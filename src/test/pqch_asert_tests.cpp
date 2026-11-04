@@ -564,14 +564,18 @@ BOOST_AUTO_TEST_CASE(asert_half_life)
     auto slow = BuildChain(params, bits, 1'800'000'000, {params.nPowTargetSpacing + params.nASERTHalfLife});
     arith_uint256 next;
     next.SetCompact(GetNextASERTWorkRequired(&slow.back(), params));
-    BOOST_CHECK_EQUAL(next.GetCompact(), (ref * 2).GetCompact());
+    arith_uint256 doubled{ref};
+    doubled *= 2;
+    BOOST_CHECK_EQUAL(next.GetCompact(), doubled.GetCompact());
 
     // 241 blocks in the time of one block: one half-life ahead of schedule, target halves.
     std::vector<int64_t> fast(240, 0);
     fast.push_back(params.nPowTargetSpacing);
     auto quick = BuildChain(params, bits, 1'800'000'000, fast);
     next.SetCompact(GetNextASERTWorkRequired(&quick.back(), params));
-    BOOST_CHECK_EQUAL(next.GetCompact(), (ref / 2).GetCompact());
+    arith_uint256 halved{ref};
+    halved /= 2;
+    BOOST_CHECK_EQUAL(next.GetCompact(), halved.GetCompact());
 }
 
 // A long stall drives the target to powLimit, never above it; a burst never reaches zero.
