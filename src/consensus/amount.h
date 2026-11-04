@@ -11,7 +11,7 @@
 /** Amount in satoshis (Can be negative) */
 typedef int64_t CAmount;
 
-/** The amount of satoshis in one BTC. */
+/** The amount of quanta (minimum unit) in one PQCH. */
 inline constexpr CAmount COIN{100'000'000};
 
 /** No amount larger than this (in satoshi) is valid.
@@ -23,7 +23,8 @@ inline constexpr CAmount COIN{100'000'000};
  * critical; in unusual circumstances like a(nother) overflow bug that allowed
  * for the creation of coins out of thin air modification could lead to a fork.
  * */
-inline constexpr CAmount MAX_MONEY{21'000'000 * COIN};
+// PQCH: maximum supply of 58,900,000 PQCH (actual issuance ends at 58,899,999.74084 PQCH).
+inline constexpr CAmount MAX_MONEY{58'900'000 * COIN};
 inline bool MoneyRange(const CAmount& nValue) { return (nValue >= 0 && nValue <= MAX_MONEY); }
 
 #endif // BITCOIN_CONSENSUS_AMOUNT_H

@@ -1837,8 +1837,9 @@ CAmount GetBlockSubsidy(int nHeight, const Consensus::Params& consensusParams)
     if (halvings >= 64)
         return 0;
 
-    CAmount nSubsidy = 50 * COIN;
-    // Subsidy is cut in half every 210,000 blocks which will occur approximately every 4 years.
+    // PQCH: initial subsidy of 12.5 PQCH per 1-minute block.
+    CAmount nSubsidy = 1'250'000'000;
+    // Subsidy is cut in half every 2,356,000 blocks on mainnet (about 4.5 years).
     nSubsidy >>= halvings;
     return nSubsidy;
 }

@@ -16,8 +16,8 @@
 #include <string>
 #include <type_traits>
 
-inline const std::string CURRENCY_UNIT = "BTC"; // One formatted unit
-inline const std::string CURRENCY_ATOM = "sat"; // One indivisible minimum value unit
+inline const std::string CURRENCY_UNIT = "PQCH"; // One formatted unit
+inline const std::string CURRENCY_ATOM = "quantum"; // One indivisible minimum value unit (plural: quanta)
 
 enum class FeeRateFormat {
     BTC_KVB, //!< Use BTC/kvB fee rate unit
