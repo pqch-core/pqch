@@ -42,7 +42,13 @@ RandomX v2.0.1 (tevador/RandomX, BSD-3-Clause) em `src/randomx`, compilada por
 - **ASERT, emissão e testes de PoW herdados:** continuam a passar (vetores do ASERT regenerados para o novo limite).
 - **Regtest, 3 nós:** 200 blocos minerados no nó A em ~20 s; B e C receberam-nos pela rede P2P,
   validaram-nos e ficaram na mesma ponta; o `getblocktemplate` indica a chave correta.
-- **Rede principal provisória, isolada, dificuldade real:** ver resultado em `validar_fase3.sh`.
+- **Rede principal provisória, isolada, dificuldade real:** 2 blocos minerados em modo rápido, com
+  ~131 mil hashes por bloco em média (nonces 264.653 e 231.462, ~1.100 s cada num único núcleo,
+  ~210 H/s). O segundo nó validou-os e rejeitou com `high-hash` uma cópia do último bloco com o
+  nonce alterado. Endereços `pqc1…`, alvo inicial `1e7fffff`.
+- **Correção encontrada pelo teste:** o minerador interno era guardado por thread do servidor RPC
+  e cada thread construía o seu próprio conjunto de dados de 2 GiB, esgotando a memória. Passou a
+  haver um único minerador por nó.
 
 ## Desempenho medido (este servidor: Intel Xeon 2,8 GHz virtual, 2 núcleos)
 
