@@ -14,7 +14,7 @@ inline constexpr unsigned int MAX_BLOCK_SERIALIZED_SIZE{4'000'000};
 /** The maximum allowed weight for a block, see BIP 141 (network rule) */
 inline constexpr unsigned int MAX_BLOCK_WEIGHT{2'000'000}; // PQCH: 2,000,000 per 1-minute block (Bitcoin: 4,000,000 per 10 minutes)
 /** The maximum allowed number of signature check operations in a block (network rule) */
-inline constexpr int64_t MAX_BLOCK_SIGOPS_COST{80'000};
+inline constexpr int64_t MAX_BLOCK_SIGOPS_COST{40'000}; // PQCH: halved with the block weight (Bitcoin: 80,000 per 4,000,000 WU)
 /**
  * Coinbase transaction outputs can only be spent after this number of new blocks (network rule).
  * PQCH: the value in force is Consensus::Params::nCoinbaseMaturity: 720 blocks (~12 h) on the

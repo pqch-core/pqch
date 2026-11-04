@@ -113,6 +113,7 @@ class TestNode():
         uses_wallet=False,
         ipcbind=False,
         use_gui=False,
+        legacy_bitcoin_scripts=True,
     ):
         self.index = i
         self.datadir_path = datadir_path
@@ -148,6 +149,14 @@ class TestNode():
             "-debugexclude=rand",
             "-uacomment=testnode%d" % i,  # required for subversion uniqueness across peers
         ]
+        # PQCH: the tests inherited from Bitcoin Core build P2PK, P2WPKH and Taproot outputs. To keep
+        # testing everything else with them, their nodes run with the post-quantum rules (P2MR only,
+        # whitepaper section 21) moved out of reach. PQCH tests set legacy_bitcoin_scripts = False.
+        if legacy_bitcoin_scripts and chain == "regtest":
+            self.args.append("-testactivationheight=pqrules@1000000000")
+            # Bitcoin has no reorganisation depth limit and its tests reorganise thousands of blocks;
+            # PQCH refuses more than 60 once synced (whitepaper, section 16). PQCH tests keep the limit.
+            self.args.append("-maxreorgdepth=0")
         if uses_wallet is not None and not uses_wallet:
             self.args.append("-disablewallet")
 

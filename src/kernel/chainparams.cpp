@@ -599,7 +599,9 @@ public:
         consensus.PQRulesHeight = 0; // PQCH: always active unless overridden (-testactivationheight=pqrules@<height>)
         consensus.MinBIP9WarningHeight = 0;
         consensus.powLimit = uint256{"7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"};
-        consensus.nPowTargetTimespan = 24 * 60 * 60; // one day
+        // PQCH: 144 one-minute blocks per "retarget period", as in Bitcoin's regtest (no retargeting
+        // happens on regtest; this only sets DifficultyAdjustmentInterval() for BIP94 and RPC tests).
+        consensus.nPowTargetTimespan = 144 * 60;
         consensus.nPowTargetSpacing = 60; // PQCH: 1-minute blocks
         consensus.fPowUseRandomX = true; // PQCH: RandomX v2 proof of work (trivial target, ~2 hashes per block)
         // PQCH: regtest keeps Bitcoin's 100-block coinbase maturity so that test chains stay short;

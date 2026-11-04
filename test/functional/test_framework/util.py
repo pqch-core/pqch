@@ -359,6 +359,8 @@ def get_binary_paths(config):
 
 
 def export_env_build_path(config):
+    # PQCH: RandomX library used by test_framework/randomx.py to mine blocks built in Python.
+    os.environ.setdefault("PQCH_RANDOMX_LIB", os.path.join(config["environment"]["BUILDDIR"], "lib", "libpqch_randomx_py.so"))
     os.environ["PATH"] = os.pathsep.join([
         os.path.join(config["environment"]["BUILDDIR"], "bin"),
         os.environ["PATH"],

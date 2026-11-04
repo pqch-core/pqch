@@ -111,6 +111,8 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
         self.network_thread = None
         self.rpc_timeout = 60  # Wait for up to 60 seconds for the RPC server to respond
         self.supports_cli = True
+        # PQCH: see TestNode. Set to False in set_test_params() to run with the post-quantum rules.
+        self.legacy_bitcoin_scripts = True
         self.bind_to_localhost_only = True
         self.parse_args(test_file)
         self.default_wallet_name = "default_wallet"
@@ -479,6 +481,7 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
                 use_cli=self.options.usecli,
                 v2transport=self.options.v2transport,
                 uses_wallet=self.uses_wallet,
+                legacy_bitcoin_scripts=self.legacy_bitcoin_scripts,
             )
             init.update(extra_init[i])
             test_node_i = TestNode(

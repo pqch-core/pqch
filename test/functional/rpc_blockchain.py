@@ -274,7 +274,7 @@ class BlockchainTest(BitcoinTestFramework):
 
     def _test_verificationprogress(self):
         self.log.info("Check that verificationprogress is less than 1 when the block tip is old")
-        future = 2 * 60 * 60
+        future = 10 * 60  # PQCH: MAX_FUTURE_BLOCK_TIME (Bitcoin: 2 h)
         self.nodes[0].setmocktime(self.nodes[0].getblockchaininfo()["time"] + future + 1)
         assert_greater_than(1, self.nodes[0].getblockchaininfo()["verificationprogress"])
 
@@ -354,7 +354,7 @@ class BlockchainTest(BitcoinTestFramework):
         node = self.nodes[0]
         res = node.gettxoutsetinfo()
 
-        assert_equal(res['total_amount'], Decimal('8725.00000000'))
+        assert_equal(res['total_amount'], Decimal('2181.25000000'))  # PQCH: 12.5 block reward
         assert_equal(res['transactions'], HEIGHT)
         assert_equal(res['height'], HEIGHT)
         assert_equal(res['txouts'], HEIGHT)
@@ -429,7 +429,7 @@ class BlockchainTest(BitcoinTestFramework):
         # Validate the gettxout response
         assert_equal(txout['bestblock'], best_block_hash)
         assert_equal(txout['confirmations'], 1)
-        assert_equal(txout['value'], 25)
+        assert_equal(txout['value'], Decimal('6.25'))  # PQCH: 12.5 block reward, halved at 150
         assert_equal(txout['scriptPubKey']['address'], self.wallet.get_address())
         assert_equal(txout['scriptPubKey']['hex'], self.wallet.get_output_script().hex())
         decoded_script = node.decodescript(self.wallet.get_output_script().hex())

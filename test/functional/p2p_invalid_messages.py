@@ -8,6 +8,7 @@ import random
 import time
 
 from test_framework.messages import (
+    uint256_from_compact,
     CBlockHeader,
     CInv,
     MAX_HEADERS_RESULTS,
@@ -22,6 +23,7 @@ from test_framework.messages import (
     msg_version,
     ser_string,
 )
+from test_framework.randomx import randomx_hash, REGTEST_GENESIS_HASH
 from test_framework.p2p import (
     P2PDataStore,
     P2PInterface,
@@ -288,7 +290,10 @@ class InvalidMessagesTest(BitcoinTestFramework):
         blockheader.hashPrevBlock = int(blockheader_tip_hash, 16)
         blockheader.nTime = int(time.time())
         blockheader.nBits = blockheader_tip.nBits
-        while not blockheader.hash_hex.startswith('0'):
+        # PQCH: RandomX proof of work (key: genesis hash at these heights) instead of SHA-256d.
+        target = uint256_from_compact(blockheader.nBits)
+        pow_ok = lambda: randomx_hash(REGTEST_GENESIS_HASH, blockheader.serialize()) <= target
+        while not pow_ok():
             blockheader.nNonce += 1
         peer = self.nodes[0].add_p2p_connection(P2PInterface())
         peer.send_and_ping(msg_headers([blockheader]))
@@ -298,9 +303,10 @@ class InvalidMessagesTest(BitcoinTestFramework):
         assert_equal(chaintips[0]['hash'], blockheader.hash_hex)
 
         # invalidate PoW
-        while not blockheader.hash_hex.startswith('f'):
+        while pow_ok():
             blockheader.nNonce += 1
-        with self.nodes[0].assert_debug_log(['Misbehaving', 'header with invalid proof of work']):
+        # PQCH: RandomX proof of work is checked with the chain as context, when the header is accepted.
+        with self.nodes[0].assert_debug_log(['Misbehaving', 'high-hash']):
             peer.send_without_ping(msg_headers([blockheader]))
             peer.wait_for_disconnect()
 

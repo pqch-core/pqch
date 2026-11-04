@@ -35,15 +35,15 @@ from test_framework.util import (
 )
 
 MAX_LOCATOR_SZ = 101
-MAX_BLOCK_WEIGHT = 4000000
-MAX_BLOCK_SIGOPS_COST = 80000
+MAX_BLOCK_WEIGHT = 2000000  # PQCH (Bitcoin: 4,000,000)
+MAX_BLOCK_SIGOPS_COST = 40000  # PQCH
 DEFAULT_BLOCK_RESERVED_WEIGHT = 8000
 MINIMUM_BLOCK_RESERVED_WEIGHT = 2000
 MAX_BLOOM_FILTER_SIZE = 36000
 MAX_BLOOM_HASH_FUNCS = 50
 
 COIN = 100000000  # 1 btc in satoshis
-MAX_MONEY = 21000000 * COIN
+MAX_MONEY = 58900000 * COIN  # PQCH
 
 MAX_BIP125_RBF_SEQUENCE = 0xfffffffd  # Sequence number that is rbf-opt-in (BIP 125) and csv-opt-out (BIP 68)
 MAX_SEQUENCE_NONFINAL = 0xfffffffe  # Sequence number that is csv-opt-out (BIP 68)
@@ -89,9 +89,9 @@ TX_MIN_STANDARD_VERSION = 1
 TX_MAX_STANDARD_VERSION = 3
 
 MAGIC_BYTES = {
-    "mainnet": b"\xf9\xbe\xb4\xd9",
+    "mainnet": b"\xa7\xca\xdc\xbf",  # PQCH
     "testnet4": b"\x1c\x16\x3f\x28",
-    "regtest": b"\xfa\xbf\xb5\xda",
+    "regtest": b"\xa2\xf4\x92\xd4",  # PQCH
     "signet": b"\x0a\x03\xcf\x40",
 }
 
@@ -848,9 +848,30 @@ class CBlock(CBlockHeader):
 
         return self.get_merkle_root(hashes)
 
+    # PQCH: RandomX proof of work (test_framework/randomx.py). The key depends on the height, read
+    # from the BIP34 height push at the start of the coinbase scriptSig.
+    def coinbase_height(self):
+        """BIP34 height from the coinbase, or None (malformed test blocks; the key is then the genesis hash)."""
+        try:
+            script = bytes(self.vtx[0].vin[0].scriptSig)
+            op = script[0]
+        except IndexError:
+            return None
+        if op == 0:
+            return 0
+        if 0x51 <= op <= 0x60:
+            return op - 0x50
+        if not 1 <= op <= 8:
+            return None
+        return int.from_bytes(script[1:1 + op], "little", signed=True)
+
+    def pow_hash_int(self):
+        from .randomx import randomx_hash, seed_for_height
+        return randomx_hash(seed_for_height(self.coinbase_height()), self._serialize_header())
+
     def is_valid(self):
         target = uint256_from_compact(self.nBits)
-        if self.hash_int > target:
+        if self.pow_hash_int() > target:
             return False
         for tx in self.vtx:
             if not tx.is_valid():
@@ -861,7 +882,7 @@ class CBlock(CBlockHeader):
 
     def solve(self):
         target = uint256_from_compact(self.nBits)
-        while self.hash_int > target:
+        while self.pow_hash_int() > target:
             self.nNonce += 1
 
     # Calculate the block weight using witness and non-witness

@@ -28,6 +28,12 @@ add_secp256k1(secp256k1)
 # PQCH: RandomX proof of work.
 include(../cmake/randomx.cmake)
 add_randomx(randomx)
+# PQCH: RandomX for the Python functional tests (loaded with ctypes by test_framework/randomx.py).
+if(BUILD_TESTS)
+  add_library(pqch_randomx_py SHARED test/randomx_py/randomx_py.cpp)
+  target_link_libraries(pqch_randomx_py PRIVATE randomx)
+  set_target_properties(pqch_randomx_py PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
+endif()
 
 # Set top-level target output locations.
 if(NOT CMAKE_RUNTIME_OUTPUT_DIRECTORY)

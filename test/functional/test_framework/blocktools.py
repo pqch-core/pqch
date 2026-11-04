@@ -47,7 +47,7 @@ from .script_util import (
 )
 from .util import assert_equal
 
-MAX_BLOCK_SIGOPS = 20000
+MAX_BLOCK_SIGOPS = 10000  # PQCH: halved with the block weight
 MAX_BLOCK_SIGOPS_WEIGHT = MAX_BLOCK_SIGOPS * WITNESS_SCALE_FACTOR
 MAX_STANDARD_TX_SIGOPS = 4000
 MAX_STANDARD_TX_WEIGHT = 400000
@@ -55,7 +55,7 @@ MAX_STANDARD_TX_WEIGHT = 400000
 # Genesis block time (regtest)
 TIME_GENESIS_BLOCK = 1296688602
 
-MAX_FUTURE_BLOCK_TIME = 2 * 60 * 60
+MAX_FUTURE_BLOCK_TIME = 10 * 60  # PQCH: 600 s (Bitcoin: 2 h)
 
 # Coinbase transaction outputs can only be spent after this number of new blocks (network rule)
 COINBASE_MATURITY = 100
@@ -101,7 +101,7 @@ def create_block(hashprev=None, coinbase=None, *, ntime=None, height=None, versi
     if tmpl is None:
         tmpl = {}
     block.nVersion = version or tmpl.get('version') or VERSIONBITS_LAST_OLD_BLOCK_VERSION
-    block.nTime = ntime or tmpl.get('curtime') or int(time.time() + 600)
+    block.nTime = ntime or tmpl.get('curtime') or int(time.time())  # PQCH: MAX_FUTURE_BLOCK_TIME is 600 s
     block.hashPrevBlock = hashprev or int(tmpl['previousblockhash'], 0x10)
     if tmpl and tmpl.get('bits') is not None:
         block.nBits = struct.unpack('>I', bytes.fromhex(tmpl['bits']))[0]
@@ -171,6 +171,10 @@ def script_BIP34_coinbase_height(height, *, padding=True):
     return CScript([CScriptNum(height)])
 
 
+# PQCH: block reward of 12.5 PQCH (Bitcoin: 50). Tests that pass nValue=50 get the PQCH subsidy.
+BLOCK_SUBSIDY = 1250000000
+
+
 def create_coinbase(height, pubkey=None, *, script_pubkey=None, extra_output_script=None, fees=0, nValue=50, halving_period=REGTEST_RETARGET_PERIOD):
     """Create a coinbase transaction.
 
@@ -185,6 +189,7 @@ def create_coinbase(height, pubkey=None, *, script_pubkey=None, extra_output_scr
     coinbaseoutput = CTxOut()
     coinbaseoutput.nValue = nValue * COIN
     if nValue == 50:
+        coinbaseoutput.nValue = BLOCK_SUBSIDY
         halvings = int(height / halving_period)
         coinbaseoutput.nValue >>= halvings
         coinbaseoutput.nValue += fees

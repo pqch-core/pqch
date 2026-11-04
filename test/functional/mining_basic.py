@@ -52,7 +52,7 @@ from test_framework.wallet import (
 
 
 DIFFICULTY_ADJUSTMENT_INTERVAL = 144
-MAX_FUTURE_BLOCK_TIME = 2 * 3600
+MAX_FUTURE_BLOCK_TIME = 10 * 60  # PQCH: 600 s (Bitcoin: 2 h)
 MAX_TIMEWARP = 600
 VERSIONBITS_TOP_BITS = 0x20000000
 VERSIONBITS_DEPLOYMENT_TESTDUMMY_BIT = 28
@@ -491,7 +491,9 @@ class MiningTest(BitcoinTestFramework):
         assert_raises_rpc_error(-22, "Block decode failed", node.submitblock, block.serialize()[:-15].hex())
 
         self.log.info("submitblock: Test empty block")
-        assert_equal('high-hash', node.submitblock(hexdata=CBlock().serialize().hex()))
+        # PQCH: RandomX proof of work is checked with the chain as context, so an empty block with no
+        # parent fails the context-free block checks first.
+        assert_equal('bad-blk-length', node.submitblock(hexdata=CBlock().serialize().hex()))
 
         self.log.info('submitheader tests')
         assert_raises_rpc_error(-22, 'Block header decode failed', lambda: node.submitheader(hexdata='xx' * BLOCK_HEADER_SIZE))
