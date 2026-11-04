@@ -166,12 +166,14 @@ static RPCMethod getnetworkhashps()
     };
 }
 
-/** PQCH: mode of the thread-local RandomX miner used by GenerateBlock. */
-static bool& rx_miner_fast_mode()
-{
-    static thread_local bool fast{false};
-    return fast;
-}
+/**
+ * PQCH: the node's single RandomX miner, shared by all RPC threads. In fast mode it owns a
+ * 2 GiB dataset, so there must be exactly one per process: a per-thread miner rebuilt the
+ * dataset for every RPC worker thread and could exhaust memory.
+ */
+static Mutex g_rx_miner_mutex;
+static std::unique_ptr<RandomXMiner> g_rx_miner GUARDED_BY(g_rx_miner_mutex);
+static bool g_rx_miner_fast GUARDED_BY(g_rx_miner_mutex){false};
 
 static bool GenerateBlock(ChainstateManager& chainman, CBlock&& block, uint64_t& max_tries, std::shared_ptr<const CBlock>& block_out, bool process_new_block)
 {
@@ -186,20 +188,25 @@ static bool GenerateBlock(ChainstateManager& chainman, CBlock&& block, uint64_t&
         if (!pindexPrev) return false;
         rx_seed = GetRandomXSeedHash(pindexPrev, consensus);
     }
-    // One miner per thread; it keeps the fast-mode dataset between calls when -randomxfastmining is set.
-    static thread_local std::unique_ptr<RandomXMiner> rx_miner;
-    if (rx_seed && (!rx_miner || rx_miner_fast_mode() != g_randomx_fast_mining.load())) {
-        rx_miner = std::make_unique<RandomXMiner>(g_randomx_fast_mining.load());
-        rx_miner_fast_mode() = g_randomx_fast_mining.load();
-    }
-    const auto pow_ok = [&] {
-        if (rx_seed) return CheckProofOfWork(rx_miner->Hash(block, *rx_seed), block.nBits, consensus);
-        return CheckProofOfWork(block.GetHash(), block.nBits, consensus);
-    };
+    {
+        // The shared miner keeps the fast-mode dataset between calls when -randomxfastmining is set.
+        // Concurrent generate* calls are serialised: they would only compete for the same CPU.
+        // The lock is released before the block is processed, so it is never held with cs_main.
+        LOCK(g_rx_miner_mutex);
+        if (rx_seed && (!g_rx_miner || g_rx_miner_fast != g_randomx_fast_mining.load())) {
+            g_rx_miner.reset(); // free a previous dataset before building a new one
+            g_rx_miner_fast = g_randomx_fast_mining.load();
+            g_rx_miner = std::make_unique<RandomXMiner>(g_rx_miner_fast);
+        }
+        const auto pow_ok = [&]() EXCLUSIVE_LOCKS_REQUIRED(g_rx_miner_mutex) {
+            if (rx_seed) return CheckProofOfWork(g_rx_miner->Hash(block, *rx_seed), block.nBits, consensus);
+            return CheckProofOfWork(block.GetHash(), block.nBits, consensus);
+        };
 
-    while (max_tries > 0 && block.nNonce < std::numeric_limits<uint32_t>::max() && !pow_ok() && !chainman.m_interrupt) {
-        ++block.nNonce;
-        --max_tries;
+        while (max_tries > 0 && block.nNonce < std::numeric_limits<uint32_t>::max() && !pow_ok() && !chainman.m_interrupt) {
+            ++block.nNonce;
+            --max_tries;
+        }
     }
     if (max_tries == 0 || chainman.m_interrupt) {
         return false;

@@ -64,6 +64,9 @@ verifica "Mesma ponta em A e C" "$(c A getbestblockhash)" "$(c C getbestblockhas
 GBT=$(c A getblocktemplate '{"rules":["segwit"]}')
 verifica "Chave RandomX no getblocktemplate" "$(echo "$GBT" | python3 -c 'import json,sys;print(json.load(sys.stdin)["randomx_seed_hash"])')" "$(c A getblockhash 0)"
 
+for n in A B C; do c $n stop >/dev/null; done  # liberta memoria antes do modo rapido (2 GiB)
+sleep 3
+
 echo
 echo "=== Parte B: rede principal provisoria, isolada, dificuldade real ==="
 arranca M1 main 29433 29432 "" "randomxfastmining=1"  # minerador em modo rapido (2 GiB)
