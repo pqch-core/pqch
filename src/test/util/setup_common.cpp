@@ -39,6 +39,7 @@
 #include <policy/feerate.h>
 #include <policy/policy.h>
 #include <pow.h>
+#include <pow_randomx.h>
 #include <primitives/block.h>
 #include <primitives/transaction.h>
 #include <random.h>
@@ -461,7 +462,9 @@ CBlock TestChain100Setup::CreateBlock(
     }
     RegenerateCommitments(block, *Assert(m_node.chainman));
 
-    while (!CheckProofOfWork(block.GetHash(), block.nBits, m_node.chainman->GetConsensus())) ++block.nNonce;
+    // PQCH: RandomX proof of work, keyed by an earlier block of the chain being extended.
+    const CBlockIndex* prev{WITH_LOCK(::cs_main, return m_node.chainman->m_blockman.LookupBlockIndex(block.hashPrevBlock))};
+    while (!CheckBlockProofOfWork(block, Assert(prev), m_node.chainman->GetConsensus())) ++block.nNonce;
 
     return block;
 }

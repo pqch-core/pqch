@@ -99,7 +99,9 @@ arith_uint256 CalculateASERT(const arith_uint256& refTarget, const int64_t nPowT
     // Input target must never be zero nor exceed powLimit.
     assert(refTarget > 0 && refTarget <= powLimit);
     // powLimit needs leading zero bits so that refTarget * factor (< 2^17) cannot overflow 256 bits.
-    assert((powLimit >> 224) == 0);
+    // PQCH: the Bitcoin Cash implementation asserts 32 zero bits (powLimit < 2^224); PQCH needs an
+    // easier limit for CPU mining, and 17 bits are exactly enough (2^239 * 2^17 = 2^256).
+    assert((powLimit >> 239) == 0);
     assert(nHeightDiff >= 0);
     assert(nHalfLife > 0);
 

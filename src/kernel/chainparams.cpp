@@ -131,7 +131,15 @@ public:
         consensus.CSVHeight = 1;
         consensus.SegwitHeight = 0;
         consensus.MinBIP9WarningHeight = 0;
-        consensus.powLimit = uint256{"00000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffff"};
+        // PQCH: RandomX runs at thousands, not trillions, of hashes per second per machine, so the
+        // easiest target is 2^239 - 1 (about 131,072 hashes per block, i.e. ~2.2 kH/s of total
+        // network hashrate for 1-minute blocks). 2^239 is the largest value for which ASERT's
+        // 256-bit arithmetic cannot overflow.
+        consensus.powLimit = uint256{"00007fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"};
+        // PQCH: RandomX v2 proof of work; key changes every 4096 blocks with a 64-block lag.
+        consensus.fPowUseRandomX = true;
+        consensus.nRandomXSeedInterval = 4096;
+        consensus.nRandomXSeedLag = 64;
         // PQCH: 1-minute blocks with ASERT difficulty adjustment on every block, anchored at genesis.
         // nPowTargetTimespan is no longer used for retargeting when ASERT is enabled.
         consensus.nPowTargetTimespan = 14 * 24 * 60 * 60; // two weeks
@@ -170,12 +178,13 @@ public:
         m_assumed_blockchain_size = 0;
         m_assumed_chain_state_size = 0;
 
-        // TODO(PQCH launch): placeholder. The mainnet genesis block is created on launch day, with a
-        // headline of that day as its message, after RandomX proof of work is in place (phase 3).
-        genesis = CreateGenesisBlock(1231006505, 2083236893, 0x1d00ffff, 1, 50 * COIN);
+        // TODO(PQCH launch): PROVISIONAL genesis for development. The definitive genesis is created on
+        // launch day, with a headline of that day as its message and a starting target matched to the
+        // hashrate expected at launch. Its bits (the easiest target) also anchor ASERT.
+        genesis = CreatePQCHGenesisBlock("PQCH provisional mainnet genesis 04/Nov/2026 - replaced at launch", 1793800800, 0, 0x1e7fffff, 1'250'000'000);
         consensus.hashGenesisBlock = genesis.GetHash();
-        assert(consensus.hashGenesisBlock == uint256{"000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f"});
-        assert(genesis.hashMerkleRoot == uint256{"4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b"});
+        assert(consensus.hashGenesisBlock == uint256{"047f81331ca9e86897b2d1eae7747f78352e9d566ddff94c2acdbac5c0bbee8a"});
+        assert(genesis.hashMerkleRoot == uint256{"7707b9c39887615a04309653c2a090def013d3f2fbb436d1836a741b1b98c270"});
 
         // PQCH: DNS seeds and fixed seeds are added before launch.
         vSeeds.clear();
@@ -580,6 +589,7 @@ public:
         consensus.powLimit = uint256{"7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"};
         consensus.nPowTargetTimespan = 24 * 60 * 60; // one day
         consensus.nPowTargetSpacing = 60; // PQCH: 1-minute blocks
+        consensus.fPowUseRandomX = true; // PQCH: RandomX v2 proof of work (trivial target, ~2 hashes per block)
         consensus.fPowAllowMinDifficultyBlocks = true;
         consensus.enforce_BIP94 = opts.enforce_bip94;
         consensus.fPowNoRetargeting = true;

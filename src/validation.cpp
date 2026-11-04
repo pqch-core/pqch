@@ -37,6 +37,7 @@
 #include <policy/settings.h>
 #include <policy/truc_policy.h>
 #include <pow.h>
+#include <pow_randomx.h>
 #include <primitives/block.h>
 #include <primitives/transaction.h>
 #include <random.h>
@@ -3836,8 +3837,10 @@ void ChainstateManager::ReceivedBlockTransactions(const CBlock& block, CBlockInd
 
 static bool CheckBlockHeader(const CBlockHeader& block, BlockValidationState& state, const Consensus::Params& consensusParams, bool fCheckPOW = true)
 {
-    // Check proof of work matches claimed amount
-    if (fCheckPOW && !CheckProofOfWork(block.GetHash(), block.nBits, consensusParams))
+    // Check proof of work matches claimed amount.
+    // PQCH: the RandomX proof of work needs the chain as context (its key is an earlier block
+    // hash), so on RandomX chains it is checked in ContextualCheckBlockHeader instead.
+    if (fCheckPOW && !consensusParams.fPowUseRandomX && !CheckProofOfWork(block.GetHash(), block.nBits, consensusParams))
         return state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER, "high-hash", "proof of work failed");
 
     return true;
@@ -4029,6 +4032,10 @@ void ChainstateManager::GenerateCoinbaseCommitment(CBlock& block, const CBlockIn
 
 bool HasValidProofOfWork(std::span<const CBlockHeader> headers, const Consensus::Params& consensusParams)
 {
+    // PQCH: RandomX proof of work cannot be checked without the chain (see pow_randomx.h). Headers
+    // from peers are fully checked, one by one, in AcceptBlockHeader; a peer sending an invalid
+    // header is then punished. This pre-check only applies to SHA256d chains.
+    if (consensusParams.fPowUseRandomX) return true;
     return std::ranges::all_of(headers,
                                [&](const auto& header) { return CheckProofOfWork(header.GetHash(), header.nBits, consensusParams); });
 }
@@ -4086,7 +4093,7 @@ arith_uint256 CalculateClaimedHeadersWork(std::span<const CBlockHeader> headers)
  *  v0.12 and v0.15 (when no additional protection was in place) whereby an attacker could unboundedly
  *  grow our in-memory block index. See https://bitcoincore.org/en/2024/07/03/disclose-header-spam.
  */
-static bool ContextualCheckBlockHeader(const CBlockHeader& block, BlockValidationState& state, const ChainstateManager& chainman, const CBlockIndex* pindexPrev) EXCLUSIVE_LOCKS_REQUIRED(::cs_main)
+static bool ContextualCheckBlockHeader(const CBlockHeader& block, BlockValidationState& state, const ChainstateManager& chainman, const CBlockIndex* pindexPrev, bool fCheckPOW = true) EXCLUSIVE_LOCKS_REQUIRED(::cs_main)
 {
     AssertLockHeld(::cs_main);
     assert(pindexPrev != nullptr);
@@ -4096,6 +4103,11 @@ static bool ContextualCheckBlockHeader(const CBlockHeader& block, BlockValidatio
     const Consensus::Params& consensusParams = chainman.GetConsensus();
     if (block.nBits != GetNextWorkRequired(pindexPrev, &block, consensusParams))
         return state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER, "bad-diffbits", "incorrect proof of work");
+
+    // PQCH: RandomX proof of work, keyed by an earlier block of this chain. Checked after the
+    // cheap nBits check so that a header with the wrong difficulty costs no RandomX hash.
+    if (fCheckPOW && consensusParams.fPowUseRandomX && !CheckBlockProofOfWork(block, pindexPrev, consensusParams))
+        return state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER, "high-hash", "proof of work failed");
 
     // Check timestamp against prev
     if (block.GetBlockTime() <= pindexPrev->GetMedianTimePast())
@@ -4518,7 +4530,7 @@ BlockValidationState TestBlockValidity(
      * - do run ContextualCheckBlock()
      */
 
-    if (!ContextualCheckBlockHeader(block, state, chainstate.m_chainman, tip)) {
+    if (!ContextualCheckBlockHeader(block, state, chainstate.m_chainman, tip, /*fCheckPOW=*/check_pow)) {
         if (state.IsValid()) NONFATAL_UNREACHABLE();
         return state;
     }

@@ -145,7 +145,9 @@ bool BlockTreeDB::LoadBlockIndexGuts(const Consensus::Params& consensusParams, s
                 pindexNew->nStatus        = diskindex.nStatus;
                 pindexNew->nTx            = diskindex.nTx;
 
-                if (!CheckProofOfWork(pindexNew->GetBlockHash(), pindexNew->nBits, consensusParams)) {
+                // PQCH: RandomX proof of work is verified when a header is accepted and needs the
+                // chain as context, so it is not re-checked when loading the local index.
+                if (!consensusParams.fPowUseRandomX && !CheckProofOfWork(pindexNew->GetBlockHash(), pindexNew->nBits, consensusParams)) {
                     LogError("%s: CheckProofOfWork failed: %s\n", __func__, pindexNew->ToString());
                     return false;
                 }
@@ -1067,8 +1069,10 @@ bool BlockManager::ReadBlock(CBlock& block, const FlatFilePos& pos, const std::o
 
     const auto block_hash{block.GetHash()};
 
-    // Check the header
-    if (!CheckProofOfWork(block_hash, block.nBits, GetConsensus())) {
+    // Check the header.
+    // PQCH: on RandomX chains the proof of work was verified when the block was accepted; re-hashing
+    // every block read from disk would be expensive. Integrity is still checked against the expected hash.
+    if (!GetConsensus().fPowUseRandomX && !CheckProofOfWork(block_hash, block.nBits, GetConsensus())) {
         LogError("Errors in block header at %s while reading block", pos.ToString());
         return false;
     }

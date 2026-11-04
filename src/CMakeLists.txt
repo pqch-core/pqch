@@ -25,6 +25,9 @@ if (ENABLE_IPC AND NOT WITH_EXTERNAL_LIBMULTIPROCESS)
 endif()
 include(../cmake/secp256k1.cmake)
 add_secp256k1(secp256k1)
+# PQCH: RandomX proof of work.
+include(../cmake/randomx.cmake)
+add_randomx(randomx)
 
 # Set top-level target output locations.
 if(NOT CMAKE_RUNTIME_OUTPUT_DIRECTORY)
@@ -132,6 +135,7 @@ add_library(bitcoin_common STATIC EXCLUDE_FROM_ALL
   policy/feerate.cpp
   policy/policy.cpp
   pow.cpp
+  pow_randomx.cpp
   protocol.cpp
   psbt.cpp
   rpc/rawtransaction_util.cpp
@@ -152,6 +156,7 @@ target_link_libraries(bitcoin_common
     bitcoin_util
     univalue
     secp256k1
+    randomx
     $<TARGET_NAME_IF_EXISTS:USDT::headers>
     $<$<PLATFORM_ID:Windows>:ws2_32>
 )

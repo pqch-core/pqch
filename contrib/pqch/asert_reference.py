@@ -13,7 +13,7 @@ Uso:
 import random
 import sys
 
-POW_LIMIT = int("00000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)  # rede principal PQCH
+POW_LIMIT = (1 << 239) - 1  # rede principal PQCH (limite para mineracao por CPU com RandomX)
 SPACING = 60          # segundos por bloco
 HALF_LIFE = 4 * 3600  # 4 horas
 
@@ -78,7 +78,7 @@ def asert_bits(ref_bits: int, time_diff: int, height_diff: int, **kw) -> int:
 
 def vectors(seed: int = 20261104, n_random: int = 400):
     rng = random.Random(seed)
-    genesis_bits = 0x1D00FFFF
+    genesis_bits = 0x1E7FFFFF
     out = []
     # Casos de fronteira.
     for h in (0, 1, 2, 239, 240, 241, 1440, 525960, 2356000):

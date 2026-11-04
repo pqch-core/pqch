@@ -38,7 +38,7 @@ unsigned int CalculateNextWorkRequired(const CBlockIndex* pindexLast, int64_t nF
  * @param[in] nPowTargetSpacing  ideal block interval in seconds
  * @param[in] nTimeDiff          time of the block being extended minus time of the anchor's parent
  * @param[in] nHeightDiff        height of the block being extended minus height of the anchor (>= 0)
- * @param[in] powLimit           easiest allowed target (must have at least 32 leading zero bits)
+ * @param[in] powLimit           easiest allowed target (must be below 2^239)
  * @param[in] nHalfLife          half-life in seconds
  * @return                       next target, clamped to [1, powLimit]
  */

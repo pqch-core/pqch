@@ -13,6 +13,7 @@
 #include <key_io.h>
 #include <node/context.h>
 #include <pow.h>
+#include <pow_randomx.h>
 #include <primitives/block.h>
 #include <primitives/transaction.h>
 #include <script/script.h>
@@ -67,7 +68,11 @@ std::vector<std::shared_ptr<CBlock>> CreateBlockChain(size_t total_height, const
         block.nBits = params.GenesisBlock().nBits;
         block.nNonce = 0;
 
-        while (!CheckProofOfWork(block.GetHash(), block.nBits, params.GetConsensus())) {
+        // PQCH: below height 4161 the RandomX key is the genesis block hash.
+        assert(height + 1 <= params.GetConsensus().nRandomXSeedInterval + params.GetConsensus().nRandomXSeedLag);
+        while (!(params.GetConsensus().fPowUseRandomX
+                     ? CheckProofOfWork(GetRandomXPowHash(block, params.GenesisBlock().GetHash()), block.nBits, params.GetConsensus())
+                     : CheckProofOfWork(block.GetHash(), block.nBits, params.GetConsensus()))) {
             ++block.nNonce;
             assert(block.nNonce);
         }
@@ -103,7 +108,7 @@ bool BuildChain(const NodeContext& node, const CBlockIndex* pindex,
             block.hashMerkleRoot = BlockMerkleRoot(block);
         }
 
-        while (!CheckProofOfWork(block.GetHash(), block.nBits, consensus)) ++block.nNonce;
+        while (!CheckBlockProofOfWork(block, pindex, consensus)) ++block.nNonce; // PQCH: RandomX
 
         chain_block = std::make_shared<CBlock>(std::move(block));
 
@@ -142,7 +147,9 @@ protected:
 
 COutPoint MineBlock(const NodeContext& node, std::shared_ptr<CBlock>& block)
 {
-    while (!CheckProofOfWork(block->GetHash(), block->nBits, Params().GetConsensus())) {
+    // PQCH: RandomX proof of work, keyed by an earlier block of the chain being extended.
+    const CBlockIndex* prev{WITH_LOCK(::cs_main, return node.chainman->m_blockman.LookupBlockIndex(block->hashPrevBlock))};
+    while (!CheckBlockProofOfWork(*block, Assert(prev), Params().GetConsensus())) {
         ++block->nNonce;
         assert(block->nNonce);
     }

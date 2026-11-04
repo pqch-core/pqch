@@ -189,7 +189,10 @@ void sanity_check_chainparams(const ArgsManager& args, ChainType chain_type)
     BOOST_CHECK(UintToArith256(consensus.powLimit) >= pow_compact);
 
     // check max target * 4*nPowTargetTimespan doesn't overflow -- see pow.cpp:CalculateNextWorkRequired()
-    if (!consensus.fPowNoRetargeting) {
+    // PQCH: only relevant to the legacy retarget; ASERT has its own bound (powLimit < 2^239).
+    if (consensus.fPowUseASERT) {
+        BOOST_CHECK((UintToArith256(consensus.powLimit) >> 239) == 0);
+    } else if (!consensus.fPowNoRetargeting) {
         arith_uint256 targ_max{UintToArith256(uint256{"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"})};
         targ_max /= consensus.nPowTargetTimespan*4;
         BOOST_CHECK(UintToArith256(consensus.powLimit) < targ_max);

@@ -33,6 +33,7 @@
 #include <policy/feerate.h>
 #include <policy/policy.h>
 #include <pow.h>
+#include <pow_randomx.h>
 #include <primitives/block.h>
 #include <primitives/transaction.h>
 #include <rpc/blockchain.h>
@@ -165,12 +166,38 @@ static RPCMethod getnetworkhashps()
     };
 }
 
+/** PQCH: mode of the thread-local RandomX miner used by GenerateBlock. */
+static bool& rx_miner_fast_mode()
+{
+    static thread_local bool fast{false};
+    return fast;
+}
+
 static bool GenerateBlock(ChainstateManager& chainman, CBlock&& block, uint64_t& max_tries, std::shared_ptr<const CBlock>& block_out, bool process_new_block)
 {
     block_out.reset();
     block.hashMerkleRoot = BlockMerkleRoot(block);
 
-    while (max_tries > 0 && block.nNonce < std::numeric_limits<uint32_t>::max() && !CheckProofOfWork(block.GetHash(), block.nBits, chainman.GetConsensus()) && !chainman.m_interrupt) {
+    // PQCH: the proof of work is RandomX, keyed by an earlier block of the chain being extended.
+    const Consensus::Params& consensus{chainman.GetConsensus()};
+    std::optional<uint256> rx_seed;
+    if (consensus.fPowUseRandomX) {
+        const CBlockIndex* pindexPrev{WITH_LOCK(cs_main, return chainman.m_blockman.LookupBlockIndex(block.hashPrevBlock))};
+        if (!pindexPrev) return false;
+        rx_seed = GetRandomXSeedHash(pindexPrev, consensus);
+    }
+    // One miner per thread; it keeps the fast-mode dataset between calls when -randomxfastmining is set.
+    static thread_local std::unique_ptr<RandomXMiner> rx_miner;
+    if (rx_seed && (!rx_miner || rx_miner_fast_mode() != g_randomx_fast_mining.load())) {
+        rx_miner = std::make_unique<RandomXMiner>(g_randomx_fast_mining.load());
+        rx_miner_fast_mode() = g_randomx_fast_mining.load();
+    }
+    const auto pow_ok = [&] {
+        if (rx_seed) return CheckProofOfWork(rx_miner->Hash(block, *rx_seed), block.nBits, consensus);
+        return CheckProofOfWork(block.GetHash(), block.nBits, consensus);
+    };
+
+    while (max_tries > 0 && block.nNonce < std::numeric_limits<uint32_t>::max() && !pow_ok() && !chainman.m_interrupt) {
         ++block.nNonce;
         --max_tries;
     }
@@ -726,6 +753,8 @@ static RPCMethod getblocktemplate()
                 {RPCResult::Type::NUM, "weightlimit", /*optional=*/true, "limit of block weight"},
                 {RPCResult::Type::NUM_TIME, "curtime", "current timestamp in " + UNIX_EPOCH_TIME + ". Adjusted for the proposed BIP94 timewarp rule."},
                 {RPCResult::Type::STR, "bits", "compressed target of next block"},
+                {RPCResult::Type::NUM, "randomx_seed_height", /*optional=*/true, "PQCH: height of the block whose hash keys RandomX for the next block"},
+                {RPCResult::Type::STR_HEX, "randomx_seed_hash", /*optional=*/true, "PQCH: RandomX key (seed hash) for the next block"},
                 {RPCResult::Type::NUM, "height", "The height of the next block"},
                 {RPCResult::Type::STR_HEX, "signet_challenge", /*optional=*/true, "Only on signet"},
                 {RPCResult::Type::STR_HEX, "default_witness_commitment", /*optional=*/true, "a valid witness commitment for the unmodified block template"},
@@ -1051,6 +1080,11 @@ static RPCMethod getblocktemplate()
     result.pushKV("curtime", block.GetBlockTime());
     result.pushKV("bits", strprintf("%08x", block.nBits));
     result.pushKV("height", pindexPrev->nHeight + 1);
+    if (consensusParams.fPowUseRandomX) {
+        // PQCH: what an external miner needs to compute the RandomX proof of work.
+        result.pushKV("randomx_seed_height", GetRandomXSeedHeight(pindexPrev->nHeight + 1, consensusParams));
+        result.pushKV("randomx_seed_hash", GetRandomXSeedHash(pindexPrev, consensusParams).GetHex());
+    }
 
     if (consensusParams.signet_blocks) {
         result.pushKV("signet_challenge", HexStr(consensusParams.signet_challenge));

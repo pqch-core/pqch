@@ -42,6 +42,7 @@ add_library(bitcoinkernel
   ../policy/settings.cpp
   ../policy/truc_policy.cpp
   ../pow.cpp
+  ../pow_randomx.cpp
   ../primitives/block.cpp
   ../primitives/transaction.cpp
   ../pubkey.cpp
@@ -103,6 +104,7 @@ target_link_libraries(bitcoinkernel
     core_interface
     kernel_warn_interface
     secp256k1_objs
+    randomx
     $<$<PLATFORM_ID:Windows>:bcrypt>
     $<TARGET_NAME_IF_EXISTS:USDT::headers>
     Boost::headers

@@ -134,6 +134,14 @@ struct Params {
      * the timestamp of its (non-existent) parent is taken as genesis time - nPowTargetSpacing.
      */
     int nASERTAnchorHeight{0};
+    /**
+     * PQCH: RandomX v2 proof of work (see pow_randomx.h). The block id remains SHA256d.
+     * The RandomX key is the hash of an earlier block, chosen every nRandomXSeedInterval
+     * blocks (a power of two) with a lag of nRandomXSeedLag blocks.
+     */
+    bool fPowUseRandomX{false};
+    int nRandomXSeedInterval{4096};
+    int nRandomXSeedLag{64};
     int64_t nPowTargetSpacing;
     int64_t nPowTargetTimespan;
     std::chrono::seconds PowTargetSpacing() const
