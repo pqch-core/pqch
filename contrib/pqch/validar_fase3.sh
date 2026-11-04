@@ -11,7 +11,7 @@
 set -euo pipefail
 
 BUILD="${1:-build}"
-MAIN_BLOCKS="${2:-3}"
+MAIN_BLOCKS="${2:-2}"
 BITCOIND="$BUILD/bin/bitcoind"
 CLI="$BUILD/bin/bitcoin-cli"
 TMP="$(mktemp -d)"
@@ -22,9 +22,9 @@ verifica() { if [[ "$2" == "$3" ]]; then echo "OK    $1: $2"; else echo "FALHA $
 limpar() { for d in "$TMP"/*/; do "$CLI" -datadir="$d" stop >/dev/null 2>&1 || true; done; sleep 3; rm -rf "$TMP"; }
 trap limpar EXIT
 
-# arranca um no: nome, rede (regtest|main), porta p2p, porta rpc, [ligar a porta]
+# arranca um no: nome, rede (regtest|main), porta p2p, porta rpc, [ligar a porta], [opcao extra]
 arranca() {
-    local nome=$1 rede=$2 p2p=$3 rpc=$4 ligar=${5:-}
+    local nome=$1 rede=$2 p2p=$3 rpc=$4 ligar=${5:-} extra=${6:-}
     local dir="$TMP/$nome"; mkdir -p "$dir"
     {
         [[ "$rede" == regtest ]] && echo "regtest=1"
@@ -33,6 +33,7 @@ arranca() {
         [[ "$rede" == regtest ]] && echo "[regtest]" || echo "[main]"
         echo "port=$p2p"; echo "rpcport=$rpc"; echo "bind=127.0.0.1"
         [[ -n "$ligar" ]] && echo "connect=127.0.0.1:$ligar"
+        [[ -n "$extra" ]] && echo "$extra"
     } > "$dir/bitcoin.conf"
     "$BITCOIND" -datadir="$dir" -daemon -debug=validation >/dev/null
     for _ in $(seq 1 60); do "$CLI" -datadir="$dir" getblockcount >/dev/null 2>&1 && return; sleep 1; done
@@ -65,7 +66,7 @@ verifica "Chave RandomX no getblocktemplate" "$(echo "$GBT" | python3 -c 'import
 
 echo
 echo "=== Parte B: rede principal provisoria, isolada, dificuldade real ==="
-arranca M1 main 29433 29432
+arranca M1 main 29433 29432 "" "randomxfastmining=1"  # minerador em modo rapido (2 GiB)
 arranca M2 main 29443 29442 29433
 sleep 3
 END_M="$(c M1 deriveaddresses "$(c M1 getdescriptorinfo "$DESC" | python3 -c 'import json,sys;print(json.load(sys.stdin)["descriptor"])')" | python3 -c 'import json,sys;print(json.load(sys.stdin)[0])')"

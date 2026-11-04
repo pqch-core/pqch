@@ -16,12 +16,13 @@ BOOST_FIXTURE_TEST_SUITE(pow_tests, BasicTestingSetup)
 
 // PQCH: mainnet uses ASERT and 1-minute blocks. The tests below exercise the legacy 2016-block
 // retarget (still used by the test networks) with vectors taken from Bitcoin's history, so they
-// run with ASERT switched off and Bitcoin's 10-minute spacing restored.
+// run with ASERT switched off and Bitcoin's 10-minute spacing and proof-of-work limit restored.
 static Consensus::Params LegacyConsensus(const CChainParams& params)
 {
     auto consensus = params.GetConsensus();
     consensus.fPowUseASERT = false;
     consensus.nPowTargetSpacing = 10 * 60;
+    consensus.powLimit = uint256{"00000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffff"};
     return consensus;
 }
 

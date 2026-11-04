@@ -89,9 +89,9 @@ BOOST_AUTO_TEST_CASE(randomx_seed_hash)
         blocks[i].nHeight = i;
         blocks[i].BuildSkip();
     }
-    BOOST_CHECK_EQUAL(GetRandomXSeedHash(&blocks[100], params), hashes[0]);
-    BOOST_CHECK_EQUAL(GetRandomXSeedHash(&blocks[4160], params), hashes[4096]); // block 4161
-    BOOST_CHECK_EQUAL(GetRandomXSeedHash(&blocks[8256], params), hashes[8192]); // block 8257
+    BOOST_CHECK_EQUAL(GetRandomXSeedHash(&blocks[100], params).GetHex(), hashes[0].GetHex());
+    BOOST_CHECK_EQUAL(GetRandomXSeedHash(&blocks[4160], params).GetHex(), hashes[4096].GetHex()); // block 4161
+    BOOST_CHECK_EQUAL(GetRandomXSeedHash(&blocks[8256], params).GetHex(), hashes[8192].GetHex()); // block 8257
 }
 
 // A header passes only when its RandomX hash meets the target; SHA256d is irrelevant.
@@ -111,10 +111,10 @@ BOOST_AUTO_TEST_CASE(randomx_check_block_pow)
     header.nVersion = 4;
     header.hashPrevBlock = genesis_hash;
     header.nTime = genesis.nTime + 60;
-    header.nBits = 0x1f00ffff; // ~256 hashes on average: makes failures common and successes cheap
+    header.nBits = 0x2000ffff; // passes with probability ~1/256: failures are common and a few successes affordable
 
     int passes{0}, fails{0};
-    for (header.nNonce = 0; header.nNonce < 2000 && (passes < 3 || fails < 3); ++header.nNonce) {
+    for (header.nNonce = 0; header.nNonce < 3000 && (passes < 3 || fails < 3); ++header.nNonce) {
         const uint256 rx{GetRandomXPowHash(header, genesis_hash)};
         const bool expected{CheckProofOfWork(rx, header.nBits, params)};
         BOOST_CHECK_EQUAL(CheckBlockProofOfWork(header, &genesis_index, params), expected);
