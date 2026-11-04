@@ -29,6 +29,25 @@ std::optional<arith_uint256> DeriveTarget(unsigned int nBits, uint256 pow_limit)
 unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast, const CBlockHeader *pblock, const Consensus::Params&);
 unsigned int CalculateNextWorkRequired(const CBlockIndex* pindexLast, int64_t nFirstBlockTime, const Consensus::Params&);
 
+/**
+ * PQCH: ASERT (aserti3) target computation, in integer arithmetic only.
+ *
+ * Approximates  target = refTarget * 2^((nTimeDiff - nPowTargetSpacing * (nHeightDiff + 1)) / nHalfLife)
+ *
+ * @param[in] refTarget          target of the anchor block (0 < refTarget <= powLimit)
+ * @param[in] nPowTargetSpacing  ideal block interval in seconds
+ * @param[in] nTimeDiff          time of the block being extended minus time of the anchor's parent
+ * @param[in] nHeightDiff        height of the block being extended minus height of the anchor (>= 0)
+ * @param[in] powLimit           easiest allowed target (must have at least 32 leading zero bits)
+ * @param[in] nHalfLife          half-life in seconds
+ * @return                       next target, clamped to [1, powLimit]
+ */
+arith_uint256 CalculateASERT(const arith_uint256& refTarget, int64_t nPowTargetSpacing, int64_t nTimeDiff,
+                             int64_t nHeightDiff, const arith_uint256& powLimit, int64_t nHalfLife) noexcept;
+
+/** PQCH: compact target required for the block after pindexPrev under ASERT. */
+unsigned int GetNextASERTWorkRequired(const CBlockIndex* pindexPrev, const Consensus::Params& params);
+
 /** Check whether a block hash satisfies the proof-of-work requirement specified by nBits */
 bool CheckProofOfWork(uint256 hash, unsigned int nBits, const Consensus::Params&);
 bool CheckProofOfWorkImpl(uint256 hash, unsigned int nBits, const Consensus::Params&);

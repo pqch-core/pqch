@@ -121,6 +121,19 @@ struct Params {
       */
     bool enforce_BIP94;
     bool fPowNoRetargeting;
+    /**
+     * PQCH: use the ASERT difficulty algorithm (aserti3, as specified for Bitcoin Cash in
+     * November 2020), which adjusts the target on every block. Replaces the 2016-block
+     * retarget when enabled.
+     */
+    bool fPowUseASERT{false};
+    /** PQCH: ASERT half-life in seconds (the target doubles/halves for each half-life of schedule error). */
+    int64_t nASERTHalfLife{0};
+    /**
+     * PQCH: height of the ASERT anchor block. With the genesis block as anchor (height 0),
+     * the timestamp of its (non-existent) parent is taken as genesis time - nPowTargetSpacing.
+     */
+    int nASERTAnchorHeight{0};
     int64_t nPowTargetSpacing;
     int64_t nPowTargetTimespan;
     std::chrono::seconds PowTargetSpacing() const

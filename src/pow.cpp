@@ -11,9 +11,18 @@
 #include <uint256.h>
 #include <util/check.h>
 
+#include <cassert>
+#include <cstdlib>
+
 unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast, const CBlockHeader *pblock, const Consensus::Params& params)
 {
     assert(pindexLast != nullptr);
+
+    // PQCH: per-block ASERT difficulty adjustment.
+    if (params.fPowUseASERT) {
+        return GetNextASERTWorkRequired(pindexLast, params);
+    }
+
     unsigned int nProofOfWorkLimit = UintToArith256(params.powLimit).GetCompact();
 
     // Only change once per difficulty adjustment interval
@@ -84,11 +93,96 @@ unsigned int CalculateNextWorkRequired(const CBlockIndex* pindexLast, int64_t nF
     return bnNew.GetCompact();
 }
 
+arith_uint256 CalculateASERT(const arith_uint256& refTarget, const int64_t nPowTargetSpacing, const int64_t nTimeDiff,
+                             const int64_t nHeightDiff, const arith_uint256& powLimit, const int64_t nHalfLife) noexcept
+{
+    // Input target must never be zero nor exceed powLimit.
+    assert(refTarget > 0 && refTarget <= powLimit);
+    // powLimit needs leading zero bits so that refTarget * factor (< 2^17) cannot overflow 256 bits.
+    assert((powLimit >> 224) == 0);
+    assert(nHeightDiff >= 0);
+    assert(nHalfLife > 0);
+
+    // Guard the 64-bit exponent computation below against overflow.
+    assert(std::llabs(nTimeDiff - nPowTargetSpacing * nHeightDiff) < (int64_t{1} << (63 - 16)));
+
+    // Exponent in 16.16 fixed point; integer division truncates towards zero, as in the specification.
+    const int64_t exponent = ((nTimeDiff - nPowTargetSpacing * (nHeightDiff + 1)) * 65536) / nHalfLife;
+
+    // Split into integer part (arithmetic right shift = floor) and fractional part in [0, 65536).
+    static_assert(int64_t{-1} >> 1 == int64_t{-1}, "ASERT needs arithmetic right shift of negative numbers");
+    int64_t shifts = exponent >> 16;
+    const auto frac = uint16_t(exponent);
+    assert(exponent == (shifts * 65536) + frac);
+
+    // 65536 * 2^(frac/65536), using the cubic approximation
+    // 2^x ~= 1 + 0.695502049*x + 0.2262698*x^2 + 0.0782318*x^3 for 0 <= x < 1 (error < 0.013%).
+    // The sum stays below 2^64 for every 16-bit frac.
+    const uint32_t factor = 65536 + ((
+        + 195766423245049ull * frac
+        + 971821376ull * frac * frac
+        + 5127ull * frac * frac * frac
+        + (1ull << 47)
+        ) >> 48);
+    // refTarget < 2^224 and factor < 2^17, so this cannot overflow.
+    arith_uint256 nextTarget = refTarget * factor;
+
+    // Multiply by 2^shifts / 65536.
+    shifts -= 16;
+    if (shifts <= 0) {
+        nextTarget >>= -shifts;
+    } else {
+        const arith_uint256 nextTargetShifted = nextTarget << shifts;
+        if ((nextTargetShifted >> shifts) != nextTarget) {
+            // Overflow: with wider integers the result would exceed powLimit anyway.
+            nextTarget = powLimit;
+        } else {
+            nextTarget = nextTargetShifted;
+        }
+    }
+
+    if (nextTarget == 0) {
+        // 0 is not a valid target, but 1 is (the hardest possible).
+        nextTarget = arith_uint256(1);
+    } else if (nextTarget > powLimit) {
+        nextTarget = powLimit;
+    }
+    return nextTarget;
+}
+
+unsigned int GetNextASERTWorkRequired(const CBlockIndex* pindexPrev, const Consensus::Params& params)
+{
+    assert(pindexPrev != nullptr);
+    assert(pindexPrev->nHeight >= params.nASERTAnchorHeight);
+
+    const CBlockIndex* pindexAnchor = pindexPrev->GetAncestor(params.nASERTAnchorHeight);
+    assert(pindexAnchor != nullptr);
+
+    // The absolute ASERT formulation uses the timestamp of the anchor block's parent.
+    // For a genesis anchor there is no parent: use one ideal block interval before genesis.
+    const int64_t nAnchorParentTime = pindexAnchor->pprev ? pindexAnchor->pprev->GetBlockTime()
+                                                          : pindexAnchor->GetBlockTime() - params.nPowTargetSpacing;
+
+    const int64_t nTimeDiff = pindexPrev->GetBlockTime() - nAnchorParentTime;
+    const int64_t nHeightDiff = pindexPrev->nHeight - pindexAnchor->nHeight;
+
+    const arith_uint256 powLimit = UintToArith256(params.powLimit);
+    arith_uint256 refTarget;
+    refTarget.SetCompact(pindexAnchor->nBits);
+
+    return CalculateASERT(refTarget, params.nPowTargetSpacing, nTimeDiff, nHeightDiff, powLimit, params.nASERTHalfLife).GetCompact();
+}
+
 // Check that on difficulty adjustments, the new difficulty does not increase
 // or decrease beyond the permitted limits.
 bool PermittedDifficultyTransition(const Consensus::Params& params, int64_t height, uint32_t old_nbits, uint32_t new_nbits)
 {
     if (params.fPowAllowMinDifficultyBlocks) return true;
+
+    // PQCH: under ASERT the target changes on every block, as a function of timestamps that are not
+    // available here. Header presync therefore relies on its other protections (minimum chain work
+    // commitments). TODO(PQCH phase 4): review a timestamp-aware bound for header presync.
+    if (params.fPowUseASERT) return true;
 
     if (height % params.DifficultyAdjustmentInterval() == 0) {
         int64_t smallest_timespan = params.nPowTargetTimespan/4;

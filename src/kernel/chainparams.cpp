@@ -132,9 +132,13 @@ public:
         consensus.SegwitHeight = 0;
         consensus.MinBIP9WarningHeight = 0;
         consensus.powLimit = uint256{"00000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffff"};
-        // PQCH: 1-minute blocks. The 2016-block retarget below is temporary; ASERT replaces it in phase 2.
+        // PQCH: 1-minute blocks with ASERT difficulty adjustment on every block, anchored at genesis.
+        // nPowTargetTimespan is no longer used for retargeting when ASERT is enabled.
         consensus.nPowTargetTimespan = 14 * 24 * 60 * 60; // two weeks
         consensus.nPowTargetSpacing = 60;
+        consensus.fPowUseASERT = true;
+        consensus.nASERTHalfLife = 4 * 60 * 60; // 4 hours (240 blocks); to be confirmed in simulation and testnet
+        consensus.nASERTAnchorHeight = 0;
         consensus.fPowAllowMinDifficultyBlocks = false;
         consensus.enforce_BIP94 = false;
         consensus.fPowNoRetargeting = false;
