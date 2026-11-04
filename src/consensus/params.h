@@ -32,8 +32,11 @@ enum BuriedDeployment : int16_t {
     // SCRIPT_VERIFY_WITNESS is enforced from genesis, but the check for downloading
     // missing witness data is not. BIP 147 also relies on hardcoded activation height.
     DEPLOYMENT_SEGWIT,
+    // PQCH: post-quantum rules (whitepaper, section 21.3): P2MR script semantics for witness v1,
+    // the restricted set of output types, and the post-quantum signature opcodes.
+    DEPLOYMENT_PQRULES,
 };
-constexpr bool ValidDeployment(BuriedDeployment dep) { return dep <= DEPLOYMENT_SEGWIT; }
+constexpr bool ValidDeployment(BuriedDeployment dep) { return dep <= DEPLOYMENT_PQRULES; }
 
 enum DeploymentPos : uint16_t {
     DEPLOYMENT_TESTDUMMY,
@@ -108,6 +111,8 @@ struct Params {
      * Note that segwit v0 script rules are enforced on all blocks except the
      * BIP 16 exception blocks. */
     int SegwitHeight;
+    /** PQCH: block height at which the post-quantum rules are enforced (0 on the main network). */
+    int PQRulesHeight{std::numeric_limits<int>::max()};
     /** Don't warn about unknown BIP 9 activations below this height.
      * This prevents us from warning about the CSV, segwit and taproot activations. */
     int MinBIP9WarningHeight;
@@ -142,6 +147,8 @@ struct Params {
     bool fPowUseRandomX{false};
     int nRandomXSeedInterval{4096};
     int nRandomXSeedLag{64};
+    /** PQCH: blocks a coinbase output must wait before it can be spent (Bitcoin: 100). */
+    int nCoinbaseMaturity{100};
     int64_t nPowTargetSpacing;
     int64_t nPowTargetTimespan;
     std::chrono::seconds PowTargetSpacing() const
@@ -174,6 +181,8 @@ struct Params {
             return CSVHeight;
         case DEPLOYMENT_SEGWIT:
             return SegwitHeight;
+        case DEPLOYMENT_PQRULES:
+            return PQRulesHeight;
         } // no default case, so the compiler can warn about missing cases
         return std::numeric_limits<int>::max();
     }

@@ -382,7 +382,7 @@ void Chainstate::MaybeUpdateMempoolForReorg(
                 const Coin& coin{CoinsTip().AccessCoin(txin.prevout)};
                 assert(!coin.IsSpent());
                 const auto mempool_spend_height{m_chain.Tip()->nHeight + 1};
-                if (coin.IsCoinBase() && mempool_spend_height - coin.nHeight < COINBASE_MATURITY) {
+                if (coin.IsCoinBase() && mempool_spend_height - coin.nHeight < m_chainman.GetConsensus().nCoinbaseMaturity) {
                     return true;
                 }
             }
@@ -801,6 +801,12 @@ bool MemPoolAccept::PreChecks(ATMPArgs& args, Workspace& ws)
     if (tx.IsCoinBase())
         return state.Invalid(TxValidationResult::TX_CONSENSUS, "coinbase");
 
+    // PQCH rule 1: only post-quantum (or keyless) output types once the post-quantum rules apply.
+    if (DeploymentActiveAfter(m_active_chainstate.m_chain.Tip(), m_active_chainstate.m_chainman, Consensus::DEPLOYMENT_PQRULES) &&
+        !Consensus::CheckPQOutputs(tx, state)) {
+        return false; // state filled in by CheckPQOutputs
+    }
+
     // Rather not work on nonstandard transactions (unless -testnet/-regtest)
     std::string reason;
     if (m_pool.m_opts.require_standard && !IsStandardTx(tx, m_pool.m_opts.max_datacarrier_bytes, m_pool.m_opts.permit_bare_multisig, m_pool.m_opts.dust_relay_feerate, reason)) {
@@ -887,7 +893,8 @@ bool MemPoolAccept::PreChecks(ATMPArgs& args, Workspace& ws)
     }
 
     // The mempool holds txs for the next block, so pass height+1 to CheckTxInputs
-    if (!Consensus::CheckTxInputs(tx, state, m_view, m_active_chainstate.m_chain.Height() + 1, ws.m_base_fees)) {
+    if (!Consensus::CheckTxInputs(tx, state, m_view, m_active_chainstate.m_chain.Height() + 1, ws.m_base_fees,
+                                 m_active_chainstate.m_chainman.GetConsensus().nCoinbaseMaturity)) {
         return false; // state filled in by CheckTxInputs
     }
 
@@ -1134,7 +1141,11 @@ bool MemPoolAccept::PolicyScriptChecks(Workspace& ws)
     const CTransaction& tx = *ws.m_ptx;
     TxValidationState& state = ws.m_state;
 
-    constexpr script_verify_flags scriptVerifyFlags = STANDARD_SCRIPT_VERIFY_FLAGS;
+    script_verify_flags scriptVerifyFlags = STANDARD_SCRIPT_VERIFY_FLAGS;
+    // PQCH: P2MR semantics for witness v1 once the post-quantum rules apply to the next block.
+    if (DeploymentActiveAfter(m_active_chainstate.m_chain.Tip(), m_active_chainstate.m_chainman, Consensus::DEPLOYMENT_PQRULES)) {
+        scriptVerifyFlags |= SCRIPT_VERIFY_P2MR;
+    }
 
     // Check input scripts and signatures.
     // This is done last to help prevent CPU exhaustion denial-of-service attacks.
@@ -2286,6 +2297,11 @@ script_verify_flags GetBlockScriptFlags(const CBlockIndex& block_index, const Ch
         flags |= SCRIPT_VERIFY_NULLDUMMY;
     }
 
+    // PQCH: witness v1 32-byte outputs are P2MR, not Taproot.
+    if (DeploymentActiveAt(block_index, chainman, Consensus::DEPLOYMENT_PQRULES)) {
+        flags |= SCRIPT_VERIFY_P2MR;
+    }
+
     return flags;
 }
 
@@ -2532,7 +2548,7 @@ bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, 
         {
             CAmount txfee = 0;
             TxValidationState tx_state;
-            if (!Consensus::CheckTxInputs(tx, tx_state, view, pindex->nHeight, txfee)) {
+            if (!Consensus::CheckTxInputs(tx, tx_state, view, pindex->nHeight, txfee, params.GetConsensus().nCoinbaseMaturity)) {
                 // Any transaction validation failure in ConnectBlock is a block consensus failure
                 state.Invalid(BlockValidationResult::BLOCK_CONSENSUS,
                               tx_state.GetRejectReason(),
@@ -3128,12 +3144,16 @@ bool Chainstate::ConnectTip(
 CBlockIndex* Chainstate::FindMostWorkChain()
 {
     AssertLockHeld(::cs_main);
+    // PQCH: candidates refused by the reorganisation depth limit in this call (see below). They stay
+    // in setBlockIndexCandidates, as the block index invariants require, and are skipped here.
+    std::set<const CBlockIndex*> refused;
     do {
         CBlockIndex *pindexNew = nullptr;
 
         // Find the best candidate header.
         {
             std::set<CBlockIndex*, CBlockIndexWorkComparator>::reverse_iterator it = setBlockIndexCandidates.rbegin();
+            while (it != setBlockIndexCandidates.rend() && refused.contains(*it)) ++it;
             if (it == setBlockIndexCandidates.rend())
                 return nullptr;
             pindexNew = *it;
@@ -3175,8 +3195,37 @@ CBlockIndex* Chainstate::FindMostWorkChain()
                 break;
             }
         }
-        if (!fInvalidAncestor)
-            return pindexNew;
+        if (fInvalidAncestor) continue;
+
+        // PQCH: reorganisation depth limit (whitepaper, section 16). Once synced, never switch
+        // to a chain that would disconnect more than MaxReorgDepth() blocks of the active chain,
+        // even if it has more work: an attacker can disturb the last minutes, not reverse
+        // payments older than about an hour. The refused blocks are not marked invalid; an
+        // operator who decides to follow that chain anyway can invalidateblock the first block
+        // of the local branch, after which the switch is no longer deep.
+        // During initial block download the chain with most work always wins.
+        const int max_depth{m_chainman.MaxReorgDepth()};
+        const CBlockIndex* tip{m_chain.Tip()};
+        if (max_depth > 0 && tip && !m_chainman.IsInitialBlockDownload()) {
+            const CBlockIndex* fork{m_chain.FindFork(*pindexNew)};
+            const int depth{tip->nHeight - (fork ? fork->nHeight : -1)};
+            if (depth > max_depth) {
+                if (m_last_refused_reorg != pindexNew) {
+                    m_last_refused_reorg = pindexNew;
+                    LogWarning("Refusing reorganisation of %d blocks (limit %d) to %s at height %d; fork point %s at height %d. "
+                               "To follow that chain anyway, invalidateblock the first block of the local branch.",
+                               depth, max_depth, pindexNew->GetBlockHash().ToString(), pindexNew->nHeight,
+                               fork ? fork->GetBlockHash().ToString() : "none", fork ? fork->nHeight : -1);
+                    m_chainman.GetNotifications().warningSet(
+                        kernel::Warning::DEEP_REORG_REFUSED,
+                        Untranslated(strprintf("Warning: refused a reorganisation of %d blocks (limit %d) towards a chain with more work. "
+                                               "Check your connections; see the documentation on deep reorganisations.", depth, max_depth)));
+                }
+                refused.insert(pindexNew);
+                continue;
+            }
+        }
+        return pindexNew;
     } while(true);
 }
 
@@ -3276,7 +3325,7 @@ bool Chainstate::ActivateBestChainStep(BlockValidationState& state, CBlockIndex&
         // any disconnected transactions back to the mempool.
         MaybeUpdateMempoolForReorg(disconnectpool, true);
     }
-    if (m_mempool) m_mempool->check(this->CoinsTip(), this->m_chain.Height() + 1);
+    if (m_mempool) m_mempool->check(this->CoinsTip(), this->m_chain.Height() + 1, m_chainman.GetConsensus().nCoinbaseMaturity);
 
     CheckForkWarningConditions();
 
@@ -4169,6 +4218,17 @@ static bool ContextualCheckBlock(const CBlock& block, BlockValidationState& stat
         }
     }
 
+    // PQCH rule 1: only post-quantum (or keyless) output types, coinbase included.
+    if (DeploymentActiveAfter(pindexPrev, chainman, Consensus::DEPLOYMENT_PQRULES)) {
+        for (const auto& tx : block.vtx) {
+            TxValidationState tx_state;
+            if (!Consensus::CheckPQOutputs(*tx, tx_state)) {
+                return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, tx_state.GetRejectReason(),
+                                     strprintf("%s (tx %s)", tx_state.GetDebugMessage(), tx->GetHash().ToString()));
+            }
+        }
+    }
+
     // Enforce rule that the coinbase starts with serialized block height
     if (DeploymentActiveAfter(pindexPrev, chainman, Consensus::DEPLOYMENT_HEIGHTINCB))
     {
@@ -4483,7 +4543,8 @@ MempoolAcceptResult ChainstateManager::ProcessTransaction(const CTransactionRef&
         return MempoolAcceptResult::Failure(state);
     }
     auto result = AcceptToMemoryPool(active_chainstate, tx, GetTime(), /*bypass_limits=*/ false, test_accept);
-    active_chainstate.GetMempool()->check(active_chainstate.CoinsTip(), active_chainstate.m_chain.Height() + 1);
+    active_chainstate.GetMempool()->check(active_chainstate.CoinsTip(), active_chainstate.m_chain.Height() + 1,
+                                         active_chainstate.m_chainman.GetConsensus().nCoinbaseMaturity);
     return result;
 }
 
@@ -6160,6 +6221,7 @@ static ChainstateManager::Options&& Flatten(ChainstateManager::Options&& opts)
     if (!opts.check_block_index.has_value()) opts.check_block_index = opts.chainparams.DefaultConsistencyChecks();
     if (!opts.minimum_chain_work.has_value()) opts.minimum_chain_work = UintToArith256(opts.chainparams.GetConsensus().nMinimumChainWork);
     if (!opts.assumed_valid_block.has_value()) opts.assumed_valid_block = opts.chainparams.GetConsensus().defaultAssumeValid;
+    if (!opts.max_reorg_depth.has_value()) opts.max_reorg_depth = opts.chainparams.MaxReorgDepth();
     return std::move(opts);
 }
 

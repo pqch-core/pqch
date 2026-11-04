@@ -26,10 +26,13 @@ SignatureCache::SignatureCache(const size_t max_size_bytes)
     // 'S' for Schnorr (followed by 0 bytes).
     static constexpr unsigned char PADDING_ECDSA[32] = {'E'};
     static constexpr unsigned char PADDING_SCHNORR[32] = {'S'};
+    static constexpr unsigned char PADDING_PQ[32] = {'P'};
     m_salted_hasher_ecdsa.Write(nonce.begin(), 32);
     m_salted_hasher_ecdsa.Write(PADDING_ECDSA, 32);
     m_salted_hasher_schnorr.Write(nonce.begin(), 32);
     m_salted_hasher_schnorr.Write(PADDING_SCHNORR, 32);
+    m_salted_hasher_pq.Write(nonce.begin(), 32);
+    m_salted_hasher_pq.Write(PADDING_PQ, 32);
 
     const auto [num_elems, approx_size_bytes] = setValid.setup_bytes(max_size_bytes);
     LogInfo("Using %zu MiB out of %zu MiB requested for signature cache, able to store %zu elements",
@@ -46,6 +49,13 @@ void SignatureCache::ComputeEntrySchnorr(uint256& entry, const uint256& hash, st
 {
     CSHA256 hasher = m_salted_hasher_schnorr;
     hasher.Write(hash.begin(), 32).Write(pubkey.data(), pubkey.size()).Write(sig.data(), sig.size()).Finalize(entry.begin());
+}
+
+void SignatureCache::ComputeEntryPQ(uint256& entry, const uint256& hash, std::span<const unsigned char> sig, std::span<const unsigned char> pubkey, PQAlgorithm algo) const
+{
+    CSHA256 hasher = m_salted_hasher_pq;
+    const unsigned char algo_byte{static_cast<unsigned char>(algo)};
+    hasher.Write(&algo_byte, 1).Write(hash.begin(), 32).Write(pubkey.data(), pubkey.size()).Write(sig.data(), sig.size()).Finalize(entry.begin());
 }
 
 bool SignatureCache::Get(const uint256& entry, const bool erase)
@@ -79,6 +89,16 @@ bool CachingTransactionSignatureChecker::VerifySchnorrSignature(std::span<const 
     m_signature_cache.ComputeEntrySchnorr(entry, sighash, sig, pubkey);
     if (m_signature_cache.Get(entry, !store)) return true;
     if (!TransactionSignatureChecker::VerifySchnorrSignature(sig, pubkey, sighash)) return false;
+    if (store) m_signature_cache.Set(entry);
+    return true;
+}
+
+bool CachingTransactionSignatureChecker::VerifyPQSignature(std::span<const unsigned char> sig, std::span<const unsigned char> pubkey, PQAlgorithm algo, const uint256& sighash) const
+{
+    uint256 entry;
+    m_signature_cache.ComputeEntryPQ(entry, sighash, sig, pubkey, algo);
+    if (m_signature_cache.Get(entry, !store)) return true;
+    if (!TransactionSignatureChecker::VerifyPQSignature(sig, pubkey, algo, sighash)) return false;
     if (store) m_signature_cache.Set(entry);
     return true;
 }

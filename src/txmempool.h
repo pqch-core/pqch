@@ -8,6 +8,7 @@
 
 #include <coins.h>
 #include <consensus/amount.h>
+#include <consensus/consensus.h>
 #include <indirectmap.h>
 #include <kernel/cs_main.h>
 #include <kernel/mempool_entry.h>          // IWYU pragma: export
@@ -313,7 +314,7 @@ public:
      * all inputs are in the mapNextTx array). If sanity-checking is turned off,
      * check does nothing.
      */
-    void check(const CCoinsViewCache& active_coins_tip, int64_t spendheight) const EXCLUSIVE_LOCKS_REQUIRED(::cs_main);
+    void check(const CCoinsViewCache& active_coins_tip, int64_t spendheight, int coinbase_maturity = COINBASE_MATURITY) const EXCLUSIVE_LOCKS_REQUIRED(::cs_main);
 
     /**
      * Remove a transaction from the mempool along with any descendants.

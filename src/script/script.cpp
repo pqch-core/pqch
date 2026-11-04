@@ -150,6 +150,12 @@ std::string GetOpName(opcodetype opcode)
     // Opcode added by BIP 342 (Tapscript)
     case OP_CHECKSIGADD            : return "OP_CHECKSIGADD";
 
+    // PQCH
+    case OP_CHECKSIGMLDSA          : return "OP_CHECKSIGMLDSA";
+    case OP_CHECKSIGMLDSAVERIFY    : return "OP_CHECKSIGMLDSAVERIFY";
+    case OP_CHECKSIGSLHDSA         : return "OP_CHECKSIGSLHDSA";
+    case OP_CHECKSIGSLHDSAVERIFY   : return "OP_CHECKSIGSLHDSAVERIFY";
+
     case OP_INVALIDOPCODE          : return "OP_INVALIDOPCODE";
 
     } // no default case, so the compiler can warn about missing cases

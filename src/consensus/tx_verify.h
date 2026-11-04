@@ -14,6 +14,7 @@
 
 class CBlockIndex;
 class CCoinsViewCache;
+class CScript;
 class CTransaction;
 class TxValidationState;
 
@@ -26,7 +27,21 @@ namespace Consensus {
  * @param[out] txfee Set to the transaction fee if successful.
  * Preconditions: tx.IsCoinBase() is false.
  */
-[[nodiscard]] bool CheckTxInputs(const CTransaction& tx, TxValidationState& state, const CCoinsViewCache& inputs, int nSpendHeight, CAmount& txfee);
+/**
+ * PQCH rule 1 (whitepaper, section 21.3), enforced from the activation of the post-quantum rules
+ * (genesis on the main network), coinbase included. The only valid outputs are:
+ *  - P2MR (witness v1, 32-byte Merkle root): coins protected by post-quantum signatures;
+ *  - OP_RETURN (provably unspendable data);
+ *  - pay-to-anchor (witness v1, 0x4e73): keyless anchors for fee bumping, e.g. in Lightning;
+ *  - witness versions 2 to 16, reserved for future soft forks.
+ * Outputs without witness (P2PK, P2PKH, P2SH, bare scripts) and witness v0 are invalid, so no coin
+ * is ever protected by an elliptic-curve key or a 160-bit hash alone.
+ */
+[[nodiscard]] bool IsPQAllowedOutput(const CScript& script_pub_key);
+[[nodiscard]] bool CheckPQOutputs(const CTransaction& tx, TxValidationState& state);
+
+[[nodiscard]] bool CheckTxInputs(const CTransaction& tx, TxValidationState& state, const CCoinsViewCache& inputs, int nSpendHeight, CAmount& txfee,
+                                 int coinbase_maturity);
 } // namespace Consensus
 
 /** Auxiliary functions for transaction validation (ideally should not be exposed) */

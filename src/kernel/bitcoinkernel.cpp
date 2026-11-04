@@ -230,6 +230,7 @@ btck_Warning cast_btck_warning(kernel::Warning warning)
     case kernel::Warning::UNKNOWN_NEW_RULES_ACTIVATED:
         return btck_Warning_UNKNOWN_NEW_RULES_ACTIVATED;
     case kernel::Warning::LARGE_WORK_INVALID_CHAIN:
+    case kernel::Warning::DEEP_REORG_REFUSED: // PQCH: reported as an alternative chain the node will not follow
         return btck_Warning_LARGE_WORK_INVALID_CHAIN;
     } // no default case, so the compiler can warn about missing cases
     assert(false);

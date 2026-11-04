@@ -9,6 +9,8 @@ namespace kernel {
 enum class Warning {
     UNKNOWN_NEW_RULES_ACTIVATED,
     LARGE_WORK_INVALID_CHAIN,
+    //! PQCH: a chain with more work was refused because it would reorganise more than -maxreorgdepth blocks.
+    DEEP_REORG_REFUSED,
 };
 } // namespace kernel
 #endif // BITCOIN_KERNEL_WARNING_H

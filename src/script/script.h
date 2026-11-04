@@ -64,6 +64,14 @@ inline constexpr int64_t VALIDATION_WEIGHT_PER_SIGOP_PASSED{50};
 // How much weight budget is added to the witness size (Tapscript only, see BIP 342).
 inline constexpr int64_t VALIDATION_WEIGHT_OFFSET{50};
 
+// PQCH: validation weight of each post-quantum signature check in PQ-script, in the same units as
+// VALIDATION_WEIGHT_PER_SIGOP_PASSED (50 = one Schnorr verification). The budget of every input is
+// its witness size + VALIDATION_WEIGHT_OFFSET, so verification time per witness byte, and with it
+// the worst-case time to validate a block, stays bounded (whitepaper, section 21.3). Calibrated
+// from measured verification times; see contrib/pqch/FASE4.md.
+inline constexpr int64_t VALIDATION_WEIGHT_PER_MLDSA_SIGOP{200}; // measured ~3.4x a Schnorr check
+inline constexpr int64_t VALIDATION_WEIGHT_PER_SLHDSA_SIGOP{800}; // measured ~14x a Schnorr check
+
 template <typename T>
 std::vector<unsigned char> ToByteVector(const T& in)
 {
@@ -209,6 +217,14 @@ enum opcodetype
 
     // Opcode added by BIP 342 (Tapscript)
     OP_CHECKSIGADD = 0xba,
+
+    // PQCH: post-quantum signature opcodes (whitepaper, section 21.3). Defined only in P2MR leaves
+    // with leaf version 0xc2 (P2MR_LEAF_PQSCRIPT); elsewhere they keep their old meaning (OP_SUCCESS
+    // in tapscript, invalid in legacy and witness v0 scripts). 0xc4/0xc5 are reserved for FN-DSA.
+    OP_CHECKSIGMLDSA = 0xc0,
+    OP_CHECKSIGMLDSAVERIFY = 0xc1,
+    OP_CHECKSIGSLHDSA = 0xc2,
+    OP_CHECKSIGSLHDSAVERIFY = 0xc3,
 
     OP_INVALIDOPCODE = 0xff,
 };
@@ -603,6 +619,13 @@ public:
 
 /** Test for OP_SUCCESSx opcodes as defined by BIP342. */
 bool IsOpSuccess(const opcodetype& opcode);
+
+/** PQCH: whether opcode is one of the post-quantum signature opcodes of P2MR PQ-script leaves. */
+constexpr bool IsPQSigOpcode(opcodetype opcode)
+{
+    return opcode == OP_CHECKSIGMLDSA || opcode == OP_CHECKSIGMLDSAVERIFY ||
+           opcode == OP_CHECKSIGSLHDSA || opcode == OP_CHECKSIGSLHDSAVERIFY;
+}
 
 bool CheckMinimalPush(const std::vector<unsigned char>& data, opcodetype opcode);
 

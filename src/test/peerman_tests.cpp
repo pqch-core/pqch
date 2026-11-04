@@ -8,6 +8,7 @@
 #include <interfaces/mining.h>
 #include <net_processing.h>
 #include <pow.h>
+#include <pow_randomx.h>
 #include <primitives/block.h>
 #include <protocol.h>
 #include <sync.h>
@@ -35,7 +36,9 @@ static void mineBlock(node::NodeContext& node, FakeNodeClock& clock, std::chrono
     auto block_template{mining->createNewBlock({}, /*cooldown=*/false)};
     BOOST_REQUIRE(block_template);
     CBlock block{block_template->getBlock()};
-    while (!CheckProofOfWork(block.GetHash(), block.nBits, node.chainman->GetConsensus())) ++block.nNonce;
+    // PQCH: RandomX proof of work, keyed by an earlier block of the chain.
+    const CBlockIndex* prev{WITH_LOCK(::cs_main, return node.chainman->m_blockman.LookupBlockIndex(block.hashPrevBlock))};
+    while (!CheckBlockProofOfWork(block, Assert(prev), node.chainman->GetConsensus())) ++block.nNonce;
     block.fChecked = true; // little speedup
     clock.set(curr_time); // process block at current time
     Assert(node.chainman->ProcessNewBlock(std::make_shared<const CBlock>(block), /*force_processing=*/true, /*min_pow_checked=*/true, nullptr));

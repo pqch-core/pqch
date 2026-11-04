@@ -113,6 +113,22 @@ std::string ScriptErrorString(const ScriptError serror)
             return "OP_IF/NOTIF argument must be minimal in tapscript";
         case SCRIPT_ERR_TAPSCRIPT_EMPTY_PUBKEY:
             return "Empty public key in tapscript";
+        case SCRIPT_ERR_P2MR_KEY_PATH:
+            return "P2MR outputs have no key path; a leaf script and control block are required";
+        case SCRIPT_ERR_P2MR_CONTROL_BYTE:
+            return "P2MR control block first byte must have its low bit set";
+        case SCRIPT_ERR_P2MR_TAPSCRIPT_LEAF:
+            return "Leaf version 0xc0 (plain tapscript) is not allowed in P2MR outputs";
+        case SCRIPT_ERR_PQ_PUBKEY_SIZE:
+            return "Post-quantum public key has the wrong size";
+        case SCRIPT_ERR_PQ_SIG_SIZE:
+            return "Post-quantum signature has the wrong size";
+        case SCRIPT_ERR_PQ_SIG_HASHTYPE:
+            return "Invalid post-quantum signature hash type";
+        case SCRIPT_ERR_PQ_SIG:
+            return "Invalid post-quantum signature";
+        case SCRIPT_ERR_PQ_SIG_REQUIRED:
+            return "A script that checks an elliptic-curve signature must also check a post-quantum signature";
         case SCRIPT_ERR_OP_CODESEPARATOR:
             return "Using OP_CODESEPARATOR in non-witness script";
         case SCRIPT_ERR_SIG_FINDANDDELETE:

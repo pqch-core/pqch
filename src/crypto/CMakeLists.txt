@@ -59,3 +59,33 @@ if(HAVE_ARM_SHANI)
     COMPILE_OPTIONS ${ARM_SHANI_CXXFLAGS}
   )
 endif()
+
+# PQCH: post-quantum signatures (whitepaper, section 21). Third-party C code, built as is in its
+# own library so that the project's warning flags do not apply to it:
+#  - mldsa-native v2.0.0 (ML-DSA, FIPS 204), parameter set 44, without the randomized API
+#    (PQCH supplies the randomness itself), symbols prefixed PQCH_mldsa44_.
+#  - slhdsa-c (SLH-DSA, FIPS 205).
+enable_language(C)
+add_library(pqch_pqc_c STATIC EXCLUDE_FROM_ALL
+  pqc/mldsa-native/mldsa_native.c
+  pqc/slhdsa-c/sha2_256.c
+  pqc/slhdsa-c/sha2_512.c
+  pqc/slhdsa-c/sha3_api.c
+  pqc/slhdsa-c/sha3_f1600.c
+  pqc/slhdsa-c/slh_dsa.c
+  pqc/slhdsa-c/slh_prehash.c
+  pqc/slhdsa-c/slh_sha2.c
+  pqc/slhdsa-c/slh_shake.c
+)
+set_target_properties(pqch_pqc_c PROPERTIES C_STANDARD 99 C_STANDARD_REQUIRED ON POSITION_INDEPENDENT_CODE ON)
+target_compile_definitions(pqch_pqc_c
+  PUBLIC
+    MLD_CONFIG_PARAMETER_SET=44
+    MLD_CONFIG_NAMESPACE_PREFIX=PQCH_mldsa44
+    MLD_CONFIG_NO_RANDOMIZED_API
+)
+target_include_directories(pqch_pqc_c PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/pqc/mldsa-native)
+target_compile_options(pqch_pqc_c PRIVATE $<$<NOT:$<C_COMPILER_ID:MSVC>>:-O2 -w>)
+
+target_sources(bitcoin_crypto PRIVATE pqc/pqc.cpp)
+target_link_libraries(bitcoin_crypto PUBLIC pqch_pqc_c)

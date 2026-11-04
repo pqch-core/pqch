@@ -4,6 +4,8 @@
 
 #include <test/util/setup_common.h>
 
+#include <test/util/pqch.h>
+
 #include <addrman.h>
 #include <banman.h>
 #include <chain.h>
@@ -157,8 +159,8 @@ BasicTestingSetup::BasicTestingSetup(const ChainType chainType, TestOpts opts)
     m_node.shutdown_signal = &m_interrupt;
     m_node.shutdown_request = [this]{ return m_interrupt(); };
     m_node.args = &gArgs;
-    std::vector<const char*> arguments = Cat(
-        {
+    std::vector<const char*> arguments = Cat(Cat(
+        std::vector<const char*>{
             "dummy",
             "-printtoconsole=0",
             "-logsourcelocations",
@@ -168,6 +170,7 @@ BasicTestingSetup::BasicTestingSetup(const ChainType chainType, TestOpts opts)
             "-debug",
             "-debugexclude=leveldb",
         },
+        opts.legacy_bitcoin_scripts && chainType == ChainType::REGTEST ? std::vector<const char*>{"-testactivationheight=pqrules@1000000000"} : std::vector<const char*>{}),
         opts.extra_args);
     if (G_TEST_COMMAND_LINE_ARGUMENTS) {
         arguments = Cat(arguments, G_TEST_COMMAND_LINE_ARGUMENTS());
@@ -235,6 +238,12 @@ BasicTestingSetup::BasicTestingSetup(const ChainType chainType, TestOpts opts)
     SelectParams(chainType);
     InitLogging(*m_node.args);
     AppInitParameterInteraction(*m_node.args);
+    if (opts.legacy_bitcoin_scripts && chainType == ChainType::MAIN) {
+        // PQCH: same as -testactivationheight=pqrules@... on regtest, which mainnet refuses.
+        CChainParams::MainNetOptions main_opts;
+        main_opts.dep_opts.activation_heights[Consensus::DEPLOYMENT_PQRULES] = 1'000'000'000;
+        SelectMainParamsForUnitTests(main_opts);
+    }
     LogInstance().StartLogging();
     m_node.warnings = std::make_unique<node::Warnings>();
     m_node.kernel = std::make_unique<kernel::Context>();
@@ -421,24 +430,30 @@ TestChain100Setup::TestChain100Setup(
     constexpr std::array<unsigned char, 32> vchKey = {
         {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}};
     coinbaseKey.Set(vchKey.begin(), vchKey.end(), true);
+    if (opts.legacy_bitcoin_scripts) {
+        m_coinbase_script = CScript() << ToByteVector(coinbaseKey.GetPubKey()) << OP_CHECKSIG;
+    } else {
+        // PQCH: the post-quantum rules only accept P2MR (and keyless) outputs, coinbase included.
+        m_coinbase_script = pqch_test::MakeTree({pqch_test::LeafMLDSA(pqch_test::MLDSAKey(COINBASE_PQ_KEY_TAG).pubkey)}).ScriptPubKey();
+    }
 
     // Generate a 100-block chain:
     this->mineBlocks(COINBASE_MATURITY);
 
-    {
+    if (opts.legacy_bitcoin_scripts) {
         LOCK(::cs_main);
-        assert(
-            m_node.chainman->ActiveChain().Tip()->GetBlockHash().ToString() ==
-            "0ee6e270d6594249e548110619f7bd690695beb219b915da4a2e84e2b61ed60f");
+        // PQCH: deterministic 100-block regtest chain (PQCH genesis, RandomX proof of work).
+        const std::string tip_hash{m_node.chainman->ActiveChain().Tip()->GetBlockHash().ToString()};
+        if (tip_hash != "6e42b294ec0066a4d00c19ec38912523b9290bccaf0585f98384195946f99036") std::cerr << "TestChain100Setup tip: " << tip_hash << std::endl;
+        assert(tip_hash == "6e42b294ec0066a4d00c19ec38912523b9290bccaf0585f98384195946f99036");
     }
 }
 
 void TestChain100Setup::mineBlocks(int num_blocks)
 {
-    CScript scriptPubKey = CScript() << ToByteVector(coinbaseKey.GetPubKey()) << OP_CHECKSIG;
     for (int i = 0; i < num_blocks; i++) {
         std::vector<CMutableTransaction> noTxns;
-        CBlock b = CreateAndProcessBlock(noTxns, scriptPubKey);
+        CBlock b = CreateAndProcessBlock(noTxns, m_coinbase_script);
         m_clock += 1s;
         m_coinbase_txns.push_back(b.vtx[0]);
     }

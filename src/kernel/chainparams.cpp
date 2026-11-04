@@ -7,6 +7,7 @@
 
 #include <chainparamsseeds.h>
 #include <consensus/amount.h>
+#include <consensus/consensus.h>
 #include <consensus/merkle.h>
 #include <consensus/params.h>
 #include <crypto/hex_base.h>
@@ -102,6 +103,9 @@ void CChainParams::ApplyDeploymentOptions(const DeploymentOptions& opts)
         case Consensus::BuriedDeployment::DEPLOYMENT_CSV:
             consensus.CSVHeight = int{height};
             break;
+        case Consensus::BuriedDeployment::DEPLOYMENT_PQRULES:
+            consensus.PQRulesHeight = int{height};
+            break;
         }
     }
 
@@ -130,6 +134,9 @@ public:
         consensus.BIP66Height = 1;
         consensus.CSVHeight = 1;
         consensus.SegwitHeight = 0;
+        // PQCH: post-quantum rules from the genesis block: no output is ever protected by an
+        // elliptic-curve key alone (whitepaper, section 21).
+        consensus.PQRulesHeight = 0;
         consensus.MinBIP9WarningHeight = 0;
         // PQCH: RandomX runs at thousands, not trillions, of hashes per second per machine, so the
         // easiest target is 2^239 - 1 (about 131,072 hashes per block, i.e. ~2.2 kH/s of total
@@ -147,6 +154,10 @@ public:
         consensus.fPowUseASERT = true;
         consensus.nASERTHalfLife = 4 * 60 * 60; // 4 hours (240 blocks); to be confirmed in simulation and testnet
         consensus.nASERTAnchorHeight = 0;
+        // PQCH: 720 blocks (~12 h) before a block reward can be spent.
+        consensus.nCoinbaseMaturity = MAINNET_COINBASE_MATURITY;
+        // PQCH: a synced node never rewrites more than 60 blocks (~1 h) of its active chain.
+        m_max_reorg_depth = 60;
         consensus.fPowAllowMinDifficultyBlocks = false;
         consensus.enforce_BIP94 = false;
         consensus.fPowNoRetargeting = false;
@@ -585,11 +596,16 @@ public:
         consensus.BIP66Height = 1;  // Always active unless overridden
         consensus.CSVHeight = 1;    // Always active unless overridden
         consensus.SegwitHeight = 0; // Always active unless overridden
+        consensus.PQRulesHeight = 0; // PQCH: always active unless overridden (-testactivationheight=pqrules@<height>)
         consensus.MinBIP9WarningHeight = 0;
         consensus.powLimit = uint256{"7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"};
         consensus.nPowTargetTimespan = 24 * 60 * 60; // one day
         consensus.nPowTargetSpacing = 60; // PQCH: 1-minute blocks
         consensus.fPowUseRandomX = true; // PQCH: RandomX v2 proof of work (trivial target, ~2 hashes per block)
+        // PQCH: regtest keeps Bitcoin's 100-block coinbase maturity so that test chains stay short;
+        // the reorg limit is the main network's (tests can change it with -maxreorgdepth).
+        consensus.nCoinbaseMaturity = COINBASE_MATURITY;
+        m_max_reorg_depth = 60;
         consensus.fPowAllowMinDifficultyBlocks = true;
         consensus.enforce_BIP94 = opts.enforce_bip94;
         consensus.fPowNoRetargeting = true;
@@ -616,10 +632,11 @@ public:
 
         ApplyDeploymentOptions(opts.dep_opts);
 
-        // PQCH regtest genesis: 2026-11-04 13:00 UTC, reward 12.5 PQCH, OP_RETURN output.
-        genesis = CreatePQCHGenesisBlock("PQCH regtest 04/Nov/2026 Peer-to-peer electronic cash, quantum-safe", 1793797200, 1, 0x207fffff, 1'250'000'000);
+        // PQCH regtest genesis: reward 12.5 PQCH, OP_RETURN output. The timestamp is Bitcoin regtest's (2011):
+        // a genesis older than -maxtipage puts a fresh node in initial block download, as tests expect.
+        genesis = CreatePQCHGenesisBlock("PQCH regtest 04/Nov/2026 Peer-to-peer electronic cash, quantum-safe", /*nTime=*/1296688602, 1, 0x207fffff, 1'250'000'000);
         consensus.hashGenesisBlock = genesis.GetHash();
-        assert(consensus.hashGenesisBlock == uint256{"126fed0ca2429d13f7515bd67256a010767ad26d35bf9acbaecf11d998503e79"});
+        assert(consensus.hashGenesisBlock == uint256{"dc23bf8241b903f340911cf5199292b79b6ca42078d45c1dca9ccfe18678364b"});
         assert(genesis.hashMerkleRoot == uint256{"0d1c1bfd8c16966c2f0c7e4a47a387465dd665a10174eb077c589d7a27ef75d7"});
 
         vFixedSeeds.clear(); //!< Regtest mode doesn't have any fixed seeds.
@@ -629,9 +646,17 @@ public:
         fDefaultConsistencyChecks = true;
         m_is_mockable_chain = true;
 
-        // PQCH: the Bitcoin regtest snapshots depended on the old genesis block and subsidy.
-        // They are regenerated together with the unit and functional tests in a later phase.
-        m_assumeutxo_data = {};
+        // PQCH: snapshot of the deterministic unit test chain (TestChain100Setup + 10 blocks, PQCH
+        // genesis and subsidy). Bitcoin's snapshots at heights 200 (fuzz target) and 299 (functional
+        // tests) are to be regenerated with those tests.
+        m_assumeutxo_data = {
+            {   // For use by unit tests
+                .height = 110,
+                .hash_serialized = AssumeutxoHash{uint256{"5d6c74a49ff1d545b52f234e124e76e873ffca54f9b86ae0c75fdab9425ebf61"}},
+                .m_chain_tx_count = 111,
+                .blockhash = uint256{"bb728fa34c4e19cd72e4bc2e5dcbe1757b0432ebdebda103b779294a8cccc116"},
+            },
+        };
 
         chainTxData = ChainTxData{
             .nTime = 0,

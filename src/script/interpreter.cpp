@@ -5,6 +5,7 @@
 
 #include <script/interpreter.h>
 
+#include <crypto/pqc/pqc.h>
 #include <crypto/ripemd160.h>
 #include <crypto/sha1.h>
 #include <crypto/sha256.h>
@@ -380,6 +381,7 @@ static bool EvalChecksigTapscript(const valtype& sig, const valtype& pubkey, Scr
         if (success && !checker.CheckSchnorrSignature(sig, pubkey, sigversion, execdata, serror)) {
             return false; // serror is set
         }
+        if (success) ++execdata.m_ec_sigs_checked; // PQCH: rule 2 bookkeeping (see ExecuteWitnessScript)
     } else {
         /*
          *  New public key version softforks should be defined before this `else` block.
@@ -454,7 +456,7 @@ bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& 
             //
             if (!script.GetOp(pc, opcode, vchPushValue))
                 return set_error(serror, SCRIPT_ERR_BAD_OPCODE);
-            if (vchPushValue.size() > MAX_SCRIPT_ELEMENT_SIZE)
+            if (vchPushValue.size() > (execdata.m_pq_leaf ? MAX_PQSCRIPT_ELEMENT_SIZE : MAX_SCRIPT_ELEMENT_SIZE))
                 return set_error(serror, SCRIPT_ERR_PUSH_SIZE);
 
             if (sigversion == SigVersion::BASE || sigversion == SigVersion::WITNESS_V0) {
@@ -1112,6 +1114,47 @@ bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& 
                 }
                 break;
 
+                // PQCH: post-quantum signature checks (whitepaper, section 21.3), only in P2MR PQ-script leaves.
+                // Same structure as OP_CHECKSIG in tapscript (BIP 342): an empty signature pushes false;
+                // a non-empty signature must be valid, otherwise the script fails.
+                case OP_CHECKSIGMLDSA:
+                case OP_CHECKSIGMLDSAVERIFY:
+                case OP_CHECKSIGSLHDSA:
+                case OP_CHECKSIGSLHDSAVERIFY:
+                {
+                    if (sigversion != SigVersion::TAPSCRIPT || !execdata.m_pq_leaf) return set_error(serror, SCRIPT_ERR_BAD_OPCODE);
+
+                    // (sig pubkey -- bool)
+                    if (stack.size() < 2) return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+                    const bool slh{opcode == OP_CHECKSIGSLHDSA || opcode == OP_CHECKSIGSLHDSAVERIFY};
+                    const PQAlgorithm algo{slh ? PQAlgorithm::SLH_DSA_SHA2_128S : PQAlgorithm::ML_DSA_44};
+                    const valtype& sig = stacktop(-2);
+                    const valtype& pubkey = stacktop(-1);
+
+                    bool success = !sig.empty();
+                    if (success) {
+                        assert(execdata.m_validation_weight_left_init);
+                        execdata.m_validation_weight_left -= slh ? VALIDATION_WEIGHT_PER_SLHDSA_SIGOP : VALIDATION_WEIGHT_PER_MLDSA_SIGOP;
+                        if (execdata.m_validation_weight_left < 0) return set_error(serror, SCRIPT_ERR_TAPSCRIPT_VALIDATION_WEIGHT);
+                    }
+                    // Strict: no upgradable key types here; new algorithms come with new opcodes or leaf versions.
+                    if (pubkey.size() != (slh ? pqc::SLHDSA128S_PUBKEY_SIZE : pqc::MLDSA44_PUBKEY_SIZE)) {
+                        return set_error(serror, SCRIPT_ERR_PQ_PUBKEY_SIZE);
+                    }
+                    if (success) {
+                        if (!checker.CheckPQSignature(sig, pubkey, algo, sigversion, execdata, serror)) return false; // serror is set
+                        ++execdata.m_pq_sigs_checked;
+                    }
+                    popstack(stack);
+                    popstack(stack);
+                    stack.push_back(success ? vchTrue : vchFalse);
+                    if (opcode == OP_CHECKSIGMLDSAVERIFY || opcode == OP_CHECKSIGSLHDSAVERIFY) {
+                        if (!success) return set_error(serror, SCRIPT_ERR_CHECKSIGVERIFY);
+                        popstack(stack);
+                    }
+                }
+                break;
+
                 case OP_CHECKMULTISIG:
                 case OP_CHECKMULTISIGVERIFY:
                 {
@@ -1490,7 +1533,7 @@ static bool HandleMissingData(MissingDataBehavior mdb)
 }
 
 template<typename T>
-bool SignatureHashSchnorr(uint256& hash_out, ScriptExecutionData& execdata, const T& tx_to, uint32_t in_pos, uint8_t hash_type, SigVersion sigversion, const PrecomputedTransactionData& cache, MissingDataBehavior mdb)
+bool SignatureHashSchnorr(uint256& hash_out, ScriptExecutionData& execdata, const T& tx_to, uint32_t in_pos, uint8_t hash_type, SigVersion sigversion, const PrecomputedTransactionData& cache, MissingDataBehavior mdb, uint8_t key_version_in)
 {
     uint8_t ext_flag, key_version;
     switch (sigversion) {
@@ -1504,7 +1547,8 @@ bool SignatureHashSchnorr(uint256& hash_out, ScriptExecutionData& execdata, cons
         // 32-byte public keys in the tapscript signature opcode execution.
         // An upgradable public key version (with a size not 32-byte) may
         // request a different key_version with a new sigversion.
-        key_version = 0;
+        // PQCH: post-quantum keys use their PQAlgorithm value as key_version.
+        key_version = key_version_in;
         break;
     default:
         assert(false);
@@ -1699,6 +1743,42 @@ bool GenericTransactionSignatureChecker<T>::VerifySchnorrSignature(std::span<con
 }
 
 template <class T>
+bool GenericTransactionSignatureChecker<T>::VerifyPQSignature(std::span<const unsigned char> sig, std::span<const unsigned char> pubkey, PQAlgorithm algo, const uint256& sighash) const
+{
+    // The signed message is the 32-byte BIP341 signature hash, with the PQCH context string
+    // (FIPS 204/205 "pure" signing), so these keys can never sign for another protocol.
+    switch (algo) {
+    case PQAlgorithm::ML_DSA_44:
+        return pqc::MLDSA44Verify(sig, sighash, pqc::TX_SIGNATURE_CONTEXT, pubkey);
+    case PQAlgorithm::SLH_DSA_SHA2_128S:
+        return pqc::SLHDSA128sVerify(sig, sighash, pqc::TX_SIGNATURE_CONTEXT, pubkey);
+    } // no default case, so the compiler can warn about missing cases
+    return false;
+}
+
+template <class T>
+bool GenericTransactionSignatureChecker<T>::CheckPQSignature(std::span<const unsigned char> sig, std::span<const unsigned char> pubkey, PQAlgorithm algo, SigVersion sigversion, ScriptExecutionData& execdata, ScriptError* serror) const
+{
+    assert(sigversion == SigVersion::TAPSCRIPT && execdata.m_pq_leaf);
+    // Exact size, optionally followed by one hash type byte (as BIP341 does for Schnorr signatures).
+    const size_t sig_size{algo == PQAlgorithm::ML_DSA_44 ? pqc::MLDSA44_SIG_SIZE : pqc::SLHDSA128S_SIG_SIZE};
+    if (sig.size() != sig_size && sig.size() != sig_size + 1) return set_error(serror, SCRIPT_ERR_PQ_SIG_SIZE);
+
+    uint8_t hashtype = SIGHASH_DEFAULT;
+    if (sig.size() == sig_size + 1) {
+        hashtype = SpanPopBack(sig);
+        if (hashtype == SIGHASH_DEFAULT) return set_error(serror, SCRIPT_ERR_PQ_SIG_HASHTYPE);
+    }
+    uint256 sighash;
+    if (!this->txdata) return HandleMissingData(m_mdb);
+    if (!SignatureHashSchnorr(sighash, execdata, *txTo, nIn, hashtype, sigversion, *this->txdata, m_mdb, static_cast<uint8_t>(algo))) {
+        return set_error(serror, SCRIPT_ERR_PQ_SIG_HASHTYPE);
+    }
+    if (!VerifyPQSignature(sig, pubkey, algo, sighash)) return set_error(serror, SCRIPT_ERR_PQ_SIG);
+    return true;
+}
+
+template <class T>
 bool GenericTransactionSignatureChecker<T>::CheckECDSASignature(const std::vector<unsigned char>& vchSigIn, const std::vector<unsigned char>& vchPubKey, const CScript& scriptCode, SigVersion sigversion) const
 {
     CPubKey pubkey(vchPubKey);
@@ -1853,6 +1933,8 @@ static bool ExecuteWitnessScript(const std::span<const valtype>& stack_span, con
                 return set_error(serror, SCRIPT_ERR_BAD_OPCODE);
             }
             // New opcodes will be listed here. May use a different sigversion to modify existing opcodes.
+            // PQCH: in PQ-script leaves the post-quantum signature opcodes are defined, not OP_SUCCESS.
+            if (execdata.m_pq_leaf && IsPQSigOpcode(opcode)) continue;
             if (IsOpSuccess(opcode)) {
                 if (flags & SCRIPT_VERIFY_DISCOURAGE_OP_SUCCESS) {
                     return set_error(serror, SCRIPT_ERR_DISCOURAGE_OP_SUCCESS);
@@ -1866,12 +1948,21 @@ static bool ExecuteWitnessScript(const std::span<const valtype>& stack_span, con
     }
 
     // Disallow stack item size > MAX_SCRIPT_ELEMENT_SIZE in witness stack
+    // PQCH: PQ-script allows elements up to MAX_PQSCRIPT_ELEMENT_SIZE (post-quantum keys and signatures).
+    const size_t max_element_size{execdata.m_pq_leaf ? MAX_PQSCRIPT_ELEMENT_SIZE : MAX_SCRIPT_ELEMENT_SIZE};
     for (const valtype& elem : stack) {
-        if (elem.size() > MAX_SCRIPT_ELEMENT_SIZE) return set_error(serror, SCRIPT_ERR_PUSH_SIZE);
+        if (elem.size() > max_element_size) return set_error(serror, SCRIPT_ERR_PUSH_SIZE);
     }
 
     // Run the script interpreter.
     if (!EvalScript(stack, exec_script, flags, checker, sigversion, execdata, serror)) return false;
+
+    // PQCH rule 2 (whitepaper, section 21.3): a script that validates an elliptic-curve signature is
+    // only valid if it also validates at least one post-quantum signature. Scripts with only
+    // hashlocks and timelocks remain allowed.
+    if (execdata.m_pq_leaf && execdata.m_ec_sigs_checked > 0 && execdata.m_pq_sigs_checked == 0) {
+        return set_error(serror, SCRIPT_ERR_PQ_SIG_REQUIRED);
+    }
 
     // Scripts inside witness implicitly require cleanstack behaviour
     if (stack.size() != 1) return set_error(serror, SCRIPT_ERR_CLEANSTACK);
@@ -1905,6 +1996,21 @@ uint256 ComputeTaprootMerkleRoot(std::span<const unsigned char> control, const u
     uint256 k = tapleaf_hash;
     for (int i = 0; i < path_len; ++i) {
         std::span node{std::span{control}.subspan(TAPROOT_CONTROL_BASE_SIZE + TAPROOT_CONTROL_NODE_SIZE * i, TAPROOT_CONTROL_NODE_SIZE)};
+        k = ComputeTapbranchHash(k, node);
+    }
+    return k;
+}
+
+uint256 ComputeP2MRMerkleRoot(std::span<const unsigned char> control, const uint256& tapleaf_hash)
+{
+    assert(control.size() >= P2MR_CONTROL_BASE_SIZE);
+    assert(control.size() <= P2MR_CONTROL_MAX_SIZE);
+    assert((control.size() - P2MR_CONTROL_BASE_SIZE) % TAPROOT_CONTROL_NODE_SIZE == 0);
+
+    const int path_len = (control.size() - P2MR_CONTROL_BASE_SIZE) / TAPROOT_CONTROL_NODE_SIZE;
+    uint256 k = tapleaf_hash;
+    for (int i = 0; i < path_len; ++i) {
+        std::span node{control.subspan(P2MR_CONTROL_BASE_SIZE + TAPROOT_CONTROL_NODE_SIZE * i, TAPROOT_CONTROL_NODE_SIZE)};
         k = ComputeTapbranchHash(k, node);
     }
     return k;
@@ -1954,6 +2060,49 @@ static bool VerifyWitnessProgram(const CScriptWitness& witness, int witversion, 
         } else {
             return set_error(serror, SCRIPT_ERR_WITNESS_PROGRAM_WRONG_LENGTH);
         }
+    } else if (witversion == 1 && program.size() == WITNESS_V1_P2MR_SIZE && !is_p2sh && (flags & SCRIPT_VERIFY_P2MR)) {
+        // PQCH P2MR: 32-byte non-P2SH witness v1 program which is the Merkle root of the script tree.
+        if (stack.size() == 0) return set_error(serror, SCRIPT_ERR_WITNESS_PROGRAM_WITNESS_EMPTY);
+        if (stack.size() >= 2 && !stack.back().empty() && stack.back()[0] == ANNEX_TAG) {
+            // Drop annex (this is non-standard; see IsWitnessStandard)
+            const valtype& annex = SpanPopBack(stack);
+            execdata.m_annex_hash = (HashWriter{} << annex).GetSHA256();
+            execdata.m_annex_present = true;
+        } else {
+            execdata.m_annex_present = false;
+        }
+        execdata.m_annex_init = true;
+        // No key path: there is no public key in the output, so a spend always reveals a leaf.
+        if (stack.size() < 2) return set_error(serror, SCRIPT_ERR_P2MR_KEY_PATH);
+        const valtype& control = SpanPopBack(stack);
+        const valtype& script = SpanPopBack(stack);
+        if (control.size() < P2MR_CONTROL_BASE_SIZE || control.size() > P2MR_CONTROL_MAX_SIZE || ((control.size() - P2MR_CONTROL_BASE_SIZE) % TAPROOT_CONTROL_NODE_SIZE) != 0) {
+            return set_error(serror, SCRIPT_ERR_TAPROOT_WRONG_CONTROL_SIZE);
+        }
+        // As in BIP 360, the bit that carried the output key parity in Taproot must be 1.
+        if ((control[0] & 1) != 1) return set_error(serror, SCRIPT_ERR_P2MR_CONTROL_BYTE);
+        const uint8_t leaf_version = control[0] & TAPROOT_LEAF_MASK;
+        execdata.m_tapleaf_hash = ComputeTapleafHash(leaf_version, script);
+        const uint256 root{ComputeP2MRMerkleRoot(control, execdata.m_tapleaf_hash)};
+        if (memcmp(root.begin(), program.data(), WITNESS_V1_P2MR_SIZE) != 0) {
+            return set_error(serror, SCRIPT_ERR_WITNESS_PROGRAM_MISMATCH);
+        }
+        execdata.m_tapleaf_hash_init = true;
+        if (leaf_version == P2MR_LEAF_PQSCRIPT) {
+            // PQ-script (leaf version 0xc2): tapscript plus post-quantum signature opcodes.
+            exec_script = CScript(script.begin(), script.end());
+            execdata.m_validation_weight_left = ::GetSerializeSize(witness.stack) + VALIDATION_WEIGHT_OFFSET;
+            execdata.m_validation_weight_left_init = true;
+            execdata.m_pq_leaf = true;
+            return ExecuteWitnessScript(stack, exec_script, flags, SigVersion::TAPSCRIPT, checker, execdata, serror);
+        }
+        // A plain tapscript leaf would accept Schnorr-only spending: refuse it rather than treat it as
+        // an unknown (anyone-can-spend) leaf version that Bitcoin tooling could produce by mistake.
+        if (leaf_version == TAPROOT_LEAF_TAPSCRIPT) return set_error(serror, SCRIPT_ERR_P2MR_TAPSCRIPT_LEAF);
+        if (flags & SCRIPT_VERIFY_DISCOURAGE_UPGRADABLE_TAPROOT_VERSION) {
+            return set_error(serror, SCRIPT_ERR_DISCOURAGE_UPGRADABLE_TAPROOT_VERSION);
+        }
+        return set_success(serror);
     } else if (witversion == 1 && program.size() == WITNESS_V1_TAPROOT_SIZE && !is_p2sh) {
         // BIP341 Taproot: 32-byte non-P2SH witness v1 program (which encodes a P2C-tweaked pubkey)
         if (!(flags & SCRIPT_VERIFY_TAPROOT)) return set_success(serror);
@@ -2200,6 +2349,7 @@ const std::map<std::string, script_verify_flag_name>& ScriptFlagNamesToEnum()
         FLAG_NAME(DISCOURAGE_UPGRADABLE_PUBKEYTYPE),
         FLAG_NAME(DISCOURAGE_OP_SUCCESS),
         FLAG_NAME(DISCOURAGE_UPGRADABLE_TAPROOT_VERSION),
+        FLAG_NAME(P2MR),
     };
 #undef FLAG_NAME
     return g_names_to_enum;

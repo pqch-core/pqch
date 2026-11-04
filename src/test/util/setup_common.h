@@ -50,6 +50,13 @@ struct TestOpts {
     bool setup_net{true};
     bool setup_validation_interface{true};
     bool min_validation_cache{false}; // Equivalent of -maxsigcachebytes=0
+    /**
+     * PQCH: the unit tests inherited from Bitcoin Core build P2PK, P2WPKH and Taproot outputs and
+     * spend them with elliptic-curve signatures. To keep that coverage of everything else, they run
+     * on regtest with the post-quantum rules moved out of reach (-testactivationheight=pqrules@...).
+     * PQCH tests set this to false to run with the real rules, active from genesis.
+     */
+    bool legacy_bitcoin_scripts{true};
 };
 
 /** Basic testing setup.
@@ -231,6 +238,13 @@ struct TestChain100Setup : public TestingSetup {
     FakeNodeClock m_clock{std::chrono::seconds{1598887952}}; // 2020-08-31, arbitrary
     std::vector<CTransactionRef> m_coinbase_txns; // For convenience, coinbase transactions
     CKey coinbaseKey; // private/public key needed to spend coinbase transactions
+    /**
+     * PQCH: output script of the blocks mined by mineBlocks(): P2PK(coinbaseKey) for the inherited
+     * tests; with TestOpts::legacy_bitcoin_scripts = false, a P2MR output whose single leaf is
+     * <m_coinbase_pq_pubkey> OP_CHECKSIGMLDSA (key from pqch_test::MLDSAKey(COINBASE_PQ_KEY_TAG)).
+     */
+    CScript m_coinbase_script;
+    static constexpr uint8_t COINBASE_PQ_KEY_TAG{0xcb};
 };
 
 /**

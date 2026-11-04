@@ -18,8 +18,8 @@ Base: Bitcoin Core v32.1 (licença MIT; avisos de copyright mantidos).
 ## Génesis da regtest
 
 - Mensagem: `PQCH regtest 04/Nov/2026 Peer-to-peer electronic cash, quantum-safe`
-- Tempo: 1793797200 (2026-11-04 13:00 UTC), nonce 1, bits `0x207fffff`, recompensa 12,5 PQCH
-- Hash: `126fed0ca2429d13f7515bd67256a010767ad26d35bf9acbaecf11d998503e79`
+- Tempo: 1296688602 (o do regtest do Bitcoin, 2011: os testes herdados assumem um génesis antigo), nonce 1, bits `0x207fffff`, recompensa 12,5 PQCH
+- Hash: `dc23bf8241b903f340911cf5199292b79b6ca42078d45c1dca9ccfe18678364b`
 - Raiz de Merkle: `0d1c1bfd8c16966c2f0c7e4a47a387465dd665a10174eb077c589d7a27ef75d7`
 
 ## O que fica para fases seguintes

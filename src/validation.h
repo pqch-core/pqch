@@ -870,6 +870,8 @@ protected:
 
     void InvalidBlockFound(CBlockIndex* pindex, const BlockValidationState& state) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
     CBlockIndex* FindMostWorkChain() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    //! PQCH: last candidate refused by the reorganisation depth limit (to warn once per candidate).
+    const CBlockIndex* m_last_refused_reorg GUARDED_BY(::cs_main){nullptr};
 
     bool RollforwardBlock(const CBlockIndex* pindex, CCoinsViewCache& inputs) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
@@ -1019,6 +1021,8 @@ public:
     bool ShouldCheckBlockIndex() const;
     const arith_uint256& MinimumChainWork() const { return *Assert(m_options.minimum_chain_work); }
     const uint256& AssumedValidBlock() const { return *Assert(m_options.assumed_valid_block); }
+    //! PQCH: maximum number of active-chain blocks a synced node will disconnect in a reorg (0 = no limit).
+    int MaxReorgDepth() const { return *Assert(m_options.max_reorg_depth); }
     kernel::Notifications& GetNotifications() const { return m_options.notifications; };
 
     /**

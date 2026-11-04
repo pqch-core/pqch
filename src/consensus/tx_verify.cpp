@@ -167,7 +167,31 @@ int64_t GetTransactionSigOpCost(const CTransaction& tx, const CCoinsViewCache& i
     return nSigOps;
 }
 
-bool Consensus::CheckTxInputs(const CTransaction& tx, TxValidationState& state, const CCoinsViewCache& inputs, int nSpendHeight, CAmount& txfee)
+bool Consensus::IsPQAllowedOutput(const CScript& script_pub_key)
+{
+    if (!script_pub_key.empty() && script_pub_key[0] == OP_RETURN) return true;
+    int version;
+    std::vector<unsigned char> program;
+    if (!script_pub_key.IsWitnessProgram(version, program)) return false;
+    if (version == 1) {
+        return program.size() == WITNESS_V1_P2MR_SIZE || CScript::IsPayToAnchor(version, program);
+    }
+    return version >= 2; // versions 2 to 16 are reserved for future soft forks
+}
+
+bool Consensus::CheckPQOutputs(const CTransaction& tx, TxValidationState& state)
+{
+    for (const auto& txout : tx.vout) {
+        if (!IsPQAllowedOutput(txout.scriptPubKey)) {
+            return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-txns-output-not-pq",
+                                 "output type not allowed: only P2MR, OP_RETURN, pay-to-anchor and witness v2-16");
+        }
+    }
+    return true;
+}
+
+bool Consensus::CheckTxInputs(const CTransaction& tx, TxValidationState& state, const CCoinsViewCache& inputs, int nSpendHeight, CAmount& txfee,
+                              int coinbase_maturity)
 {
     // are the actual inputs available?
     if (!inputs.HaveInputs(tx)) {
@@ -182,7 +206,7 @@ bool Consensus::CheckTxInputs(const CTransaction& tx, TxValidationState& state, 
         assert(!coin.IsSpent());
 
         // If prev is coinbase, check that it's matured
-        if (coin.IsCoinBase() && nSpendHeight - coin.nHeight < COINBASE_MATURITY) {
+        if (coin.IsCoinBase() && nSpendHeight - coin.nHeight < coinbase_maturity) {
             return state.Invalid(TxValidationResult::TX_PREMATURE_SPEND, "bad-txns-premature-spend-of-coinbase",
                 strprintf("tried to spend coinbase at depth %d", nSpendHeight - coin.nHeight));
         }

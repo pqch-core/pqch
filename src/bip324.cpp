@@ -33,8 +33,14 @@ BIP324Cipher::BIP324Cipher(const CKey& key, const EllSwiftPubKey& pubkey) noexce
 
 void BIP324Cipher::Initialize(const EllSwiftPubKey& their_pubkey, bool initiator, bool self_decrypt) noexcept
 {
+    const auto& magic = Params().MessageStart();
+    Initialize(their_pubkey, initiator, self_decrypt, std::span<const unsigned char, 4>{magic});
+}
+
+void BIP324Cipher::Initialize(const EllSwiftPubKey& their_pubkey, bool initiator, bool self_decrypt,
+                              std::span<const unsigned char, 4> message_header) noexcept
+{
     // Determine salt (fixed string + network magic bytes)
-    const auto& message_header = Params().MessageStart();
     std::string salt = std::string{"bitcoin_v2_shared_secret"} + std::string(std::begin(message_header), std::end(message_header));
 
     // Perform ECDH to derive shared secret.

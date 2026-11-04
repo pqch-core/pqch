@@ -10,6 +10,7 @@
 #include <interfaces/mining.h>
 #include <node/blockstorage.h>
 #include <pow.h>
+#include <pow_randomx.h>
 #include <primitives/block.h>
 #include <primitives/transaction.h>
 #include <random.h>
@@ -114,7 +115,8 @@ std::shared_ptr<CBlock> MinerTestingSetup::FinalizeBlock(std::shared_ptr<CBlock>
 
     pblock->hashMerkleRoot = BlockMerkleRoot(*pblock);
 
-    while (!CheckProofOfWork(pblock->GetHash(), pblock->nBits, Params().GetConsensus())) {
+    // PQCH: RandomX proof of work, keyed by an earlier block of the chain.
+    while (!CheckBlockProofOfWork(*pblock, prev_block, Params().GetConsensus())) {
         ++(pblock->nNonce);
     }
 

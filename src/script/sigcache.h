@@ -42,6 +42,8 @@ private:
     //! Entries are SHA256(nonce || 'E' or 'S' || 31 zero bytes || signature hash || public key || signature):
     CSHA256 m_salted_hasher_ecdsa;
     CSHA256 m_salted_hasher_schnorr;
+    CSHA256 m_salted_hasher_pq; //!< PQCH: 'P' padding, then algorithm byte
+
     typedef CuckooCache::cache<uint256, SignatureCacheHasher> map_type;
     map_type setValid;
     std::shared_mutex cs_sigcache;
@@ -55,6 +57,8 @@ public:
     void ComputeEntryECDSA(uint256& entry, const uint256 &hash, const std::vector<unsigned char>& vchSig, const CPubKey& pubkey) const;
 
     void ComputeEntrySchnorr(uint256& entry, const uint256 &hash, std::span<const unsigned char> sig, const XOnlyPubKey& pubkey) const;
+
+    void ComputeEntryPQ(uint256& entry, const uint256& hash, std::span<const unsigned char> sig, std::span<const unsigned char> pubkey, PQAlgorithm algo) const;
 
     bool Get(const uint256& entry, bool erase);
 
@@ -72,6 +76,7 @@ public:
 
     bool VerifyECDSASignature(const std::vector<unsigned char>& vchSig, const CPubKey& vchPubKey, const uint256& sighash) const override;
     bool VerifySchnorrSignature(std::span<const unsigned char> sig, const XOnlyPubKey& pubkey, const uint256& sighash) const override;
+    bool VerifyPQSignature(std::span<const unsigned char> sig, std::span<const unsigned char> pubkey, PQAlgorithm algo, const uint256& sighash) const override;
 };
 
 #endif // BITCOIN_SCRIPT_SIGCACHE_H

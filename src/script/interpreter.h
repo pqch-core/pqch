@@ -146,6 +146,12 @@ enum class script_verify_flag_name : uint8_t {
     // Making unknown public key versions (in BIP 342 scripts) non-standard
     SCRIPT_VERIFY_DISCOURAGE_UPGRADABLE_PUBKEYTYPE,
 
+    // PQCH: witness v1 32-byte programs are P2MR (pay-to-Merkle-root, whitepaper section 21.3)
+    // instead of Taproot: no key path, leaf version 0xc2 runs PQ-script (tapscript plus the
+    // post-quantum signature opcodes, larger stack elements, and the rule that elliptic-curve
+    // signatures need a post-quantum one beside them).
+    SCRIPT_VERIFY_P2MR,
+
     // Constants to point to the highest flag in use. Add new flags above this line.
     //
     SCRIPT_VERIFY_END_MARKER
@@ -232,6 +238,19 @@ struct ScriptExecutionData
 
     //! The hash of the corresponding output
     std::optional<uint256> m_output_hash;
+
+    //! PQCH: whether the script being executed is a P2MR PQ-script leaf (leaf version 0xc2).
+    bool m_pq_leaf = false;
+    //! PQCH: number of non-empty elliptic-curve (Schnorr) signatures checked in this leaf.
+    int m_ec_sigs_checked = 0;
+    //! PQCH: number of non-empty post-quantum signatures checked in this leaf.
+    int m_pq_sigs_checked = 0;
+};
+
+/** PQCH: post-quantum signature algorithms usable in PQ-script. */
+enum class PQAlgorithm : uint8_t {
+    ML_DSA_44 = 1,       //!< FIPS 204; also the BIP341 sighash key_version for it
+    SLH_DSA_SHA2_128S = 2, //!< FIPS 205; also the BIP341 sighash key_version for it
 };
 
 /** Signature hash sizes */
@@ -245,6 +264,18 @@ inline constexpr size_t TAPROOT_CONTROL_BASE_SIZE = 33;
 inline constexpr size_t TAPROOT_CONTROL_NODE_SIZE = 32;
 inline constexpr size_t TAPROOT_CONTROL_MAX_NODE_COUNT = 128;
 inline constexpr size_t TAPROOT_CONTROL_MAX_SIZE = TAPROOT_CONTROL_BASE_SIZE + TAPROOT_CONTROL_NODE_SIZE * TAPROOT_CONTROL_MAX_NODE_COUNT;
+
+/**
+ * PQCH: P2MR (pay-to-Merkle-root, as in BIP 360). The output holds only the 32-byte Merkle root
+ * of the script tree. The control block is one byte (leaf version with the low bit set) followed
+ * by the Merkle path; there is no internal key and so no key path.
+ */
+inline constexpr size_t WITNESS_V1_P2MR_SIZE = 32;
+inline constexpr uint8_t P2MR_LEAF_PQSCRIPT = 0xc2;
+inline constexpr size_t P2MR_CONTROL_BASE_SIZE = 1;
+inline constexpr size_t P2MR_CONTROL_MAX_SIZE = P2MR_CONTROL_BASE_SIZE + TAPROOT_CONTROL_NODE_SIZE * TAPROOT_CONTROL_MAX_NODE_COUNT;
+/** PQCH: largest stack element in PQ-script (an SLH-DSA-128s signature plus hash type is 7,857 bytes). */
+inline constexpr unsigned int MAX_PQSCRIPT_ELEMENT_SIZE = 8192;
 
 extern const HashWriter HASHER_TAPSIGHASH; //!< Hasher with tag "TapSighash" pre-fed to it.
 extern const HashWriter HASHER_TAPLEAF;    //!< Hasher with tag "TapLeaf" pre-fed to it.
@@ -285,6 +316,12 @@ public:
         return false;
     }
 
+    /** PQCH: check a post-quantum signature (with optional trailing hash type byte) in PQ-script. */
+    virtual bool CheckPQSignature(std::span<const unsigned char> sig, std::span<const unsigned char> pubkey, PQAlgorithm algo, SigVersion sigversion, ScriptExecutionData& execdata, ScriptError* serror = nullptr) const
+    {
+        return false;
+    }
+
     virtual bool CheckLockTime(const CScriptNum& nLockTime) const
     {
          return false;
@@ -307,8 +344,10 @@ enum class MissingDataBehavior
     FAIL,         //!< Just act as if the signature was invalid
 };
 
+/** BIP341 signature hash. PQCH: key_version (tapscript only) is 0 for Schnorr keys and the
+ *  PQAlgorithm value for post-quantum keys, so a signature hash never serves two algorithms. */
 template<typename T>
-bool SignatureHashSchnorr(uint256& hash_out, ScriptExecutionData& execdata, const T& tx_to, uint32_t in_pos, uint8_t hash_type, SigVersion sigversion, const PrecomputedTransactionData& cache, MissingDataBehavior mdb);
+bool SignatureHashSchnorr(uint256& hash_out, ScriptExecutionData& execdata, const T& tx_to, uint32_t in_pos, uint8_t hash_type, SigVersion sigversion, const PrecomputedTransactionData& cache, MissingDataBehavior mdb, uint8_t key_version = 0);
 
 template <class T>
 class GenericTransactionSignatureChecker : public BaseSignatureChecker
@@ -324,12 +363,14 @@ private:
 protected:
     virtual bool VerifyECDSASignature(const std::vector<unsigned char>& vchSig, const CPubKey& vchPubKey, const uint256& sighash) const;
     virtual bool VerifySchnorrSignature(std::span<const unsigned char> sig, const XOnlyPubKey& pubkey, const uint256& sighash) const;
+    virtual bool VerifyPQSignature(std::span<const unsigned char> sig, std::span<const unsigned char> pubkey, PQAlgorithm algo, const uint256& sighash) const;
 
 public:
     GenericTransactionSignatureChecker(const T* txToIn, unsigned int nInIn, const CAmount& amountIn, MissingDataBehavior mdb) : txTo(txToIn), m_mdb(mdb), nIn(nInIn), amount(amountIn), txdata(nullptr) {}
     GenericTransactionSignatureChecker(const T* txToIn, unsigned int nInIn, const CAmount& amountIn, const PrecomputedTransactionData& txdataIn, MissingDataBehavior mdb) : txTo(txToIn), m_mdb(mdb), nIn(nInIn), amount(amountIn), txdata(&txdataIn) {}
     bool CheckECDSASignature(const std::vector<unsigned char>& scriptSig, const std::vector<unsigned char>& vchPubKey, const CScript& scriptCode, SigVersion sigversion) const override;
     bool CheckSchnorrSignature(std::span<const unsigned char> sig, std::span<const unsigned char> pubkey, SigVersion sigversion, ScriptExecutionData& execdata, ScriptError* serror = nullptr) const override;
+    bool CheckPQSignature(std::span<const unsigned char> sig, std::span<const unsigned char> pubkey, PQAlgorithm algo, SigVersion sigversion, ScriptExecutionData& execdata, ScriptError* serror = nullptr) const override;
     bool CheckLockTime(const CScriptNum& nLockTime) const override;
     bool CheckSequence(const CScriptNum& nSequence) const override;
 };
@@ -355,6 +396,11 @@ public:
         return m_checker.CheckSchnorrSignature(sig, pubkey, sigversion, execdata, serror);
     }
 
+    bool CheckPQSignature(std::span<const unsigned char> sig, std::span<const unsigned char> pubkey, PQAlgorithm algo, SigVersion sigversion, ScriptExecutionData& execdata, ScriptError* serror = nullptr) const override
+    {
+        return m_checker.CheckPQSignature(sig, pubkey, algo, sigversion, execdata, serror);
+    }
+
     bool CheckLockTime(const CScriptNum& nLockTime) const override
     {
         return m_checker.CheckLockTime(nLockTime);
@@ -373,6 +419,9 @@ uint256 ComputeTapbranchHash(std::span<const unsigned char> a, std::span<const u
 /** Compute the BIP341 taproot script tree Merkle root from control block and leaf hash.
  *  Requires control block to have valid length (33 + k*32, with k in {0,1,..,128}). */
 uint256 ComputeTaprootMerkleRoot(std::span<const unsigned char> control, const uint256& tapleaf_hash);
+/** PQCH: compute the P2MR script tree Merkle root from control block and leaf hash.
+ *  Requires control block to have valid length (1 + k*32, with k in {0,1,..,128}). */
+uint256 ComputeP2MRMerkleRoot(std::span<const unsigned char> control, const uint256& tapleaf_hash);
 
 bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& script, script_verify_flags flags, const BaseSignatureChecker& checker, SigVersion sigversion, ScriptExecutionData& execdata, ScriptError* error = nullptr);
 bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& script, script_verify_flags flags, const BaseSignatureChecker& checker, SigVersion sigversion, ScriptError* error = nullptr);

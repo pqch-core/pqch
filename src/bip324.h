@@ -63,6 +63,11 @@ public:
      */
     void Initialize(const EllSwiftPubKey& their_pubkey, bool initiator, bool self_decrypt = false) noexcept;
 
+    /** PQCH: as above with explicit network magic (the one above uses the selected chain's). Lets the
+     *  tests check the BIP324 vectors, which were computed with Bitcoin's main network magic. */
+    void Initialize(const EllSwiftPubKey& their_pubkey, bool initiator, bool self_decrypt,
+                    std::span<const unsigned char, 4> network_magic) noexcept;
+
     /** Determine whether this cipher is fully initialized. */
     explicit operator bool() const noexcept { return m_send_l_cipher.has_value(); }
 

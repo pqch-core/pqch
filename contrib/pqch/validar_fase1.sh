@@ -16,7 +16,7 @@ BUILD="${1:-build}"
 BITCOIND="$BUILD/bin/bitcoind"
 CLI="$BUILD/bin/bitcoin-cli"
 DATADIR="$(mktemp -d)"
-GENESIS_ESPERADO="126fed0ca2429d13f7515bd67256a010767ad26d35bf9acbaecf11d998503e79"
+GENESIS_ESPERADO="dc23bf8241b903f340911cf5199292b79b6ca42078d45c1dca9ccfe18678364b"
 HALVING=150          # regtest
 SUBSIDIO=1250000000  # 12,5 PQCH em quanta
 
@@ -35,7 +35,9 @@ verifica() { # descricao, obtido, esperado
 verifica "Bloco genesis" "$(cli getblockhash 0)" "$GENESIS_ESPERADO"
 
 # Endereco de teste (chave publica de exemplo, sem valor real).
-DESC="wpkh(0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798)"
+# PQCH fase 4: so sao validas saidas P2MR (versao 1, 32 bytes). rawtr() da um programa de 32 bytes
+# qualquer: serve para receber recompensas de teste (ninguem conhece uma folha que o gaste).
+DESC="rawtr(79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798)"
 DESC="$(cli getdescriptorinfo "$DESC" | python3 -c 'import json,sys; print(json.load(sys.stdin)["descriptor"])')"
 ENDERECO="$(cli deriveaddresses "$DESC" | python3 -c 'import json,sys; print(json.load(sys.stdin)[0])')"
 verifica "Prefixo do endereco" "${ENDERECO:0:6}" "pqcrt1"

@@ -126,6 +126,9 @@ static void ValidateCheckInputsForAllFlags(const CTransaction &tx, script_verify
         // Randomly selects flag combinations
         script_verify_flags test_flags = script_verify_flags::from_int(insecure_rand.randrange(MAX_SCRIPT_VERIFY_FLAGS));
 
+        // PQCH: P2MR replaces the Taproot meaning of witness v1 outputs (tested in pqch_pq_tests),
+        // so it is not one more restriction on these Bitcoin scripts: leave it out here.
+        test_flags &= ~SCRIPT_VERIFY_P2MR;
         // Filter out incompatible flag choices
         if ((test_flags & SCRIPT_VERIFY_CLEANSTACK)) {
             // CLEANSTACK requires P2SH and WITNESS, see VerifyScript() in

@@ -43,7 +43,9 @@ c() { local n=$1; shift; "$CLI" -datadir="$TMP/$n" "$@"; }
 espera_altura() { # no, altura, segundos
     for _ in $(seq 1 "$3"); do [[ "$(c "$1" getblockcount)" -ge "$2" ]] && return 0; sleep 1; done; return 1; }
 
-DESC="wpkh(0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798)"
+# PQCH fase 4: so sao validas saidas P2MR (versao 1, 32 bytes). rawtr() da um programa de 32 bytes
+# qualquer: serve para receber recompensas de teste (ninguem conhece uma folha que o gaste).
+DESC="rawtr(79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798)"
 endereco() { local d; d="$(c "$1" getdescriptorinfo "$DESC" | python3 -c 'import json,sys;print(json.load(sys.stdin)["descriptor"])')"; c "$1" deriveaddresses "$d" | python3 -c 'import json,sys;print(json.load(sys.stdin)[0])'; }
 
 echo "=== Parte A: regtest, 3 nos ==="

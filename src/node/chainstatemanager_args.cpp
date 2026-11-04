@@ -20,6 +20,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <limits>
 #include <string>
 
 namespace node {
@@ -47,6 +48,13 @@ util::Result<void> ApplyArgsManOptions(const ArgsManager& args, ChainstateManage
     }
 
     if (auto value{args.GetIntArg("-maxtipage")}) opts.max_tip_age = std::chrono::seconds{*value};
+
+    if (auto value{args.GetIntArg("-maxreorgdepth")}) {
+        if (*value < 0 || *value > std::numeric_limits<int>::max()) {
+            return util::Error{Untranslated(strprintf("Invalid -maxreorgdepth value %d (must be 0 or more)", *value))};
+        }
+        opts.max_reorg_depth = int(*value);
+    }
 
     ReadDatabaseArgs(args, opts.coins_db);
     ReadCoinsViewArgs(args, opts.coins_view);

@@ -101,6 +101,11 @@ public:
     uint64_t PruneAfterHeight() const { return nPruneAfterHeight; }
     /** Minimum free space (in GB) needed for data directory */
     uint64_t AssumedBlockchainSize() const { return m_assumed_blockchain_size; }
+    /**
+     * PQCH: once synced, refuse to switch to a chain that would disconnect more than this many
+     * blocks of the active chain, even if it has more work (0 = no limit). See validation.cpp.
+     */
+    int MaxReorgDepth() const { return m_max_reorg_depth; }
     /** Minimum free space (in GB) needed for data directory when pruned; Does not include prune target*/
     uint64_t AssumedChainStateSize() const { return m_assumed_chain_state_size; }
     /** Whether it is possible to mine blocks on demand (no retargeting) */
@@ -186,6 +191,7 @@ protected:
     uint16_t nDefaultPort;
     uint64_t nPruneAfterHeight;
     uint64_t m_assumed_blockchain_size;
+    int m_max_reorg_depth{0};
     uint64_t m_assumed_chain_state_size;
     std::vector<std::string> vSeeds;
     std::vector<unsigned char> base58Prefixes[MAX_BASE58_TYPES];

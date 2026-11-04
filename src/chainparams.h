@@ -28,4 +28,11 @@ const CChainParams &Params();
  */
 void SelectParams(ChainType chain);
 
+/**
+ * PQCH, unit tests only: select main network parameters built with the given options (for
+ * instance, the post-quantum rules moved out of reach so that the tests inherited from Bitcoin
+ * Core keep running with elliptic-curve scripts). Never called by the node.
+ */
+void SelectMainParamsForUnitTests(const CChainParams::MainNetOptions& options);
+
 #endif // BITCOIN_CHAINPARAMS_H
