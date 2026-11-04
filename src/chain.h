@@ -143,6 +143,13 @@ public:
     uint32_t nBits{0};
     uint32_t nNonce{0};
 
+    //! PQCH: merged mining proof of this header (null unless nVersion has the auxpow bit). Kept so that
+    //! headers can be served to peers; persisted in the block index database.
+    std::shared_ptr<const auxpow::CAuxPow> m_auxpow;
+    //! PQCH: the nearest block at or below this one that was the first in its chain to use its
+    //! Monero RandomX key (auxpow seed); null if none. See CheckAuxSeed in pow_randomx.h.
+    const CBlockIndex* m_last_new_aux_seed{nullptr};
+
     //! (memory only) Sequential id assigned to distinguish order in which blocks are received.
     //! Initialized to SEQ_ID_INIT_FROM_DISK{1} when loading blocks from disk, except for blocks
     //! belonging to the best chain which overwrite it to SEQ_ID_BEST_CHAIN_FROM_DISK{0}.
@@ -156,7 +163,8 @@ public:
           hashMerkleRoot{block.hashMerkleRoot},
           nTime{block.nTime},
           nBits{block.nBits},
-          nNonce{block.nNonce}
+          nNonce{block.nNonce},
+          m_auxpow{block.auxpow}
     {
     }
 
@@ -192,8 +200,12 @@ public:
         block.nTime = nTime;
         block.nBits = nBits;
         block.nNonce = nNonce;
+        block.auxpow = std::const_pointer_cast<auxpow::CAuxPow>(m_auxpow);
         return block;
     }
+
+    /** PQCH: Monero RandomX key of this header's merged mining proof, or null. */
+    uint256 AuxSeed() const { return m_auxpow ? m_auxpow->seed_hash : uint256{}; }
 
     uint256 GetBlockHash() const
     {
@@ -357,6 +369,12 @@ public:
         READWRITE(obj.nTime);
         READWRITE(obj.nBits);
         READWRITE(obj.nNonce);
+        // PQCH: merged mining proof, for headers served to peers.
+        if (obj.nVersion & auxpow::VERSION_AUXPOW) {
+            SER_READ(obj, obj.m_auxpow = std::make_shared<const auxpow::CAuxPow>());
+            if (!obj.m_auxpow) throw std::ios_base::failure("PQCH: block index entry with the auxpow bit but no auxpow");
+            READWRITE(const_cast<auxpow::CAuxPow&>(*obj.m_auxpow));
+        }
     }
 
     uint256 ConstructBlockHash() const

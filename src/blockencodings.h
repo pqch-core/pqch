@@ -5,6 +5,7 @@
 #ifndef BITCOIN_BLOCKENCODINGS_H
 #define BITCOIN_BLOCKENCODINGS_H
 
+#include <auxpow.h>
 #include <crypto/siphash.h>
 #include <primitives/block.h>
 
@@ -103,6 +104,8 @@ public:
     static constexpr int SHORTTXIDS_LENGTH = 6;
 
     CBlockHeader header;
+    //! PQCH: coinbase head of a merged mined block (auxpow.h), sent after the prefilled transactions.
+    auxpow::CAuxPowCoinbaseHead auxpow_head;
 
     /**
      * Dummy for deserialization
@@ -121,6 +124,7 @@ public:
     SERIALIZE_METHODS(CBlockHeaderAndShortTxIDs, obj)
     {
         READWRITE(obj.header, obj.nonce, Using<VectorFormatter<CustomUintFormatter<SHORTTXIDS_LENGTH>>>(obj.shorttxids), obj.prefilledtxn);
+        if (obj.header.IsAuxPow()) READWRITE(obj.auxpow_head);
         if (ser_action.ForRead()) {
             if (obj.BlockTxCount() > std::numeric_limits<uint16_t>::max()) {
                 throw std::ios_base::failure("indexes overflowed 16 bits");
@@ -137,6 +141,7 @@ protected:
     const CTxMemPool* pool;
 public:
     CBlockHeader header;
+    auxpow::CAuxPowCoinbaseHead auxpow_head; //!< PQCH
 
     // Can be overridden for testing
     using IsBlockMutatedFn = std::function<bool(const CBlock&, bool)>;

@@ -5,15 +5,28 @@
 
 #include <primitives/block.h>
 
+#include <streams.h>
+
 #include <hash.h>
 #include <tinyformat.h>
 
 #include <memory>
 #include <sstream>
 
+std::vector<unsigned char> CBlockHeader::SerializePure() const
+{
+    DataStream ss{};
+    ss << nVersion << hashPrevBlock << hashMerkleRoot << nTime << nBits << nNonce;
+    const auto bytes{MakeUCharSpan(ss)};
+    return {bytes.begin(), bytes.end()};
+}
+
 uint256 CBlockHeader::GetHash() const
 {
-    return (HashWriter{} << *this).GetHash();
+    // PQCH: the block id is SHA256d of the 80 header bytes only, never of the auxpow.
+    HashWriter hasher{};
+    hasher << nVersion << hashPrevBlock << hashMerkleRoot << nTime << nBits << nNonce;
+    return hasher.GetHash();
 }
 
 std::string CBlock::ToString() const

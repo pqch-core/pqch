@@ -63,6 +63,7 @@
 #include <util/tokenbucket.h>
 #include <util/trace.h>
 #include <validation.h>
+#include <auxpow.h>
 
 #include <algorithm>
 #include <array>
@@ -205,6 +206,10 @@ static constexpr size_t MAX_ADDR_PROCESSING_TOKEN_BUCKET{MAX_ADDR_TO_SEND};
 static constexpr auto PRIVATE_BROADCAST_MAX_CONNECTION_LIFETIME{3min};
 
 // Internal stuff
+// PQCH: a headers message full of merged mined headers (each followed by its proof and a zero
+// transaction count) must still fit in one P2P message.
+static_assert(3 + MAX_HEADERS_RESULTS * (80 + auxpow::MAX_AUXPOW_SIZE + 1) <= MAX_PROTOCOL_MESSAGE_LENGTH);
+
 namespace {
 /** Blocks that are in flight, and that are in the queue to be downloaded. */
 struct QueuedBlock {

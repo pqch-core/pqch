@@ -9,6 +9,7 @@
 #include <uint256.h>
 
 #include <atomic>
+#include <string>
 #include <memory>
 #include <span>
 
@@ -50,6 +51,25 @@ uint256 GetRandomXPowHash(const CBlockHeader& header, const uint256& seed);
  * params.fPowUseRandomX is set, SHA256d (as in Bitcoin) otherwise.
  */
 bool CheckBlockProofOfWork(const CBlockHeader& header, const CBlockIndex* pindexPrev, const Consensus::Params& params);
+/**
+ * PQCH: same, with the reason on failure ("high-hash", "bad-auxpow (...)"). Headers with the auxpow
+ * bit are checked as merged mined with Monero: the work is RandomX(Monero key, Monero hashing
+ * blob) and must commit to this header's id (auxpow.h). The Monero key rules need the chain and are
+ * checked in validation.cpp.
+ */
+bool CheckBlockProofOfWork(const CBlockHeader& header, const CBlockIndex* pindexPrev, const Consensus::Params& params, std::string& error);
+
+/**
+ * PQCH: Monero key rule for a merged mined header at pindexPrev->nHeight + 1 using `seed`
+ * (Consensus::Params::nAuxSeedWindow). Sets `is_new` when no block of the window on this chain
+ * introduced the key. Fails ("auxpow-too-many-seeds") if a new key would exceed the window's limit.
+ * Cheap (follows CBlockIndex::m_last_new_aux_seed links, at most nAuxNewSeedsPerWindow steps), so it
+ * runs before any RandomX work.
+ */
+bool CheckAuxSeed(const uint256& seed, const CBlockIndex* pindexPrev, const Consensus::Params& params, bool& is_new, std::string& error);
+
+/** PQCH: set pindex->m_last_new_aux_seed from its parent (call when the index is created or loaded). */
+void SetLastNewAuxSeed(CBlockIndex& pindex, const Consensus::Params& params);
 
 /**
  * Hasher for mining. In fast mode it builds the full 2 GiB dataset once per seed (slow to start,

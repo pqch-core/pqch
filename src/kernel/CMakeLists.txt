@@ -43,6 +43,7 @@ add_library(bitcoinkernel
   ../policy/truc_policy.cpp
   ../pow.cpp
   ../pow_randomx.cpp
+  ../auxpow.cpp
   ../primitives/block.cpp
   ../primitives/transaction.cpp
   ../pubkey.cpp

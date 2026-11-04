@@ -7,6 +7,8 @@
 
 #include <validation.h>
 
+#include <auxpow.h>
+
 #include <arith_uint256.h>
 #include <chain.h>
 #include <checkqueue.h>
@@ -3998,6 +4000,18 @@ bool CheckBlock(const CBlock& block, BlockValidationState& state, const Consensu
         return false;
     }
 
+    // PQCH: merged mining proof, block part (auxpow.h). The block id does not commit to the proof,
+    // so a failure here means the data we got is wrong, not that the block is: BLOCK_MUTATED, which
+    // does not mark the block invalid.
+    if (fCheckPOW && block.IsAuxPow()) {
+        std::string auxpow_error;
+        if (!block.auxpow || !auxpow::CheckAuxPowCoinbase(*block.auxpow, block.m_auxpow_head, auxpow_error)) {
+            return state.Invalid(BlockValidationResult::BLOCK_MUTATED, "bad-auxpow-coinbase", auxpow_error);
+        }
+    } else if (!block.m_auxpow_head.head.empty()) {
+        return state.Invalid(BlockValidationResult::BLOCK_MUTATED, "unexpected-auxpow-coinbase", "coinbase head on a block that is not merged mined");
+    }
+
     // All potential-corruption validation must be done before we do any
     // transaction validation, as otherwise we may mark the header as invalid
     // because we receive the wrong transactions for it.
@@ -4155,8 +4169,21 @@ static bool ContextualCheckBlockHeader(const CBlockHeader& block, BlockValidatio
 
     // PQCH: RandomX proof of work, keyed by an earlier block of this chain. Checked after the
     // cheap nBits check so that a header with the wrong difficulty costs no RandomX hash.
-    if (fCheckPOW && consensusParams.fPowUseRandomX && !CheckBlockProofOfWork(block, pindexPrev, consensusParams))
-        return state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER, "high-hash", "proof of work failed");
+    // PQCH: merged mined headers (auxpow.h) also follow the Monero key rule, checked first because
+    // a new key costs a 256 MiB RandomX cache.
+    if (block.IsAuxPow() && block.auxpow) {
+        bool is_new_seed{false};
+        std::string seed_error;
+        if (!CheckAuxSeed(block.auxpow->seed_hash, pindexPrev, consensusParams, is_new_seed, seed_error)) {
+            return state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER, seed_error, "too many new Monero RandomX keys in the window");
+        }
+    }
+    if (fCheckPOW && consensusParams.fPowUseRandomX) {
+        std::string pow_error;
+        if (!CheckBlockProofOfWork(block, pindexPrev, consensusParams, pow_error)) {
+            return state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER, pow_error, "proof of work failed");
+        }
+    }
 
     // Check timestamp against prev
     if (block.GetBlockTime() <= pindexPrev->GetMedianTimePast())
@@ -4427,6 +4454,16 @@ bool ChainstateManager::AcceptBlock(const std::shared_ptr<const CBlock>& pblock,
     }
 
     const CChainParams& params{GetParams()};
+
+    // PQCH: the proof of work of a merged mined block was checked on the header we indexed. The
+    // block id does not commit to the proof, so the block must carry that same proof (or a peer
+    // could attach a forged one that commits to the id without the work).
+    if (block.IsAuxPow() && (!block.auxpow || !pindex->m_auxpow ||
+                             (HashWriter{} << *block.auxpow).GetHash() != (HashWriter{} << *pindex->m_auxpow).GetHash())) {
+        state.Invalid(BlockValidationResult::BLOCK_MUTATED, "bad-auxpow-mismatch", "merged mining proof differs from the indexed header's");
+        LogError("%s: %s\n", __func__, state.ToString());
+        return false;
+    }
 
     if (!CheckBlock(block, state, params.GetConsensus()) ||
         !ContextualCheckBlock(block, state, *this, pindex->pprev)) {

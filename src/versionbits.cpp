@@ -335,6 +335,8 @@ std::vector<std::pair<int, bool>> VersionBitsCache::CheckUnknownActivations(cons
     LOCK(m_mutex);
     std::vector<std::pair<int, bool>> result;
     for (int bit = 0; bit < VERSIONBITS_NUM_BITS; ++bit) {
+        // PQCH: bit 8 (0x100) marks merged mined headers (auxpow.h); it is not a deployment signal.
+        if (bit == 8) continue;
         WarningBitsConditionChecker checker(chainparams, m_caches, bit);
         ThresholdState state = checker.GetStateFor(pindex, m_warning_caches.at(bit));
         if (state == ACTIVE || state == LOCKED_IN) {

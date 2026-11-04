@@ -60,6 +60,7 @@
 #include <node/interface_ui.h>
 #include <node/kernel_notifications.h>
 #include <node/mempool_args.h>
+#include <node/mergemining.h>
 #include <node/mempool_persist.h>
 #include <node/mempool_persist_args.h>
 #include <node/mining_args.h>
@@ -324,6 +325,7 @@ void Shutdown(NodeContext& node)
 
     StopHTTPRPC();
     StopREST();
+    node::StopMergeMiningRPC(); // PQCH
     StopRPC();
     StopHTTPServer();
     for (auto& client : node.chain_clients) {
@@ -737,6 +739,7 @@ void SetupServerArgs(ArgsManager& argsman, bool can_listen_ipc)
     argsman.AddArg("-randomxfastmining", "PQCH: make the built-in miner (generate* RPCs) use RandomX fast mode, which needs about 2.1 GiB of memory and a slow start but hashes several times faster (default: 0)", ArgsManager::ALLOW_ANY, OptionsCategory::BLOCK_CREATION);
     argsman.AddArg("-blockversion=<n>", "Override block version to test forking scenarios", ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::BLOCK_CREATION);
 
+    argsman.AddArg("-mergemining", strprintf("Serve P2Pool's merge mining API at http://<rpcbind>:<rpcport>%s, without authentication, so that Monero miners can merge mine PQCH (needs -server; access is limited by -rpcbind and -rpcallowip) (default: %u)", node::MERGEMINING_HTTP_PATH, node::DEFAULT_MERGEMINING), ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
     argsman.AddArg("-rest", strprintf("Accept public REST requests (default: %u)", DEFAULT_REST_ENABLE), ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
     argsman.AddArg("-rpcallowip=<ip>", "Allow JSON-RPC connections from specified source. Valid values for <ip> are a single IP (e.g. 1.2.3.4), a network/netmask (e.g. 1.2.3.4/255.255.255.0), a network/CIDR (e.g. 1.2.3.4/24), all ipv4 (0.0.0.0/0), or all ipv6 (::/0). RFC4193 is allowed only if -cjdnsreachable=0. This option can be specified multiple times", ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
     argsman.AddArg("-rpcauth=<userpw>", "Username and HMAC-SHA-256 hashed password for JSON-RPC connections. The field <userpw> comes in the format: <USERNAME>:<SALT>$<HASH>. A canonical python script is included in share/rpcauth. The client then connects normally using the rpcuser=<USERNAME>/rpcpassword=<PASSWORD> pair of arguments. This option can be specified multiple times", ArgsManager::ALLOW_ANY | ArgsManager::SENSITIVE, OptionsCategory::RPC);
@@ -792,6 +795,7 @@ static bool AppInitServers(NodeContext& node)
     if (!StartHTTPRPC(&node))
         return false;
     if (args.GetBoolArg("-rest", DEFAULT_REST_ENABLE)) StartREST(&node);
+    if (args.GetBoolArg("-mergemining", node::DEFAULT_MERGEMINING)) node::StartMergeMiningRPC(node); // PQCH
     StartHTTPServer();
     return true;
 }

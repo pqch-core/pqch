@@ -147,6 +147,17 @@ struct Params {
     bool fPowUseRandomX{false};
     int nRandomXSeedInterval{4096};
     int nRandomXSeedLag{64};
+    /**
+     * PQCH: merged mining with Monero (auxpow.h), allowed from this height (max = never).
+     * Every Monero RandomX key costs validators a new 256 MiB cache, so keys are rate limited: a key
+     * that no block of the last nAuxSeedWindow blocks introduced counts as new, and at most
+     * nAuxNewSeedsPerWindow new keys may appear in any nAuxSeedWindow blocks. A key therefore stays
+     * usable for nAuxSeedWindow blocks after it is introduced (Monero changes key every 2048 blocks,
+     * about 2.8 days; 4320 PQCH blocks are 3 days). Provisional values, to calibrate on the testnet.
+     */
+    int nAuxPowHeight{std::numeric_limits<int>::max()};
+    int nAuxSeedWindow{4320};
+    int nAuxNewSeedsPerWindow{4};
     /** PQCH: blocks a coinbase output must wait before it can be spent (Bitcoin: 100). */
     int nCoinbaseMaturity{100};
     int64_t nPowTargetSpacing;

@@ -4,6 +4,8 @@
 
 #include <pow_randomx.h>
 
+#include <auxpow.h>
+
 #include <chain.h>
 #include <logging.h>
 #include <pow.h>
@@ -72,7 +74,7 @@ struct RxContext {
 
 // Keep the two most recently used keys: around an epoch change and during reorgs blocks
 // from both sides of the boundary are validated, and rebuilding a cache costs ~0.5 s.
-constexpr size_t MAX_RX_CONTEXTS{2};
+constexpr size_t MAX_RX_CONTEXTS{4}; // PQCH: direct keys and Monero keys (merged mining)
 std::mutex g_rx_mutex;
 std::deque<std::shared_ptr<RxContext>> g_rx_contexts; // most recently used first
 
@@ -99,11 +101,9 @@ std::shared_ptr<RxContext> GetContext(std::span<const unsigned char> key)
 
 std::vector<unsigned char> SerializeHeader(const CBlockHeader& header)
 {
-    DataStream ss{};
-    ss << header;
-    assert(ss.size() == 80);
-    const auto bytes{MakeUCharSpan(ss)};
-    return {bytes.begin(), bytes.end()};
+    auto bytes{header.SerializePure()};
+    assert(bytes.size() == 80);
+    return bytes;
 }
 
 } // namespace
@@ -144,11 +144,73 @@ uint256 GetRandomXPowHash(const CBlockHeader& header, const uint256& seed)
 
 bool CheckBlockProofOfWork(const CBlockHeader& header, const CBlockIndex* pindexPrev, const Consensus::Params& params)
 {
+    std::string error;
+    return CheckBlockProofOfWork(header, pindexPrev, params, error);
+}
+
+bool CheckBlockProofOfWork(const CBlockHeader& header, const CBlockIndex* pindexPrev, const Consensus::Params& params, std::string& error)
+{
     if (!params.fPowUseRandomX) {
-        return CheckProofOfWork(header.GetHash(), header.nBits, params);
+        if (header.IsAuxPow()) { error = "auxpow not allowed"; return false; }
+        if (CheckProofOfWork(header.GetHash(), header.nBits, params)) return true;
+        error = "high-hash";
+        return false;
+    }
+    if (header.IsAuxPow()) {
+        // PQCH: merged mined with Monero (auxpow.h). Cheap structural checks first, then one RandomX
+        // hash of the Monero hashing blob under the Monero key.
+        if (pindexPrev->nHeight + 1 < params.nAuxPowHeight) { error = "auxpow-not-active"; return false; }
+        if (!header.auxpow) { error = "auxpow-missing"; return false; }
+        std::vector<unsigned char> blob;
+        std::string detail;
+        if (!auxpow::CheckAuxPowHeader(*header.auxpow, header.GetHash(), params.hashGenesisBlock, blob, detail)) {
+            error = "bad-auxpow (" + detail + ")";
+            return false;
+        }
+        const uint256& seed{header.auxpow->seed_hash};
+        if (CheckProofOfWork(RandomXHash(std::span<const unsigned char>{seed.data(), seed.size()}, blob), header.nBits, params)) return true;
+        error = "high-hash";
+        return false;
     }
     const uint256 seed{GetRandomXSeedHash(pindexPrev, params)};
-    return CheckProofOfWork(GetRandomXPowHash(header, seed), header.nBits, params);
+    if (CheckProofOfWork(GetRandomXPowHash(header, seed), header.nBits, params)) return true;
+    error = "high-hash";
+    return false;
+}
+
+bool CheckAuxSeed(const uint256& seed, const CBlockIndex* pindexPrev, const Consensus::Params& params, bool& is_new, std::string& error)
+{
+    const int height{pindexPrev ? pindexPrev->nHeight + 1 : 0};
+    int new_in_window{0};
+    const CBlockIndex* p{pindexPrev ? pindexPrev->m_last_new_aux_seed : nullptr};
+    // Every link is a block that introduced a key; in a valid chain at most nAuxNewSeedsPerWindow of
+    // them are in the window, the bound below only guards against a corrupted index.
+    for (int steps{0}; p && p->nHeight > height - params.nAuxSeedWindow && steps <= params.nAuxNewSeedsPerWindow; ++steps) {
+        if (p->AuxSeed() == seed) {
+            is_new = false;
+            return true;
+        }
+        ++new_in_window;
+        p = p->pprev ? p->pprev->m_last_new_aux_seed : nullptr;
+    }
+    is_new = true;
+    if (new_in_window >= params.nAuxNewSeedsPerWindow) {
+        error = "auxpow-too-many-seeds";
+        return false;
+    }
+    return true;
+}
+
+void SetLastNewAuxSeed(CBlockIndex& pindex, const Consensus::Params& params)
+{
+    const CBlockIndex* inherited{pindex.pprev ? pindex.pprev->m_last_new_aux_seed : nullptr};
+    pindex.m_last_new_aux_seed = inherited;
+    if (!pindex.m_auxpow) return;
+    bool is_new{false};
+    std::string error;
+    // A header in the index already passed CheckAuxSeed; only is_new matters here.
+    CheckAuxSeed(pindex.m_auxpow->seed_hash, pindex.pprev, params, is_new, error);
+    if (is_new) pindex.m_last_new_aux_seed = &pindex;
 }
 
 struct RandomXMiner::Impl {

@@ -147,6 +147,8 @@ public:
         consensus.fPowUseRandomX = true;
         consensus.nRandomXSeedInterval = 4096;
         consensus.nRandomXSeedLag = 64;
+        // PQCH: merged mining with Monero from the genesis block.
+        consensus.nAuxPowHeight = 0;
         // PQCH: 1-minute blocks with ASERT difficulty adjustment on every block, anchored at genesis.
         // nPowTargetTimespan is no longer used for retargeting when ASERT is enabled.
         consensus.nPowTargetTimespan = 14 * 24 * 60 * 60; // two weeks
@@ -604,6 +606,7 @@ public:
         consensus.nPowTargetTimespan = 144 * 60;
         consensus.nPowTargetSpacing = 60; // PQCH: 1-minute blocks
         consensus.fPowUseRandomX = true; // PQCH: RandomX v2 proof of work (trivial target, ~2 hashes per block)
+        consensus.nAuxPowHeight = 0;     // PQCH: merged mining with Monero
         // PQCH: regtest keeps Bitcoin's 100-block coinbase maturity so that test chains stay short;
         // the reorg limit is the main network's (tests can change it with -maxreorgdepth).
         consensus.nCoinbaseMaturity = COINBASE_MATURITY;

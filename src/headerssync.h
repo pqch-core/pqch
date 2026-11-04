@@ -26,6 +26,8 @@ struct CompressedHeader {
     uint32_t nTime{0};
     uint32_t nBits{0};
     uint32_t nNonce{0};
+    //! PQCH: merged mining proof (auxpow.h), kept so redownloaded headers can be fully validated.
+    std::shared_ptr<auxpow::CAuxPow> auxpow;
 
     CompressedHeader()
     {
@@ -37,7 +39,8 @@ struct CompressedHeader {
           hashMerkleRoot{header.hashMerkleRoot},
           nTime{header.nTime},
           nBits{header.nBits},
-          nNonce{header.nNonce}
+          nNonce{header.nNonce},
+          auxpow{header.auxpow}
     {
     }
 
@@ -50,6 +53,7 @@ struct CompressedHeader {
         ret.nTime = nTime;
         ret.nBits = nBits;
         ret.nNonce = nNonce;
+        ret.auxpow = auxpow;
         return ret;
     };
 };

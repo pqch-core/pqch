@@ -77,6 +77,7 @@ endif()
 
 add_library(bitcoin_consensus STATIC EXCLUDE_FROM_ALL
   arith_uint256.cpp
+  auxpow.cpp
   consensus/merkle.cpp
   consensus/tx_check.cpp
   hash.cpp
@@ -240,6 +241,7 @@ add_library(bitcoin_node STATIC EXCLUDE_FROM_ALL
   node/interfaces.cpp
   node/kernel_notifications.cpp
   node/mempool_args.cpp
+  node/mergemining.cpp
   node/mempool_persist.cpp
   node/mempool_persist_args.cpp
   node/miner.cpp
