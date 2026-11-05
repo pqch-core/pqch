@@ -1221,6 +1221,7 @@ bool DescriptorScriptPubKeyMan::TopUpWithDB(WalletBatch& batch, unsigned int siz
     assert(m_wallet_descriptor.GetEnd() - 1 == m_max_cached_index);
 
     m_storage.TopUpCallback(new_spks, this);
+    m_topup_blocked_by_lock = false;
     return true;
 }
 
@@ -1246,6 +1247,7 @@ std::vector<WalletDestination> DescriptorScriptPubKeyMan::MarkUnusedAddresses(co
         }
         if (!TopUp()) {
             WalletLogPrintf("%s: Topping up keypool failed (locked wallet)\n", __func__);
+            m_topup_blocked_by_lock = m_storage.IsLocked();
         }
     }
 
@@ -1621,6 +1623,12 @@ void DescriptorScriptPubKeyMan::WriteDescriptor()
     }
 }
 
+bool DescriptorScriptPubKeyMan::WriteDescriptor(WalletBatch& batch)
+{
+    LOCK(cs_desc_man);
+    return batch.WriteDescriptor(GetID(), m_wallet_descriptor);
+}
+
 WalletDescriptor DescriptorScriptPubKeyMan::GetWalletDescriptor() const
 {
     return m_wallet_descriptor;
@@ -1698,6 +1706,12 @@ void DescriptorScriptPubKeyMan::UpgradeDescriptorCache()
 
 util::Result<void> DescriptorScriptPubKeyMan::UpdateWalletDescriptor(WalletDescriptor& descriptor, const FlatSigningProvider& provider)
 {
+    WalletBatch batch(m_storage.GetDatabase());
+    return UpdateWalletDescriptor(batch, descriptor, provider);
+}
+
+util::Result<void> DescriptorScriptPubKeyMan::UpdateWalletDescriptor(WalletBatch& batch, WalletDescriptor& descriptor, const FlatSigningProvider& provider)
+{
     LOCK(cs_desc_man);
     std::string error;
     if (!CanUpdateToWalletDescriptor(descriptor, error)) {
@@ -1709,7 +1723,6 @@ util::Result<void> DescriptorScriptPubKeyMan::UpdateWalletDescriptor(WalletDescr
     m_max_cached_index = -1;
     m_wallet_descriptor.UpdateFrom(descriptor);
 
-    WalletBatch batch(m_storage.GetDatabase());
     UpdateWithSigningProvider(batch, provider);
     NotifyFirstKeyTimeChanged(this, m_wallet_descriptor.creation_time);
     return {};

@@ -67,6 +67,8 @@ static RPCMethod getwalletinfo()
                         {RPCResult::Type::BOOL, "external_signer", "whether this wallet is configured to use an external signer such as a hardware wallet"},
                         {RPCResult::Type::BOOL, "blank", "Whether this wallet intentionally does not contain any keys, scripts, or descriptors"},
                         {RPCResult::Type::NUM_TIME, "birthtime", /*optional=*/true, "The start time for blocks scanning. It could be modified by (re)importing any descriptor with an earlier timestamp."},
+                        {RPCResult::Type::NUM, "rescan_after_unlock_from", /*optional=*/true, "PQCH: the wallet was locked when it needed new addresses (a post-quantum seed has no public derivation); "
+                            "payments to them in blocks from this height are not shown yet. walletpassphrase generates the addresses and rescans those blocks."},
                         {RPCResult::Type::ARR, "flags", "The flags currently set on the wallet",
                         {
                             {RPCResult::Type::STR, "flag", "The name of the flag"},
@@ -117,6 +119,7 @@ static RPCMethod getwalletinfo()
     obj.pushKV("descriptors", pwallet->IsWalletFlagSet(WALLET_FLAG_DESCRIPTORS));
     obj.pushKV("external_signer", pwallet->IsWalletFlagSet(WALLET_FLAG_EXTERNAL_SIGNER));
     obj.pushKV("blank", pwallet->IsWalletFlagSet(WALLET_FLAG_BLANK_WALLET));
+    if (pwallet->m_rescan_after_unlock_height) obj.pushKV("rescan_after_unlock_from", *pwallet->m_rescan_after_unlock_height);
     if (int64_t birthtime = pwallet->GetBirthTime(); birthtime != UNKNOWN_TIME) {
         obj.pushKV("birthtime", birthtime);
     }

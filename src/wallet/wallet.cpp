@@ -1265,7 +1265,18 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransactionRef& ptx, const SyncTxS
             // loop though all outputs
             for (const CTxOut& txout: tx.vout) {
                 for (const auto& spk_man : GetScriptPubKeyMans(txout.scriptPubKey)) {
-                    for (auto &dest : spk_man->MarkUnusedAddresses(txout.scriptPubKey)) {
+                    auto marked{spk_man->MarkUnusedAddresses(txout.scriptPubKey)};
+                    // PQCH: a locked wallet cannot generate the addresses after this one (no
+                    // public derivation from a post-quantum seed): rescan from here once unlocked.
+                    if (const auto* desc_spkm{dynamic_cast<const DescriptorScriptPubKeyMan*>(spk_man)}; desc_spkm && desc_spkm->TopUpBlockedByLock()) {
+                        if (const auto* conf{std::get_if<TxStateConfirmed>(&state)}) {
+                            if (!m_rescan_after_unlock_height || conf->confirmed_block_height < *m_rescan_after_unlock_height) {
+                                m_rescan_after_unlock_height = conf->confirmed_block_height;
+                                WalletLogPrintf("Locked wallet: addresses after a used one could not be generated; blocks from height %d will be rescanned once the wallet is unlocked\n", conf->confirmed_block_height);
+                            }
+                        }
+                    }
+                    for (auto &dest : marked) {
                         // If internal flag is not defined try to infer it from the ScriptPubKeyMan
                         if (!dest.internal.has_value()) {
                             dest.internal = IsInternalScriptPubKeyMan(spk_man);
@@ -3485,6 +3496,33 @@ bool CWallet::Unlock(const CKeyingMaterial& vMasterKeyIn)
     return true;
 }
 
+std::optional<int> CWallet::RescanAfterUnlock()
+{
+    int height;
+    uint256 start;
+    {
+        LOCK(cs_wallet);
+        if (!m_rescan_after_unlock_height || IsLocked()) return std::nullopt;
+        // The addresses are generated first (the caller tops up the key pool after unlocking).
+        for (ScriptPubKeyMan* spkm : GetAllScriptPubKeyMans()) {
+            if (const auto* desc{dynamic_cast<DescriptorScriptPubKeyMan*>(spkm)}; desc && desc->TopUpBlockedByLock()) return std::nullopt;
+        }
+        height = *m_rescan_after_unlock_height;
+        if (height > GetLastBlockHeight() || !chain().findAncestorByHeight(GetLastBlockHash(), height, FoundBlock().hash(start))) {
+            m_rescan_after_unlock_height.reset();
+            return std::nullopt;
+        }
+    }
+    WalletRescanReserver reserver(*this);
+    if (!reserver.reserve()) return std::nullopt; // a scan is running; try again at the next unlock
+    WalletLogPrintf("Rescanning from height %d for addresses generated after unlocking\n", height);
+    const ScanResult result{ScanForWalletTransactions(start, height, /*max_height=*/{}, reserver, /*save_progress=*/false)};
+    if (result.status != ScanResult::SUCCESS) return std::nullopt;
+    LOCK(cs_wallet);
+    if (m_rescan_after_unlock_height == height) m_rescan_after_unlock_height.reset();
+    return height;
+}
+
 std::set<ScriptPubKeyMan*> CWallet::GetActiveScriptPubKeyMans() const
 {
     std::set<ScriptPubKeyMan*> spk_mans;
@@ -3891,25 +3929,55 @@ util::Result<std::reference_wrapper<DescriptorScriptPubKeyMan>> CWallet::AddWall
         }
     }
 
+    // PQCH: the private keys or post-quantum seed, the descriptor and its cache are written in one
+    // database transaction, so that a failure part way (full disk, crash) never leaves a descriptor
+    // on disk without its seed, or a seed without its descriptor. Error messages never quote the
+    // descriptor's private form.
     auto spk_man = GetDescriptorScriptPubKeyMan(desc);
-    if (spk_man) {
-        WalletLogPrintf("Update existing descriptor: %s\n", desc.descriptor->ToString());
-        if (auto spkm_res = spk_man->UpdateWalletDescriptor(desc, signing_provider); !spkm_res) {
-            return util::Error{util::ErrorString(spkm_res)};
+    std::unique_ptr<DescriptorScriptPubKeyMan> new_spk_man;
+    bilingual_str txn_error;
+    const bool committed{RunWithinTxn(GetDatabase(), /*process_desc=*/"import descriptor", [&](WalletBatch& batch) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet) {
+        try {
+            if (spk_man) {
+                WalletLogPrintf("Update existing descriptor: %s\n", desc.descriptor->ToString());
+                if (auto spkm_res = spk_man->UpdateWalletDescriptor(batch, desc, signing_provider); !spkm_res) {
+                    txn_error = util::ErrorString(spkm_res);
+                    return false;
+                }
+            } else {
+                // CreateFromMigration is CreateFromImport writing through the given batch.
+                new_spk_man = DescriptorScriptPubKeyMan::CreateFromMigration(*this, batch, desc, m_keypool_size, signing_provider);
+                // Write the existing cache to disk
+                if (!batch.WriteDescriptorCacheItems(new_spk_man->GetID(), desc.cache)) {
+                    txn_error = _("Unable to write descriptor cache");
+                    return false;
+                }
+            }
+            // Save the descriptor to DB
+            if (!(spk_man ? spk_man : new_spk_man.get())->WriteDescriptor(batch)) {
+                txn_error = _("Unable to write descriptor");
+                return false;
+            }
+        } catch (const std::exception& e) {
+            txn_error = Untranslated(e.what());
+            return false;
         }
-    } else {
-        auto new_spk_man = DescriptorScriptPubKeyMan::CreateFromImport(*this, desc, m_keypool_size, signing_provider);
+        return true;
+    })};
+    if (!committed) {
+        if (new_spk_man) {
+            // Its scripts were cached while topping up: forget them with it.
+            for (auto it{m_cached_spks.begin()}; it != m_cached_spks.end();) {
+                std::erase(it->second, new_spk_man.get());
+                it = it->second.empty() ? m_cached_spks.erase(it) : std::next(it);
+            }
+        }
+        return util::Error{txn_error.empty() ? _("Unable to write the descriptor to the wallet database") : txn_error};
+    }
+    if (new_spk_man) {
+        // Save the descriptor to memory, now that it is on disk.
         spk_man = new_spk_man.get();
-
-        // Save the descriptor to memory
-        uint256 id = new_spk_man->GetID();
-        AddScriptPubKeyMan(id, std::move(new_spk_man));
-
-        // Write the existing cache to disk
-        WalletBatch batch(GetDatabase());
-        if (!batch.WriteDescriptorCacheItems(id, desc.cache)) {
-            return util::Error{_("Unable to write descriptor cache")};
-        }
+        AddScriptPubKeyMan(spk_man->GetID(), std::move(new_spk_man));
     }
 
     // Apply the label if necessary
@@ -3929,9 +3997,6 @@ util::Result<std::reference_wrapper<DescriptorScriptPubKeyMan>> CWallet::AddWall
             }
         }
     }
-
-    // Save the descriptor to DB
-    spk_man->WriteDescriptor();
 
     // Break balance caches so that outputs that are now IsMine in already known txs will be included in the balance
     MarkDirty();

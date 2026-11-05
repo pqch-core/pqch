@@ -607,6 +607,12 @@ public:
     RecursiveMutex m_relock_mutex;
 
     bool Unlock(const SecureString& strWalletPassphrase);
+    /** PQCH: after an unlock and a key pool top up, rescan the blocks seen while the wallet was
+     *  locked and could not generate new addresses (DescriptorScriptPubKeyMan::TopUpBlockedByLock).
+     *  Returns the height the rescan started from, or nullopt if none was needed or it failed. */
+    std::optional<int> RescanAfterUnlock() EXCLUSIVE_LOCKS_REQUIRED(!cs_wallet);
+    /** PQCH: lowest block height to rescan once unlocked (see RescanAfterUnlock). */
+    std::optional<int> m_rescan_after_unlock_height GUARDED_BY(cs_wallet);
     bool ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase, const SecureString& strNewWalletPassphrase);
     bool EncryptWallet(const SecureString& strWalletPassphrase);
 

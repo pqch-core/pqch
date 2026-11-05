@@ -90,6 +90,9 @@ RPCMethod walletpassphrase()
         relock_time = pwallet->nRelockTime;
     }
 
+    // PQCH: blocks seen while the wallet was locked may pay addresses it could only generate now.
+    pwallet->RescanAfterUnlock();
+
     // Get wallet scheduler to queue up the relock callback in the future.
     // Scheduled events don't get destructed until they are executed,
     // and they are executed in series in a single scheduler thread so

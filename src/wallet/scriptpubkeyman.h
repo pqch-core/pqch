@@ -27,6 +27,7 @@
 #include <wallet/walletutil.h>
 
 #include <functional>
+#include <atomic>
 #include <optional>
 #include <unordered_map>
 #include <unordered_set>
@@ -287,6 +288,8 @@ private:
     CryptedKeyMap m_map_crypted_keys GUARDED_BY(cs_desc_man);
     PQSeedMap m_pq_seeds GUARDED_BY(cs_desc_man);                //!< PQCH
     CryptedPQSeedMap m_crypted_pq_seeds GUARDED_BY(cs_desc_man); //!< PQCH
+    //! PQCH: addresses could not be generated because the wallet was locked (see TopUpBlockedByLock).
+    std::atomic<bool> m_topup_blocked_by_lock{false};
 
     //! keeps track of whether Unlock has run a thorough check before
     bool m_decryption_thoroughly_checked = false;
@@ -405,9 +408,18 @@ public:
     uint256 GetID() const override;
 
     bool HasWalletDescriptor(const WalletDescriptor& desc) const;
+    /** PQCH: true when a used address was found but the next ones could not be generated because
+     *  the wallet is locked: a post-quantum seed has no public derivation, so a locked wallet cannot
+     *  extend its address range, and payments to those addresses are not seen until it is unlocked
+     *  and the blocks rescanned (CWallet::RescanAfterUnlock). Cleared by a successful top up. */
+    bool TopUpBlockedByLock() const { return m_topup_blocked_by_lock; }
     util::Result<void> UpdateWalletDescriptor(WalletDescriptor& descriptor, const FlatSigningProvider& provider);
+    //! PQCH: the same, writing through `batch` (so that an import can be one database transaction).
+    util::Result<void> UpdateWalletDescriptor(WalletBatch& batch, WalletDescriptor& descriptor, const FlatSigningProvider& provider);
     bool CanUpdateToWalletDescriptor(const WalletDescriptor& descriptor, std::string& error);
     void WriteDescriptor();
+    //! PQCH: the same through `batch`; false on a write error.
+    [[nodiscard]] bool WriteDescriptor(WalletBatch& batch);
 
     WalletDescriptor GetWalletDescriptor() const EXCLUSIVE_LOCKS_REQUIRED(cs_desc_man);
     std::unordered_set<CScript, SaltedSipHasher> GetScriptPubKeys() const override;
