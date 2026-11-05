@@ -88,6 +88,7 @@ EXTENDED_SCRIPTS = [
     # These tests are not run by default.
     # Longest test should go first, to favor running tests in parallel
     'feature_pruning.py',
+    'feature_block.py',
     'feature_dbcrash.py',
     'feature_index_prune.py',
     'feature_utxo_abort_on_error.py',
@@ -104,7 +105,9 @@ BASE_SCRIPTS = [
     # vv Tests less than 5m vv
     'feature_fee_estimation.py',
     'feature_taproot.py',
-    'feature_block.py',
+    # PQCH: the 1088-block reorg of full blocks takes over an hour with RandomX; it runs in the
+    # extended set.
+    'feature_block.py --skipreorg',
     'mempool_ephemeral_dust.py',
     'wallet_conflicts.py',
     'p2p_opportunistic_1p1c.py',

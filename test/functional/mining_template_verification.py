@@ -122,7 +122,9 @@ class MiningTemplateVerificationTest(BitcoinTestFramework):
         self.log.info("Extremely high nBits")
         bad_block = copy.deepcopy(block)
         bad_block.nBits = 469762303  # impossible in the real world
-        assert_template(node, bad_block, "bad-diffbits", solve=False, expect_submit="high-hash")
+        # PQCH: submitblock also says bad-diffbits (Bitcoin: high-hash): the RandomX proof of work is
+        # checked with the chain as context, after the cheap difficulty check.
+        assert_template(node, bad_block, "bad-diffbits", solve=False)
 
         self.log.info("Lowering nBits should make the block invalid")
         bad_block = copy.deepcopy(block)
