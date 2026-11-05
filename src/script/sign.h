@@ -33,7 +33,16 @@ struct SignatureData;
 
 struct SignOptions {
     int sighash_type{SIGHASH_DEFAULT};
+    //! PQCH: spend standard P2MR outputs through the recovery leaf (SLH-DSA) instead of the hybrid leaf.
+    bool p2mr_recovery{false};
 };
+
+/**
+ * PQCH: script flags for checking signatures this software produces. On PQCH chains (post-quantum
+ * rules from the genesis block) witness v1 outputs are P2MR, so SCRIPT_VERIFY_P2MR is added to
+ * STANDARD_SCRIPT_VERIFY_FLAGS.
+ */
+script_verify_flags StandardSigningVerifyFlags();
 
 /** Interface for signature creators. */
 class BaseSignatureCreator {
@@ -47,6 +56,12 @@ public:
     virtual std::vector<uint8_t> CreateMuSig2Nonce(const SigningProvider& provider, const CPubKey& aggregate_pubkey, const CPubKey& script_pubkey, const CPubKey& part_pubkey, const uint256* leaf_hash, const uint256* merkle_root, SigVersion sigversion, const SignatureData& sigdata) const =0;
     virtual bool CreateMuSig2PartialSig(const SigningProvider& provider, uint256& partial_sig, const CPubKey& aggregate_pubkey, const CPubKey& script_pubkey, const CPubKey& part_pubkey, const uint256* leaf_hash, const std::vector<std::pair<uint256, bool>>& tweaks, SigVersion sigversion, const SignatureData& sigdata) const =0;
     virtual bool CreateMuSig2AggregateSig(const std::vector<CPubKey>& participants, std::vector<uint8_t>& sig, const CPubKey& aggregate_pubkey, const CPubKey& script_pubkey, const uint256* leaf_hash, const std::vector<std::pair<uint256, bool>>& tweaks, SigVersion sigversion, const SignatureData& sigdata) const =0;
+    /** PQCH: Schnorr signature in a P2MR PQ-script leaf (key_version 0). `key` is null for creators without keys. */
+    virtual bool CreateP2MRSchnorrSig(const CKey* key, std::vector<unsigned char>& sig, const uint256& leaf_hash) const =0;
+    /** PQCH: post-quantum signature in a P2MR PQ-script leaf (key_version = algorithm). */
+    virtual bool CreatePQSig(const pqc::KeyPair* key, PQAlgorithm algo, std::vector<unsigned char>& sig, const uint256& leaf_hash) const =0;
+    /** PQCH: whether standard P2MR outputs are spent through the recovery leaf. */
+    virtual bool UseP2MRRecovery() const { return false; }
 };
 
 /** A signature creator for transactions. */
@@ -59,7 +74,7 @@ class MutableTransactionSignatureCreator : public BaseSignatureCreator
     const MutableTransactionSignatureChecker checker;
     const PrecomputedTransactionData* m_txdata;
 
-    std::optional<uint256> ComputeSchnorrSignatureHash(const uint256* leaf_hash, SigVersion sigversion) const;
+    std::optional<uint256> ComputeSchnorrSignatureHash(const uint256* leaf_hash, SigVersion sigversion, uint8_t key_version = 0) const;
 
 public:
     MutableTransactionSignatureCreator(const CMutableTransaction& tx LIFETIMEBOUND, unsigned int input_idx, const CAmount& amount, const SignOptions& options);
@@ -70,6 +85,9 @@ public:
     std::vector<uint8_t> CreateMuSig2Nonce(const SigningProvider& provider, const CPubKey& aggregate_pubkey, const CPubKey& script_pubkey, const CPubKey& part_pubkey, const uint256* leaf_hash, const uint256* merkle_root, SigVersion sigversion, const SignatureData& sigdata) const override;
     bool CreateMuSig2PartialSig(const SigningProvider& provider, uint256& partial_sig, const CPubKey& aggregate_pubkey, const CPubKey& script_pubkey, const CPubKey& part_pubkey, const uint256* leaf_hash, const std::vector<std::pair<uint256, bool>>& tweaks, SigVersion sigversion, const SignatureData& sigdata) const override;
     bool CreateMuSig2AggregateSig(const std::vector<CPubKey>& participants, std::vector<uint8_t>& sig, const CPubKey& aggregate_pubkey, const CPubKey& script_pubkey, const uint256* leaf_hash, const std::vector<std::pair<uint256, bool>>& tweaks, SigVersion sigversion, const SignatureData& sigdata) const override;
+    bool CreateP2MRSchnorrSig(const CKey* key, std::vector<unsigned char>& sig, const uint256& leaf_hash) const override;
+    bool CreatePQSig(const pqc::KeyPair* key, PQAlgorithm algo, std::vector<unsigned char>& sig, const uint256& leaf_hash) const override;
+    bool UseP2MRRecovery() const override { return m_options.p2mr_recovery; }
 };
 
 /** A signature checker that accepts all signatures */
@@ -87,6 +105,7 @@ typedef std::pair<CPubKey, std::vector<unsigned char>> SigPair;
 struct SignatureData {
     bool complete = false; ///< Stores whether the scriptSig and scriptWitness are complete
     bool witness = false; ///< Stores whether the input this SigData corresponds to is a witness input
+    bool p2mr = false; ///< PQCH: whether the input was signed as a standard P2MR output
     CScript scriptSig; ///< The scriptSig of an input. Contains complete signatures or the traditional partial signatures format
     CScript redeem_script; ///< The redeemScript (if any) for the input
     CScript witness_script; ///< The witnessScript (if any) for the input. witnessScripts are used in P2WSH outputs.

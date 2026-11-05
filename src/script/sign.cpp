@@ -6,6 +6,7 @@
 #include <script/sign.h>
 
 #include <addresstype.h>
+#include <chainparams.h>
 #include <coins.h>
 #include <consensus/amount.h>
 #include <hash.h>
@@ -14,6 +15,7 @@
 #include <policy/policy.h>
 #include <prevector.h>
 #include <primitives/transaction.h>
+#include <random.h>
 #include <script/keyorigin.h>
 #include <script/miniscript.h>
 #include <script/script.h>
@@ -22,6 +24,7 @@
 #include <script/solver.h>
 #include <script/verify_flags.h>
 #include <serialize.h>
+#include <support/cleanse.h>
 #include <uint256.h>
 #include <util/check.h>
 #include <util/translation.h>
@@ -76,7 +79,7 @@ bool MutableTransactionSignatureCreator::CreateSig(const SigningProvider& provid
     return true;
 }
 
-std::optional<uint256> MutableTransactionSignatureCreator::ComputeSchnorrSignatureHash(const uint256* leaf_hash, SigVersion sigversion) const
+std::optional<uint256> MutableTransactionSignatureCreator::ComputeSchnorrSignatureHash(const uint256* leaf_hash, SigVersion sigversion, uint8_t key_version) const
 {
     assert(sigversion == SigVersion::TAPROOT || sigversion == SigVersion::TAPSCRIPT);
 
@@ -96,8 +99,46 @@ std::optional<uint256> MutableTransactionSignatureCreator::ComputeSchnorrSignatu
         execdata.m_tapleaf_hash = *leaf_hash;
     }
     uint256 hash;
-    if (!SignatureHashSchnorr(hash, execdata, m_txto, nIn, m_options.sighash_type, sigversion, *m_txdata, MissingDataBehavior::FAIL)) return std::nullopt;
+    if (!SignatureHashSchnorr(hash, execdata, m_txto, nIn, m_options.sighash_type, sigversion, *m_txdata, MissingDataBehavior::FAIL, key_version)) return std::nullopt;
     return hash;
+}
+
+bool MutableTransactionSignatureCreator::CreateP2MRSchnorrSig(const CKey* key, std::vector<unsigned char>& sig, const uint256& leaf_hash) const
+{
+    if (!key) return false;
+    const std::optional<uint256> hash{ComputeSchnorrSignatureHash(&leaf_hash, SigVersion::TAPSCRIPT, /*key_version=*/0)};
+    if (!hash) return false;
+    sig.resize(64);
+    // An untweaked BIP340 signature (merkle_root null): the key is a script key, not an output key.
+    if (!key->SignSchnorr(*hash, sig, /*merkle_root=*/nullptr, uint256{})) return false;
+    if (m_options.sighash_type) sig.push_back(m_options.sighash_type);
+    return true;
+}
+
+bool MutableTransactionSignatureCreator::CreatePQSig(const pqc::KeyPair* key, PQAlgorithm algo, std::vector<unsigned char>& sig, const uint256& leaf_hash) const
+{
+    if (!key) return false;
+    const std::optional<uint256> hash{ComputeSchnorrSignatureHash(&leaf_hash, SigVersion::TAPSCRIPT, static_cast<uint8_t>(algo))};
+    if (!hash) return false;
+    bool ok{false};
+    switch (algo) {
+    case PQAlgorithm::ML_DSA_44: {
+        // Hedged signing (FIPS 204 default): fresh randomness on top of the deterministic nonce.
+        std::array<unsigned char, 32> rnd;
+        GetStrongRandBytes(rnd);
+        ok = pqc::MLDSA44Sign(key->seckey, *hash, pqc::TX_SIGNATURE_CONTEXT, rnd, sig);
+        break;
+    }
+    case PQAlgorithm::SLH_DSA_SHA2_128S: {
+        std::array<unsigned char, 16> addrnd;
+        GetStrongRandBytes(addrnd);
+        ok = pqc::SLHDSA128sSign(key->seckey, *hash, pqc::TX_SIGNATURE_CONTEXT, addrnd, sig);
+        break;
+    }
+    }
+    if (!ok) return false;
+    if (m_options.sighash_type) sig.push_back(m_options.sighash_type);
+    return true;
 }
 
 bool MutableTransactionSignatureCreator::CreateSchnorrSig(const SigningProvider& provider, std::vector<unsigned char>& sig, const XOnlyPubKey& pubkey, const uint256* leaf_hash, const uint256* merkle_root, SigVersion sigversion) const
@@ -635,6 +676,45 @@ static bool SignTaproot(const SigningProvider& provider, const BaseSignatureCrea
     return false;
 }
 
+/** PQCH: sign a standard P2MR output (script/p2mr.h) through the hybrid or the recovery leaf. */
+static bool SignP2MR(const SigningProvider& provider, const BaseSignatureCreator& creator, const p2mr::SpendData& spend, SignatureData& sigdata, std::vector<valtype>& result)
+{
+    sigdata.p2mr = true;
+    const bool recovery{creator.UseP2MRRecovery()};
+    const uint256 leaf_hash{spend.LeafHash(recovery)};
+    const CScript leaf{spend.Leaf(recovery)};
+    std::vector<valtype> stack;
+    if (!recovery) {
+        // Leaf A: <x-only> OP_CHECKSIGVERIFY <ML-DSA> OP_CHECKSIGMLDSA. Witness: ML-DSA sig, Schnorr sig.
+        CKey owner;
+        p2mr::LeafAKeys keys;
+        const bool have{provider.GetKey(spend.owner.GetID(), owner) && p2mr::DeriveLeafAKeys(owner, keys)};
+        if (have && (XOnlyPubKey{keys.schnorr.GetPubKey()} != spend.keys.schnorr || keys.mldsa.pubkey != spend.keys.mldsa)) return false;
+        std::vector<unsigned char> schnorr_sig, pq_sig;
+        const bool ok{creator.CreateP2MRSchnorrSig(have ? &keys.schnorr : nullptr, schnorr_sig, leaf_hash) &&
+                      creator.CreatePQSig(have ? &keys.mldsa : nullptr, PQAlgorithm::ML_DSA_44, pq_sig, leaf_hash)};
+        memory_cleanse(keys.mldsa.seckey.data(), keys.mldsa.seckey.size());
+        if (!ok) return false;
+        stack.push_back(std::move(pq_sig));
+        stack.push_back(std::move(schnorr_sig));
+    } else {
+        // Leaf B: <salt> OP_DROP <SLH-DSA> OP_CHECKSIGSLHDSA. Witness: SLH-DSA sig.
+        CKey owner;
+        pqc::KeyPair key;
+        const bool have{provider.GetKey(spend.keys.recovery_owner.GetID(), owner) && p2mr::DeriveRecoveryKey(owner, key)};
+        if (have && key.pubkey != spend.keys.slhdsa) return false;
+        std::vector<unsigned char> pq_sig;
+        const bool ok{creator.CreatePQSig(have ? &key : nullptr, PQAlgorithm::SLH_DSA_SHA2_128S, pq_sig, leaf_hash)};
+        memory_cleanse(key.seckey.data(), key.seckey.size());
+        if (!ok) return false;
+        stack.push_back(std::move(pq_sig));
+    }
+    stack.emplace_back(leaf.begin(), leaf.end());
+    stack.push_back(spend.Control(recovery));
+    result = std::move(stack);
+    return true;
+}
+
 /**
  * Sign scriptPubKey using signature made with creator.
  * Signatures are returned in scriptSigRet (or returns false if scriptPubKey can't be signed),
@@ -716,8 +796,14 @@ static bool SignStep(const SigningProvider& provider, const BaseSignatureCreator
         sigdata.missing_witness_script = uint256(vSolutions[0]);
         return false;
 
-    case TxoutType::WITNESS_V1_TAPROOT:
+    case TxoutType::WITNESS_V1_TAPROOT: {
+        // PQCH: a witness v1 program the provider knows as a standard P2MR output.
+        p2mr::SpendData spend;
+        if (provider.GetP2MRSpendData(uint256{std::span<const unsigned char>{vSolutions[0]}}, spend)) {
+            return SignP2MR(provider, creator, spend, sigdata, ret);
+        }
         return SignTaproot(provider, creator, WitnessV1Taproot(XOnlyPubKey{vSolutions[0]}), sigdata, ret);
+    }
 
     case TxoutType::ANCHOR:
         return true;
@@ -812,7 +898,9 @@ bool ProduceSignature(const SigningProvider& provider, const BaseSignatureCreato
     sigdata.scriptSig = PushAll(result);
 
     // Test solution
-    sigdata.complete = solved && VerifyScript(sigdata.scriptSig, fromPubKey, &sigdata.scriptWitness, STANDARD_SCRIPT_VERIFY_FLAGS, creator.Checker());
+    script_verify_flags verify_flags{STANDARD_SCRIPT_VERIFY_FLAGS};
+    if (sigdata.p2mr) verify_flags |= SCRIPT_VERIFY_P2MR;
+    sigdata.complete = solved && VerifyScript(sigdata.scriptSig, fromPubKey, &sigdata.scriptWitness, verify_flags, creator.Checker());
     return sigdata.complete;
 }
 
@@ -861,7 +949,7 @@ SignatureData DataFromTransaction(const CMutableTransaction& tx, unsigned int nI
     // Get signatures
     MutableTransactionSignatureChecker tx_checker(&tx, nIn, txout.nValue, MissingDataBehavior::FAIL);
     SignatureExtractorChecker extractor_checker(data, tx_checker);
-    if (VerifyScript(data.scriptSig, txout.scriptPubKey, &data.scriptWitness, STANDARD_SCRIPT_VERIFY_FLAGS, extractor_checker)) {
+    if (VerifyScript(data.scriptSig, txout.scriptPubKey, &data.scriptWitness, StandardSigningVerifyFlags(), extractor_checker)) {
         data.complete = true;
         return data;
     }
@@ -945,6 +1033,7 @@ public:
     DummySignatureChecker() = default;
     bool CheckECDSASignature(const std::vector<unsigned char>& sig, const std::vector<unsigned char>& vchPubKey, const CScript& scriptCode, SigVersion sigversion) const override { return sig.size() != 0; }
     bool CheckSchnorrSignature(std::span<const unsigned char> sig, std::span<const unsigned char> pubkey, SigVersion sigversion, ScriptExecutionData& execdata, ScriptError* serror) const override { return sig.size() != 0; }
+    bool CheckPQSignature(std::span<const unsigned char> sig, std::span<const unsigned char> pubkey, PQAlgorithm algo, SigVersion sigversion, ScriptExecutionData& execdata, ScriptError* serror) const override { return sig.size() != 0; }
     bool CheckLockTime(const CScriptNum& nLockTime) const override { return true; }
     bool CheckSequence(const CScriptNum& nSequence) const override { return true; }
 };
@@ -978,6 +1067,16 @@ public:
     bool CreateSchnorrSig(const SigningProvider& provider, std::vector<unsigned char>& sig, const XOnlyPubKey& pubkey, const uint256* leaf_hash, const uint256* tweak, SigVersion sigversion) const override
     {
         sig.assign(64, '\000');
+        return true;
+    }
+    bool CreateP2MRSchnorrSig(const CKey*, std::vector<unsigned char>& sig, const uint256&) const override
+    {
+        sig.assign(64, '\000');
+        return true;
+    }
+    bool CreatePQSig(const pqc::KeyPair*, PQAlgorithm algo, std::vector<unsigned char>& sig, const uint256&) const override
+    {
+        sig.assign(algo == PQAlgorithm::ML_DSA_44 ? pqc::MLDSA44_SIG_SIZE : pqc::SLHDSA128S_SIG_SIZE, '\000');
         return true;
     }
     std::vector<uint8_t> CreateMuSig2Nonce(const SigningProvider& provider, const CPubKey& aggregate_pubkey, const CPubKey& script_pubkey, const CPubKey& part_pubkey, const uint256* leaf_hash, const uint256* merkle_root, SigVersion sigversion, const SignatureData& sigdata) const override
@@ -1072,7 +1171,7 @@ bool SignTransaction(CMutableTransaction& mtx, const SigningProvider* keystore, 
         }
 
         ScriptError serror = SCRIPT_ERR_OK;
-        if (!sigdata.complete && !VerifyScript(txin.scriptSig, prevPubKey, &txin.scriptWitness, STANDARD_SCRIPT_VERIFY_FLAGS, TransactionSignatureChecker(&txConst, i, amount, txdata, MissingDataBehavior::FAIL), &serror)) {
+        if (!sigdata.complete && !VerifyScript(txin.scriptSig, prevPubKey, &txin.scriptWitness, StandardSigningVerifyFlags(), TransactionSignatureChecker(&txConst, i, amount, txdata, MissingDataBehavior::FAIL), &serror)) {
             if (serror == SCRIPT_ERR_INVALID_STACK_OPERATION) {
                 // Unable to sign input and verification failed (possible attempt to partially sign).
                 input_errors[i] = Untranslated("Unable to sign input, invalid stack size (possibly missing key)");
@@ -1088,4 +1187,11 @@ bool SignTransaction(CMutableTransaction& mtx, const SigningProvider* keystore, 
         }
     }
     return input_errors.empty();
+}
+
+script_verify_flags StandardSigningVerifyFlags()
+{
+    script_verify_flags flags{STANDARD_SCRIPT_VERIFY_FLAGS};
+    if (Params().GetConsensus().PQRulesHeight == 0) flags |= SCRIPT_VERIFY_P2MR;
+    return flags;
 }

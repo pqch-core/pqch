@@ -4,6 +4,9 @@
 
 #include <consensus/tx_check.h>
 
+#include <consensus/tx_verify.h>
+#include <script/interpreter.h>
+
 #include <consensus/amount.h>
 #include <consensus/consensus.h>
 #include <consensus/validation.h>
@@ -65,4 +68,17 @@ bool CheckTransaction(const CTransaction& tx, TxValidationState& state)
     }
 
     return true;
+}
+
+// PQCH: declared in consensus/tx_verify.h; defined here so that the wallet (no node library) can use it.
+bool Consensus::IsPQAllowedOutput(const CScript& script_pub_key)
+{
+    if (!script_pub_key.empty() && script_pub_key[0] == OP_RETURN) return true;
+    int version;
+    std::vector<unsigned char> program;
+    if (!script_pub_key.IsWitnessProgram(version, program)) return false;
+    if (version == 1) {
+        return program.size() == WITNESS_V1_P2MR_SIZE || CScript::IsPayToAnchor(version, program);
+    }
+    return version >= 2; // versions 2 to 16 are reserved for future soft forks
 }

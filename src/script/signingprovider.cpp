@@ -54,6 +54,10 @@ bool HidingSigningProvider::GetTaprootSpendData(const XOnlyPubKey& output_key, T
 {
     return m_provider->GetTaprootSpendData(output_key, spenddata);
 }
+bool HidingSigningProvider::GetP2MRSpendData(const uint256& root, p2mr::SpendData& data) const
+{
+    return m_provider->GetP2MRSpendData(root, data);
+}
 bool HidingSigningProvider::GetTaprootBuilder(const XOnlyPubKey& output_key, TaprootBuilder& builder) const
 {
     return m_provider->GetTaprootBuilder(output_key, builder);
@@ -108,6 +112,10 @@ bool FlatSigningProvider::GetTaprootSpendData(const XOnlyPubKey& output_key, Tap
     }
     return false;
 }
+bool FlatSigningProvider::GetP2MRSpendData(const uint256& root, p2mr::SpendData& data) const
+{
+    return LookupHelper(p2mr_spenddata, root, data);
+}
 bool FlatSigningProvider::GetTaprootBuilder(const XOnlyPubKey& output_key, TaprootBuilder& builder) const
 {
     return LookupHelper(tr_trees, output_key, builder);
@@ -155,6 +163,8 @@ FlatSigningProvider& FlatSigningProvider::Merge(FlatSigningProvider&& b)
     origins.merge(b.origins);
     tr_trees.merge(b.tr_trees);
     aggregate_pubkeys.merge(b.aggregate_pubkeys);
+    p2mr_spenddata.merge(b.p2mr_spenddata);
+    p2mr_keys.merge(b.p2mr_keys);
     // We shouldn't be merging 2 different sessions, just overwrite with b's sessions.
     if (!musig2_secnonces) musig2_secnonces = b.musig2_secnonces;
     return *this;
@@ -343,6 +353,14 @@ bool MultiSigningProvider::GetTaprootSpendData(const XOnlyPubKey& output_key, Ta
 {
     for (const auto& provider: m_providers) {
         if (provider->GetTaprootSpendData(output_key, spenddata)) return true;
+    }
+    return false;
+}
+
+bool MultiSigningProvider::GetP2MRSpendData(const uint256& root, p2mr::SpendData& data) const
+{
+    for (const auto& provider: m_providers) {
+        if (provider->GetP2MRSpendData(root, data)) return true;
     }
     return false;
 }

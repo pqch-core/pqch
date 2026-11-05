@@ -32,6 +32,11 @@ fs::path GetWalletDir()
     return path;
 }
 
+bool IsPQWalletChain()
+{
+    return Params().GetConsensus().PQRulesHeight == 0;
+}
+
 WalletDescriptor GenerateWalletDescriptor(const CExtPubKey& master_key, const OutputType& addr_type, bool internal)
 {
     int64_t creation_time = GetTime();
@@ -56,7 +61,14 @@ WalletDescriptor GenerateWalletDescriptor(const CExtPubKey& master_key, const Ou
         break;
     }
     case OutputType::BECH32M: {
-        desc_prefix = "tr(" + xpub + "/86h";
+        if (IsPQWalletChain()) {
+            // PQCH: p2mr() with hardened derivation only (whitepaper, section 21.5):
+            // m/360h/coin_typeh/0h/{0h,1h}/*h.
+            desc_prefix = "p2mr(" + xpub + "/360h";
+            desc_suffix = "h/*h)";
+        } else {
+            desc_prefix = "tr(" + xpub + "/86h";
+        }
         break;
     }
     case OutputType::UNKNOWN: {

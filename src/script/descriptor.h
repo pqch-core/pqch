@@ -7,10 +7,12 @@
 
 #include <outputtype.h>
 #include <pubkey.h>
+#include <script/p2mr.h>
 #include <uint256.h>
 
 #include <cstddef>
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <optional>
 #include <set>
@@ -34,6 +36,8 @@ private:
     ExtPubKeyMap m_parent_xpubs;
     /** Map key expression index -> last hardened xpub */
     ExtPubKeyMap m_last_hardened_xpubs;
+    /** PQCH: P2MR address keys by BIP32 child public key (they cannot be derived without private keys) */
+    std::map<CPubKey, p2mr::AddressKeys> m_p2mr_keys;
 
 public:
     /** Cache a parent xpub
@@ -81,6 +85,11 @@ public:
     std::unordered_map<uint32_t, ExtPubKeyMap> GetCachedDerivedExtPubKeys() const;
     /** Retrieve all cached last hardened xpubs */
     ExtPubKeyMap GetCachedLastHardenedExtPubKeys() const;
+
+    /** PQCH: cache / retrieve the P2MR address keys of a BIP32 child key */
+    void CacheP2MRKeys(const CPubKey& child, const p2mr::AddressKeys& keys);
+    bool GetCachedP2MRKeys(const CPubKey& child, p2mr::AddressKeys& keys) const;
+    const std::map<CPubKey, p2mr::AddressKeys>& GetCachedP2MRKeysAll() const { return m_p2mr_keys; }
 
     /** Combine another DescriptorCache into this one.
      * Returns a cache containing the items from the other cache unknown to current cache

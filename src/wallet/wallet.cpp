@@ -18,6 +18,7 @@
 #include <common/signmessage.h>
 #include <common/system.h>
 #include <consensus/amount.h>
+#include <consensus/tx_verify.h>
 #include <consensus/consensus.h>
 #include <consensus/validation.h>
 #include <external_signer.h>
@@ -2301,6 +2302,9 @@ OutputType CWallet::TransactionChangeType(const std::optional<OutputType>& chang
         return *change_type;
     }
 
+    // PQCH: change is always P2MR on PQCH chains.
+    if (IsPQWalletChain()) return OutputType::BECH32M;
+
     // if m_default_address_type is legacy, use legacy address as change.
     if (m_default_address_type == OutputType::LEGACY) {
         return OutputType::LEGACY;
@@ -3010,6 +3014,18 @@ bool CWallet::LoadWalletArgs(std::shared_ptr<CWallet> wallet, const WalletContex
     interfaces::Chain* chain = context.chain;
     const ArgsManager& args = *Assert(context.args);
 
+    // PQCH: P2MR (bech32m) addresses by default on PQCH chains, and no other type.
+    if (IsPQWalletChain()) {
+        wallet->m_default_address_type = OutputType::BECH32M;
+        for (const char* arg : {"-addresstype", "-changetype"}) {
+            const std::string value{args.GetArg(arg, "")};
+            if (!value.empty() && ParseOutputType(value) != OutputType::BECH32M) {
+                error = strprintf(_("%s=%s: only bech32m (post-quantum P2MR) addresses exist on this network"), arg, value);
+                return false;
+            }
+        }
+    }
+
     if (!args.GetArg("-addresstype", "").empty()) {
         std::optional<OutputType> parsed = ParseOutputType(args.GetArg("-addresstype", ""));
         if (!parsed) {
@@ -3653,6 +3669,8 @@ void CWallet::SetupDescriptorScriptPubKeyMans(WalletBatch& batch, const CExtKey&
     AssertLockHeld(cs_wallet);
     for (bool internal : {false, true}) {
         for (OutputType t : OUTPUT_TYPES) {
+            // PQCH: only P2MR (bech32m) outputs on PQCH chains.
+            if (IsPQWalletChain() && t != OutputType::BECH32M) continue;
             SetupDescriptorScriptPubKeyMan(batch, master_key, t, internal);
         }
     }
@@ -3825,6 +3843,27 @@ util::Result<std::reference_wrapper<DescriptorScriptPubKeyMan>> CWallet::AddWall
     AssertLockHeld(cs_wallet);
 
     Assert(IsWalletFlagSet(WALLET_FLAG_DESCRIPTORS));
+
+    // PQCH: on PQCH chains the wallet keeps only descriptors whose outputs it can spend there:
+    // p2mr(), or addr()/raw() (watch-only) for outputs the consensus rules allow. A tr() output
+    // would be read as a P2MR root nobody can spend, and the other Bitcoin types are invalid outputs.
+    if (IsPQWalletChain()) {
+        const std::string str{desc.descriptor->ToString()};
+        const bool p2mr{str.starts_with("p2mr(")};
+        if (!p2mr && !str.starts_with("addr(") && !str.starts_with("raw(")) {
+            return util::Error{_("Only p2mr(), addr() and raw() descriptors can be used on this network (post-quantum outputs)")};
+        }
+        if (!p2mr) {
+            FlatSigningProvider out;
+            std::vector<CScript> scripts;
+            if (!desc.descriptor->ExpandFromCache(0, desc.cache, scripts, out) && !desc.descriptor->Expand(0, signing_provider, scripts, out)) {
+                return util::Error{_("Cannot expand descriptor")};
+            }
+            for (const CScript& script : scripts) {
+                if (!Consensus::IsPQAllowedOutput(script)) return util::Error{_("This output type is not valid on this network")};
+            }
+        }
+    }
 
     auto spk_man = GetDescriptorScriptPubKeyMan(desc);
     if (spk_man) {

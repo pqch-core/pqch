@@ -57,6 +57,7 @@ const std::string VERSION{"version"};
 const std::string WALLETDESCRIPTOR{"walletdescriptor"};
 const std::string WALLETDESCRIPTORCACHE{"walletdescriptorcache"};
 const std::string WALLETDESCRIPTORLHCACHE{"walletdescriptorlhcache"};
+const std::string WALLETDESCRIPTORP2MRCACHE{"walletdescriptorp2mrcache"}; // PQCH
 const std::string WALLETDESCRIPTORCKEY{"walletdescriptorckey"};
 const std::string WALLETDESCRIPTORKEY{"walletdescriptorkey"};
 const std::string WATCHMETA{"watchmeta"};
@@ -283,6 +284,12 @@ bool WalletBatch::WriteDescriptorCacheItems(const uint256& desc_id, const Descri
     }
     for (const auto& lh_xpub_pair : cache.GetCachedLastHardenedExtPubKeys()) {
         if (!WriteDescriptorLastHardenedCache(lh_xpub_pair.second, desc_id, lh_xpub_pair.first)) {
+            return false;
+        }
+    }
+    // PQCH: P2MR address keys (they cannot be derived again without the private keys).
+    for (const auto& [child, keys] : cache.GetCachedP2MRKeysAll()) {
+        if (!WriteIC(std::make_pair(std::make_pair(DBKeys::WALLETDESCRIPTORP2MRCACHE, desc_id), child), keys)) {
             return false;
         }
     }
@@ -835,6 +842,26 @@ static DBErrors LoadDescriptorWalletRecords(CWallet* pwallet, DatabaseBatch& bat
             return DBErrors::LOAD_OK;
         });
         result = std::max(result, lh_cache_res.m_result);
+
+        // PQCH: P2MR address keys
+        prefix = PrefixStream(DBKeys::WALLETDESCRIPTORP2MRCACHE, id);
+        LoadResult p2mr_cache_res = LoadRecords(pwallet, batch, DBKeys::WALLETDESCRIPTORP2MRCACHE, prefix,
+            [&id, &cache] (CWallet* pwallet, DataStream& key, DataStream& value, std::string& err) {
+            uint256 desc_id;
+            CPubKey child;
+            key >> desc_id;
+            assert(desc_id == id);
+            key >> child;
+            p2mr::AddressKeys keys;
+            value >> keys;
+            if (!keys.IsValid()) {
+                err = "Invalid P2MR key cache entry";
+                return DBErrors::CORRUPT;
+            }
+            cache.CacheP2MRKeys(child, keys);
+            return DBErrors::LOAD_OK;
+        });
+        result = std::max(result, p2mr_cache_res.m_result);
 
         // Set the cache to the WalletDescriptor
         desc->cache = cache;

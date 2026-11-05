@@ -11,6 +11,7 @@
 #include <key.h>
 #include <pubkey.h>
 #include <script/keyorigin.h>
+#include <script/p2mr.h>
 #include <script/script.h>
 #include <sync.h>
 #include <uint256.h>
@@ -176,6 +177,8 @@ public:
     virtual bool GetKeyOrigin(const CKeyID& keyid, KeyOriginInfo& info) const { return false; }
     virtual bool GetTaprootSpendData(const XOnlyPubKey& output_key, TaprootSpendData& spenddata) const { return false; }
     virtual bool GetTaprootBuilder(const XOnlyPubKey& output_key, TaprootBuilder& builder) const { return false; }
+    /** PQCH: spending data of a standard P2MR output, by its Merkle root (the witness program). */
+    virtual bool GetP2MRSpendData(const uint256& root, p2mr::SpendData& data) const { return false; }
     virtual std::vector<CPubKey> GetMuSig2ParticipantPubkeys(const CPubKey& pubkey) const { return {}; }
     virtual std::map<CPubKey, std::vector<CPubKey>> GetAllMuSig2ParticipantPubkeys() const {return {}; }
     virtual void SetMuSig2SecNonce(const uint256& id, MuSig2SecNonce&& nonce) const {}
@@ -224,6 +227,7 @@ public:
     bool GetKeyOrigin(const CKeyID& keyid, KeyOriginInfo& info) const override;
     bool GetTaprootSpendData(const XOnlyPubKey& output_key, TaprootSpendData& spenddata) const override;
     bool GetTaprootBuilder(const XOnlyPubKey& output_key, TaprootBuilder& builder) const override;
+    bool GetP2MRSpendData(const uint256& root, p2mr::SpendData& data) const override;
     std::vector<CPubKey> GetMuSig2ParticipantPubkeys(const CPubKey& pubkey) const override;
     std::map<CPubKey, std::vector<CPubKey>> GetAllMuSig2ParticipantPubkeys() const override;
     void SetMuSig2SecNonce(const uint256& id, MuSig2SecNonce&& nonce) const override;
@@ -239,6 +243,8 @@ struct FlatSigningProvider final : public SigningProvider
     std::map<CKeyID, CKey> keys;
     std::map<XOnlyPubKey, TaprootBuilder> tr_trees; /** Map from output key to Taproot tree (which can then make the TaprootSpendData */
     std::map<CPubKey, std::vector<CPubKey>> aggregate_pubkeys; /** MuSig2 aggregate pubkeys */
+    std::map<uint256, p2mr::SpendData> p2mr_spenddata; /** PQCH: standard P2MR outputs by Merkle root */
+    std::map<CPubKey, p2mr::AddressKeys> p2mr_keys;    /** PQCH: P2MR address keys by BIP32 child key (descriptor expansion) */
     std::map<uint256, MuSig2SecNonce>* musig2_secnonces{nullptr};
 
     bool GetCScript(const CScriptID& scriptid, CScript& script) const override;
@@ -248,6 +254,7 @@ struct FlatSigningProvider final : public SigningProvider
     bool GetKey(const CKeyID& keyid, CKey& key) const override;
     bool GetTaprootSpendData(const XOnlyPubKey& output_key, TaprootSpendData& spenddata) const override;
     bool GetTaprootBuilder(const XOnlyPubKey& output_key, TaprootBuilder& builder) const override;
+    bool GetP2MRSpendData(const uint256& root, p2mr::SpendData& data) const override;
     std::vector<CPubKey> GetMuSig2ParticipantPubkeys(const CPubKey& pubkey) const override;
     std::map<CPubKey, std::vector<CPubKey>> GetAllMuSig2ParticipantPubkeys() const override;
     void SetMuSig2SecNonce(const uint256& id, MuSig2SecNonce&& nonce) const override;
@@ -346,6 +353,7 @@ public:
     bool GetKey(const CKeyID& keyid, CKey& key) const override;
     bool GetTaprootSpendData(const XOnlyPubKey& output_key, TaprootSpendData& spenddata) const override;
     bool GetTaprootBuilder(const XOnlyPubKey& output_key, TaprootBuilder& builder) const override;
+    bool GetP2MRSpendData(const uint256& root, p2mr::SpendData& data) const override;
 };
 
 #endif // BITCOIN_SCRIPT_SIGNINGPROVIDER_H

@@ -148,6 +148,14 @@ public:
 };
 
 WalletDescriptor GenerateWalletDescriptor(const CExtPubKey& master_key, const OutputType& output_type, bool internal);
+
+/**
+ * PQCH: whether the selected chain has the post-quantum rules from its genesis block (all PQCH
+ * networks). Then the wallet only makes P2MR outputs (p2mr() descriptors, bech32m addresses):
+ * the other Bitcoin output types are invalid there, and a tr() output would be read as a P2MR root
+ * nobody can spend.
+ */
+bool IsPQWalletChain();
 } // namespace wallet
 
 #endif // BITCOIN_WALLET_WALLETUTIL_H
