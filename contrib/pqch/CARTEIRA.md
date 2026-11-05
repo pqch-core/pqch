@@ -16,37 +16,61 @@ Uma transação típica (1 entrada, 2 saídas) pesa ~4.430 WU. A folha B só é 
 
 ## De onde vêm as chaves
 
-1. **Semente:** a semente BIP32 normal da carteira, uma chave aleatória de 256 bits. A cópia de
-   segurança faz-se com `backupwallet` ou com os descritores privados (`listdescriptors true`).
-2. **Caminho:** `m/360h/{0h|1h}/0h/{0h receber | 1h troco}/*h`. O `1h` é para as redes de teste.
-   Todos os passos são endurecidos, porque as chaves pós-quânticas não se podem derivar de uma xpub.
-3. **Chave filha `k` de cada endereço:** dela saem, por HMAC-SHA512 com etiquetas diferentes,
-   três coisas: a chave Schnorr, a semente ML-DSA e o sal.
-4. **A chave pública de `k` nunca aparece na cadeia.** Um atacante quântico que tire a chave
-   privada Schnorr da chave x-only revelada no gasto não fica a saber nada de `k`. Por isso também
-   não consegue calcular a chave ML-DSA, e a proteção híbrida mantém-se.
-5. **Chave de recuperação SLH-DSA:** uma só por descritor, derivada da filha no índice
-   `0x7FFFFFFF`. Gerar uma chave SLH-DSA demora ~80 ms, demasiado para 1.000 endereços. Reutilizá-la
-   é seguro porque o SLH-DSA não guarda estado. O sal por endereço faz com que o hash da folha B
-   seja diferente em cada endereço. Esse hash fica visível sempre que se gasta pela folha A, e sem
-   o sal ligaria todos os endereços da carteira.
+As chaves saem de uma **semente pós-quântica própria** de 32 bytes. Não vêm de uma cadeia BIP32
+(curva elíptica). Assim, o ficheiro da carteira não guarda nenhuma chave pública de curva elíptica
+a partir da qual um computador quântico pudesse chegar à semente.
 
-As etiquetas são `PQCH/P2MR/v1/schnorr`, `…/ml-dsa-44`, `…/salt` e `…/slh-dsa-128s`. Há um vetor
-fixo no teste `p2mr_key_derivation`: qualquer alteração à derivação é detetada, porque faria perder
-o acesso aos fundos.
+1. **Semente:** criada quando a carteira é criada, a partir de material aleatório novo
+   (HMAC-SHA512 com a etiqueta `PQCH/P2MR/v2/wallet-seed`). Fica no ficheiro da carteira, cifrada
+   se a carteira estiver cifrada. O id é um hash etiquetado (`PQCH/P2MR/v2/seed-id`): pode ser
+   mostrado sem revelar nada.
+2. **Caminho:** `360h/{0h|1h}/0h/{0h receber | 1h troco}/*h`. O `1h` do segundo passo é para as
+   redes de teste.
+3. **Nó de cada endereço:** `HMAC-SHA512(semente, "PQCH/P2MR/v2/node" ‖ caminho em 32 bits big
+   endian)`, os primeiros 32 bytes.
+4. **Chaves do nó**, por HMAC-SHA512 com etiquetas diferentes:
+   - chave Schnorr (`…/schnorr`): sozinha não abre nada;
+   - semente ML-DSA-44 (`…/ml-dsa-44`);
+   - sal (`…/salt`).
+
+   Um atacante quântico que tire a chave privada Schnorr da chave x-only revelada no gasto fica só
+   com metade da folha A.
+5. **Chave de recuperação SLH-DSA-128s:** uma só por descritor, no nó `caminho/2147483647h`
+   (`…/slh-dsa-128s`).
+   - **Porquê uma só:** gerar uma demora ~80 ms. Reutilizá-la é seguro, porque o SLH-DSA não
+     guarda estado.
+   - **Porquê o sal:** cada endereço tem o seu sal, e por isso o hash da folha B é diferente em
+     cada endereço. Esse hash fica visível sempre que se gasta pela folha A; sem o sal ligaria os
+     endereços entre si.
+
+Há um vetor fixo no teste `p2mr_key_derivation`. O id, a chave Schnorr e o sal foram confirmados
+por uma implementação independente em Python. Qualquer alteração à derivação é detetada, porque
+faria perder o acesso aos fundos.
 
 ## Descritor
 
 ```
-p2mr([fingerprint/360h/1h/0h]tpub…/0h/*h)
+p2mr(pqseed(<id da semente>)/360h/1h/0h/0h/*h)     forma pública (listdescriptors)
+p2mr(pqprv(<semente>)/360h/1h/0h/0h/*h)            forma privada (listdescriptors true, cópia de segurança)
 ```
 
-- Aceita uma xprv ou xpub com o caminho todo endurecido. Um passo não endurecido é recusado.
-- As chaves pós-quânticas de cada endereço ficam guardadas na base de dados da carteira
+- Todos os passos são endurecidos (`h`), e o `*h` só pode ser o último.
+- As chaves pós-quânticas de cada endereço ficam na base de dados da carteira
   (`walletdescriptorp2mrcache`, ~1,4 KB por endereço). Assim, a carteira reconhece os endereços
-  depois de reiniciar, mesmo estando bloqueada.
-- **Sem xpub de observação.** Para uma carteira só de observação (loja, exchange), importam-se
-  endereços concretos com `addr(pqc1p…)`.
+  depois de reiniciar, mesmo bloqueada.
+- **Cópia de segurança:** os dois descritores privados, ou `backupwallet`. Importados com
+  `importdescriptors` numa carteira vazia, dão os mesmos endereços e, depois da reanálise, o mesmo
+  saldo.
+- **Sem xpub de observação.** Uma carteira só de observação (loja, exchange) importa endereços
+  concretos com `addr(pqc1p…)`.
+- **O que fica no ficheiro da carteira:**
+  - `walletdescriptorpqseed`: a semente, ou `walletdescriptorcpqseed` com a semente cifrada
+    (AES-256, com o id como vetor de inicialização);
+  - os descritores, que só contêm o id;
+  - o cache das chaves públicas pós-quânticas.
+
+  Não há registos `walletdescriptorkey`, `walletdescriptorckey` nem `walletdescriptorcache`
+  (xpub). O script de validação confirma isto.
 
 ## Regras da carteira nas redes PQCH
 
@@ -57,7 +81,7 @@ p2mr([fingerprint/360h/1h/0h]tpub…/0h/*h)
   válidas na PQCH. Um `tr()` é recusado: na PQCH a sua saída seria lida como uma raiz P2MR e o
   dinheiro ficaria perdido.
 - O troco é sempre P2MR, mesmo que se peça outro tipo (`change_type`, `-changetype`).
-- `createwalletdescriptor` só cria descritores `bech32m`.
+- `createwalletdescriptor` é recusado: os descritores `p2mr()` de uma carteira nascem da sua semente.
 - Envios para endereços que a rede não aceita (`1…`, `3…`, `pqc1q…`) são recusados antes de criar a
   transação. Todas as saídas voltam a ser verificadas antes de assinar.
 - Os assinadores externos (carteiras de hardware atuais) são recusados, porque ainda não assinam P2MR.
@@ -77,16 +101,20 @@ p2mr([fingerprint/360h/1h/0h]tpub…/0h/*h)
 ## Validação
 
 - `src/test/pqch_p2mr_wallet_tests.cpp` cobre:
-  - a derivação (determinismo, separação quântica, vetor fixo);
-  - o descritor (caminhos endurecidos, expansão com chaves e a partir do cache);
+  - a derivação (determinismo, vetor fixo confirmado em Python);
+  - o descritor (formas pública e privada, caminhos endurecidos, expansão com a semente e a partir
+    do cache, nenhuma chave de curva elíptica na expansão);
   - a assinatura e verificação das duas folhas, assinaturas alteradas e chaves erradas;
   - os tamanhos para a estimativa de taxas.
-- `contrib/pqch/validar_carteira.sh` corre em regtest com 2 nós e faz 26 verificações:
+- `contrib/pqch/validar_carteira.sh` corre em regtest com 2 nós e faz 39 verificações:
   - cria a carteira e confirma que os tipos antigos são recusados;
+  - confirma que o ficheiro da carteira não tem chaves de curva elíptica nem tpub, e que a semente
+    fica cifrada numa carteira cifrada;
   - envia entre os nós pela rede P2P;
   - reinicia um nó e volta a gastar;
   - recupera a carteira a partir dos descritores privados;
-  - testa a carteira cifrada.
+  - testa a carteira cifrada: bloqueada não assina, e depois de reiniciar e desbloquear assina; uma
+    frase errada é recusada.
 - As 18 suítes de testes da carteira herdadas do Bitcoin passam.
 
 ## Revisão independente
@@ -99,23 +127,23 @@ Uma revisão feita por quem não escreveu o código encontrou sete erros, todos 
 | Envios para endereços antigos criavam transações inválidas e prendiam as moedas | destino verificado; todas as saídas verificadas antes de assinar |
 | `createwalletdescriptor` e `change_type` ainda criavam tipos antigos | só bech32m |
 | A verificação depois de assinar podia aceitar Taproot | usa as regras da rede (`StandardSigningVerifyFlags`) e nunca assina Taproot na PQCH |
-| Dois descritores com a mesma chave filha num provedor partilhado | a expansão mais recente vence |
+| Dois descritores com a mesma chave filha num provedor partilhado | já não se aplica: as chaves vêm da semente e o cache é por índice |
 | Chave secreta PQ não era apagada em todos os caminhos | `pqc::KeyPair` apaga-a ao ser destruído |
-| O índice `0x7FFFFFFF` podia ser usado como endereço | recusado |
+| O índice `0x7FFFFFFF` podia ser usado como endereço | recusado (é o da chave de recuperação) |
 
 A estimativa de taxas também foi corrigida: contava a contagem de elementos duas vezes e não
 contava o byte de sighash. Agora assume sempre o caso maior.
 
-## Risco conhecido: ficheiro da carteira + computador quântico
+## Ficheiro da carteira e computador quântico
 
-Na cadeia de blocos nenhuma chave de curva elíptica da cadeia de derivação fica exposta. O ficheiro
-da carteira, porém, guarda essas chaves públicas: a xpub mestra nos descritores, as xpub filhas no
-cache e a chave `recovery_owner`. Quem tiver o ficheiro **e** um computador quântico tira delas as
-chaves privadas, e daí todas as chaves ML-DSA e SLH-DSA, **mesmo com a carteira cifrada**. Com um
-computador clássico, a cifra da carteira continua a proteger. A correção de fundo é uma semente
-pós-quântica própria, guardada só cifrada, sem chaves públicas de curva elíptica no ficheiro. Fica
-como decisão antes do lançamento, porque muda a derivação, e a derivação fica fixa para sempre
-depois do lançamento.
+A primeira versão derivava as chaves de uma cadeia BIP32. O ficheiro da carteira guardava então
+chaves públicas de curva elíptica (xpub mestra e xpub filhas). Quem tivesse o ficheiro e um
+computador quântico chegava a todas as chaves, mesmo com a carteira cifrada. Por decisão do
+projeto (5 nov. 2026), a carteira passou a usar uma semente pós-quântica própria.
+
+Hoje o ficheiro só tem a semente (cifrada, se a carteira estiver cifrada), o id dela e chaves
+públicas pós-quânticas. A cifra da carteira (AES-256) continua segura contra computadores
+quânticos, mas depende de uma frase-passe forte.
 
 ## Pendente
 
@@ -123,8 +151,7 @@ depois do lançamento.
   ML-DSA for desativado.
 - PSBT com assinaturas pós-quânticas parciais (multiassinatura, carteiras de hardware). Hoje a
   carteira assina cada entrada P2MR de uma vez só.
-- Registar `coin_type` no SLIP-0044 e o prefixo no SLIP-0173. O caminho usa `0h` na rede principal
-  provisoriamente.
+- Registar o prefixo no SLIP-0173. O segundo passo do caminho usa `0h` na rede principal.
 - Mostrar a árvore P2MR em `getaddressinfo`; hoje o `desc` de um endereço é `addr(…)`.
 - Ao desbloquear a carteira, voltar a derivar as chaves P2MR guardadas em cache e compará-las.
 - A troca para as regras da carteira usa `PQRulesHeight == 0`, sem olhar para a altura (só afeta
@@ -132,7 +159,8 @@ depois do lançamento.
 - Rever os alvos de fuzzing que assinam ou inferem descritores, porque agora leem os parâmetros da
   rede. O `psbt` já foi corrigido.
 - A migração de carteiras antigas do Bitcoin para descritores não é suportada nas redes PQCH.
-- Carteiras de hardware com ML-DSA e SLH-DSA.
+- Carteiras de hardware com ML-DSA e SLH-DSA. Não são compatíveis com as carteiras BIP32 atuais.
 - Palavras de recuperação BIP39 (24 palavras, secção 21.5) e a cópia de segurança obrigatória no
-  primeiro arranque (secção 20). Ficam para a aplicação; o nó guarda a semente no ficheiro da
-  carteira, como o Bitcoin Core.
+  primeiro arranque (secção 20). Ficam para a aplicação. A semente pós-quântica pode sair das 24
+  palavras (por exemplo, com um HMAC da semente BIP39), mas isso tem de ficar decidido antes do
+  lançamento.
