@@ -32,3 +32,7 @@ race:epoll_ctl
 
 # https://github.com/bitcoin/bitcoin/issues/23366
 race:std::__1::ios_base::*
+
+# PQCH: libstdc++ is not built with TSan: freeing a std::exception_ptr (shared between the worker
+# that sets a future and the thread that reads it) inside libstdc++ is reported as a race.
+called_from_lib:libstdc++.so.6

@@ -82,7 +82,8 @@ jobs:
     timeout-minutes: 240
     env:
       ASAN_OPTIONS: detect_leaks=1:detect_stack_use_after_return=1
-      UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+      LSAN_OPTIONS: suppressions=${{ github.workspace }}/test/sanitizer_suppressions/lsan
+      UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1:suppressions=${{ github.workspace }}/test/sanitizer_suppressions/ubsan
     steps:
       - uses: actions/checkout@v4
       - name: Install packages
@@ -154,7 +155,7 @@ jobs:
     runs-on: ${{ fromJSON(vars.PQCH_RUNS_ON || '"ubuntu-24.04"') }}
     timeout-minutes: 300
     env:
-      TSAN_OPTIONS: halt_on_error=1:second_deadlock_stack=1
+      TSAN_OPTIONS: halt_on_error=1:second_deadlock_stack=1:suppressions=${{ github.workspace }}/test/sanitizer_suppressions/tsan
     steps:
       - uses: actions/checkout@v4
       - name: Install packages
