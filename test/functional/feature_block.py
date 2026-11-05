@@ -734,7 +734,7 @@ class FullBlockTest(BitcoinTestFramework):
         #                                                                                   \-> b54 (15)
         #                                                                        -> b44 (14)\-> b48 () -> b48p ()
         self.log.info("Accept a previously rejected future block at a later time")
-        node.setmocktime(int(time.time()) + 2*60*60)
+        node.setmocktime(int(time.time()) + 3*60*60)  # PQCH: future limit 600 s (Bitcoin: +2 h with a 2 h limit)
         self.move_tip(48)
         self.block_heights[b48.hash_int] = self.block_heights[b44.hash_int] + 1 # b48 is a parent of b44
         b48p = self.next_block("48p")
