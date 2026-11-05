@@ -199,6 +199,10 @@ struct Descriptor {
     /** Get the maximum size number of stack elements for satisfying this descriptor. */
     virtual std::optional<int64_t> MaxSatisfactionElems() const = 0;
 
+    /** PQCH: for a standard P2MR output, the weight and element count of a spend through the
+     *  recovery leaf (SLH-DSA, script/p2mr.h) instead of the hybrid leaf; nullopt otherwise. */
+    virtual std::optional<std::pair<int64_t, int64_t>> MaxP2MRRecoverySatisfaction() const { return std::nullopt; }
+
     /** Return all (extended) public keys for this descriptor, including any from subdescriptors.
      *
      * @param[out] pubkeys Any public keys

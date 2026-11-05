@@ -223,6 +223,8 @@ class BlockchainTest(BitcoinTestFramework):
             'bip65': {'type': 'buried', 'active': True, 'height': 4},
             'csv': {'type': 'buried', 'active': True, 'height': 5},
             'segwit': {'type': 'buried', 'active': True, 'height': 6},
+            # PQCH: the post-quantum rules, moved out of reach for the inherited tests (test_node.py)
+            'pqrules': {'type': 'buried', 'active': False, 'height': 1000000000},
             'testdummy': {
                 'type': 'bip9',
                 'bip9': {
@@ -274,7 +276,7 @@ class BlockchainTest(BitcoinTestFramework):
 
     def _test_verificationprogress(self):
         self.log.info("Check that verificationprogress is less than 1 when the block tip is old")
-        future = 10 * 60  # PQCH: MAX_FUTURE_BLOCK_TIME (Bitcoin: 2 h)
+        future = 2 * 60 * 60  # the 2 h window of GuessVerificationProgress (not MAX_FUTURE_BLOCK_TIME, 600 s on PQCH)
         self.nodes[0].setmocktime(self.nodes[0].getblockchaininfo()["time"] + future + 1)
         assert_greater_than(1, self.nodes[0].getblockchaininfo()["verificationprogress"])
 

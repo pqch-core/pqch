@@ -1223,6 +1223,7 @@ public:
     std::optional<int64_t> MaxSatSize(bool) const override { return p2mr::HybridWitnessSize(/*explicit_hashtype=*/true) - GetSizeOfCompactSize(4); }
     std::optional<int64_t> MaxSatisfactionWeight(bool use_max_sig) const override { return MaxSatSize(use_max_sig); }
     std::optional<int64_t> MaxSatisfactionElems() const override { return 4; }
+    std::optional<std::pair<int64_t, int64_t>> MaxP2MRRecoverySatisfaction() const override { return std::pair<int64_t, int64_t>{p2mr::RecoveryWitnessSize(/*explicit_hashtype=*/true) - GetSizeOfCompactSize(3), 3}; }
     std::unique_ptr<DescriptorImpl> Clone() const override { return std::make_unique<SolvedP2MRDescriptor>(m_script); }
 };
 
@@ -1662,6 +1663,7 @@ public:
     std::optional<int64_t> MaxSatSize(bool) const override { return p2mr::HybridWitnessSize(/*explicit_hashtype=*/true) - GetSizeOfCompactSize(4); }
     std::optional<int64_t> MaxSatisfactionWeight(bool use_max_sig) const override { return MaxSatSize(use_max_sig); }
     std::optional<int64_t> MaxSatisfactionElems() const override { return 4; }
+    std::optional<std::pair<int64_t, int64_t>> MaxP2MRRecoverySatisfaction() const override { return std::pair<int64_t, int64_t>{p2mr::RecoveryWitnessSize(/*explicit_hashtype=*/true) - GetSizeOfCompactSize(3), 3}; }
 
     std::unique_ptr<DescriptorImpl> Clone() const override
     {

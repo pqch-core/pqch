@@ -191,6 +191,38 @@ static const CBlockIndex* ParseHashOrHeight(const UniValue& param, ChainstateMan
     }
 }
 
+/** PQCH: the merged mining proof (auxpow.h). Monero hashes are shown in Monero's byte order. */
+static UniValue AuxPowToJSON(const auxpow::CAuxPow& a)
+{
+    UniValue result(UniValue::VOBJ);
+    result.pushKV("parent_header", HexStr(a.parent_header));
+    result.pushKV("seed_hash", HexStr(a.seed_hash));
+    result.pushKV("tx_count", a.tx_count);
+    result.pushKV("coinbase_hash", HexStr(a.CoinbaseHash()));
+    UniValue coinbase_branch(UniValue::VARR);
+    for (const uint256& h : a.coinbase_branch) coinbase_branch.push_back(HexStr(h));
+    result.pushKV("coinbase_branch", std::move(coinbase_branch));
+    result.pushKV("coinbase_extra", HexStr(a.coinbase_extra));
+    UniValue aux_branch(UniValue::VARR);
+    for (const uint256& h : a.aux_branch) aux_branch.push_back(HexStr(h));
+    result.pushKV("aux_branch", std::move(aux_branch));
+    return result;
+}
+
+static RPCResult AuxPowResultDoc()
+{
+    return {RPCResult::Type::OBJ, "auxpow", /*optional=*/true, "PQCH: the Monero merged mining proof, if the block is merged mined (Monero hashes in Monero's byte order)",
+        {
+            {RPCResult::Type::STR_HEX, "parent_header", "The Monero block header"},
+            {RPCResult::Type::STR_HEX, "seed_hash", "The Monero RandomX key (seed hash)"},
+            {RPCResult::Type::NUM, "tx_count", "Transactions in the Monero block, coinbase included"},
+            {RPCResult::Type::STR_HEX, "coinbase_hash", "Hash of the Monero coinbase transaction"},
+            {RPCResult::Type::ARR, "coinbase_branch", "Proof of the coinbase in the Monero transaction tree", {{RPCResult::Type::STR_HEX, "", "hash"}}},
+            {RPCResult::Type::STR_HEX, "coinbase_extra", "The Monero coinbase tx_extra (with the merge mining tag)"},
+            {RPCResult::Type::ARR, "aux_branch", "Proof of this block's hash in the merge mining tree", {{RPCResult::Type::STR_HEX, "", "hash"}}},
+        }};
+}
+
 UniValue blockheaderToJSON(const CBlockIndex& tip, const CBlockIndex& blockindex, const uint256 pow_limit)
 {
     // Serialize passed information without accessing chain state of the active chain!
@@ -218,6 +250,7 @@ UniValue blockheaderToJSON(const CBlockIndex& tip, const CBlockIndex& blockindex
         result.pushKV("previousblockhash", blockindex.pprev->GetBlockHash().GetHex());
     if (pnext)
         result.pushKV("nextblockhash", pnext->GetBlockHash().GetHex());
+    if (blockindex.m_auxpow) result.pushKV("auxpow", AuxPowToJSON(*blockindex.m_auxpow)); // PQCH
     return result;
 }
 
@@ -666,6 +699,7 @@ static RPCMethod getblockheader()
                             {RPCResult::Type::NUM, "nTx", "The number of transactions in the block"},
                             {RPCResult::Type::STR_HEX, "previousblockhash", /*optional=*/true, "The hash of the previous block (if available)"},
                             {RPCResult::Type::STR_HEX, "nextblockhash", /*optional=*/true, "The hash of the next block (if available)"},
+                            AuxPowResultDoc(),
                         }},
                     RPCResult{"for verbose=false",
                         RPCResult::Type::STR_HEX, "", "A string that is serialized, hex-encoded data for block 'hash'"},
@@ -806,6 +840,7 @@ static std::vector<RPCResult> GetBlockFields(RPCResult tx_result, std::optional<
     fields.emplace_back(RPCResult::Type::NUM, "nTx", "The number of transactions in the block");
     fields.emplace_back(RPCResult::Type::STR_HEX, "previousblockhash", /*optional=*/true, "The hash of the previous block (if available)");
     fields.emplace_back(RPCResult::Type::STR_HEX, "nextblockhash", /*optional=*/true, "The hash of the next block (if available)");
+    fields.push_back(AuxPowResultDoc());
     if (elision_msg) {
         // Elide all block-level fields except the tx array (which differs per verbosity)
         std::vector<RPCResult> new_fields;

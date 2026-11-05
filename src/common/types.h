@@ -48,6 +48,11 @@ struct PSBTFillOptions {
      * Whether to fill in bip32 derivation information if available.
      */
     bool bip32_derivs{true};
+
+    /**
+     * PQCH: spend standard P2MR outputs through the recovery leaf (SLH-DSA).
+     */
+    bool p2mr_recovery{false};
 };
 
 } // namespace common

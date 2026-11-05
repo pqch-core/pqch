@@ -22,6 +22,7 @@ class uint256;
 class UniValue;
 class CTxUndo;
 class CTxOut;
+enum class TxoutType;
 
 /**
  * Verbose level for block's transaction
@@ -44,6 +45,9 @@ UniValue ValueFromAmount(CAmount amount);
 std::string FormatScript(const CScript& script);
 std::string EncodeHexTx(const CTransaction& tx);
 std::string SighashToStr(int32_t sighash_type);
+/** The output type name shown by the RPCs. PQCH: on chains with the post-quantum rules from genesis a
+ *  32-byte witness v1 program is a P2MR output, shown as "p2mr" (Bitcoin: "witness_v1_taproot"). */
+std::string RPCOutputTypeName(TxoutType type);
 void ScriptToUniv(const CScript& script, UniValue& out, bool include_hex = true, bool include_address = false, const SigningProvider* provider = nullptr);
 void TxToUniv(const CTransaction& tx, const uint256& block_hash, UniValue& entry, bool include_hex = true, const CTxUndo* txundo = nullptr, TxVerbosity verbosity = TxVerbosity::SHOW_DETAILS, std::function<bool(const CTxOut&)> is_change_func = {});
 

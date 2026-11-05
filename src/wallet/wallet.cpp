@@ -2204,7 +2204,7 @@ void MaybeResendWalletTxs(WalletContext& context)
 }
 
 
-bool CWallet::SignTransaction(CMutableTransaction& tx) const
+bool CWallet::SignTransaction(CMutableTransaction& tx, bool p2mr_recovery) const
 {
     AssertLockHeld(cs_wallet);
 
@@ -2220,16 +2220,16 @@ bool CWallet::SignTransaction(CMutableTransaction& tx) const
         coins[input.prevout] = Coin(wtx.GetTx()->vout[input.prevout.n], prev_height, wtx.IsCoinBase());
     }
     std::map<int, bilingual_str> input_errors;
-    return SignTransaction(tx, coins, SIGHASH_DEFAULT, input_errors);
+    return SignTransaction(tx, coins, SIGHASH_DEFAULT, input_errors, p2mr_recovery);
 }
 
-bool CWallet::SignTransaction(CMutableTransaction& tx, const std::map<COutPoint, Coin>& coins, int sighash, std::map<int, bilingual_str>& input_errors) const
+bool CWallet::SignTransaction(CMutableTransaction& tx, const std::map<COutPoint, Coin>& coins, int sighash, std::map<int, bilingual_str>& input_errors, bool p2mr_recovery) const
 {
     // Try to sign with all ScriptPubKeyMans
     for (ScriptPubKeyMan* spk_man : GetAllScriptPubKeyMans()) {
         // spk_man->SignTransaction will return true if the transaction is complete,
         // so we can exit early and return true if that happens
-        if (spk_man->SignTransaction(tx, coins, sighash, input_errors)) {
+        if (spk_man->SignTransaction(tx, coins, sighash, input_errors, p2mr_recovery)) {
             return true;
         }
     }

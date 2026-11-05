@@ -5,6 +5,7 @@
 #include <core_io.h>
 
 #include <addresstype.h>
+#include <chainparams.h>
 #include <coins.h>
 #include <consensus/amount.h>
 #include <consensus/consensus.h>
@@ -426,7 +427,13 @@ void ScriptToUniv(const CScript& script, UniValue& out, bool include_hex, bool i
     if (include_address && ExtractDestination(script, address) && type != TxoutType::PUBKEY) {
         out.pushKV("address", EncodeDestination(address));
     }
-    out.pushKV("type", GetTxnOutputType(type));
+    out.pushKV("type", RPCOutputTypeName(type));
+}
+
+std::string RPCOutputTypeName(TxoutType type)
+{
+    if (type == TxoutType::WITNESS_V1_TAPROOT && Params().GetConsensus().PQRulesHeight == 0) return "p2mr";
+    return GetTxnOutputType(type);
 }
 
 void TxToUniv(const CTransaction& tx, const uint256& block_hash, UniValue& entry, bool include_hex, const CTxUndo* txundo, TxVerbosity verbosity, std::function<bool(const CTxOut&)> is_change_func)

@@ -115,7 +115,8 @@ static UniValue FinishTransaction(const std::shared_ptr<CWallet> pwallet, const 
     // so external signers are not asked to sign more than once.
     bool complete;
     pwallet->FillPSBT(psbtx, {.sign = false, .bip32_derivs = true}, complete);
-    const auto err{pwallet->FillPSBT(psbtx, {.sign = true, .bip32_derivs = false}, complete)};
+    const bool p2mr_recovery{options.exists("p2mr_recovery") && options["p2mr_recovery"].get_bool()}; // PQCH
+    const auto err{pwallet->FillPSBT(psbtx, {.sign = true, .bip32_derivs = false, .p2mr_recovery = p2mr_recovery}, complete)};
     if (err) {
         throw JSONRPCPSBTError(*err);
     }
@@ -445,6 +446,8 @@ static std::vector<RPCArg> FundTxDoc(bool solving_data = true)
             "replaceable", RPCArg::Type::BOOL, RPCArg::DefaultHint{"wallet default"}, "Marks this transaction as BIP125-replaceable.\n"
             "Allows this transaction to be replaced by a transaction with higher fees"
         },
+        {"p2mr_recovery", RPCArg::Type::BOOL, RPCArg::Default{false}, "PQCH: spend P2MR inputs through the recovery leaf (SLH-DSA-128s, about twice the size) instead of\n"
+            "the hybrid leaf (Schnorr + ML-DSA-44). For an emergency in which ML-DSA can no longer be trusted. Fees are estimated for that size."},
     };
     if (solving_data) {
         args.push_back({"solving_data", RPCArg::Type::OBJ, RPCArg::Optional::OMITTED, "Keys and scripts needed for producing a final transaction with a dummy signature.\n"
@@ -515,8 +518,13 @@ CreatedTransactionResult FundTransaction(CWallet& wallet, const CMutableTransact
                     {"maxconf", UniValueType(UniValue::VNUM)},
                     {"input_weights", UniValueType(UniValue::VARR)},
                     {"max_tx_weight", UniValueType(UniValue::VNUM)},
+                    {"p2mr_recovery", UniValueType(UniValue::VBOOL)}, // PQCH
                 },
                 true, true);
+
+        if (options.exists("p2mr_recovery")) {
+            coinControl.m_p2mr_recovery = options["p2mr_recovery"].get_bool();
+        }
 
         if (options.exists("add_inputs")) {
             coinControl.m_allow_other_inputs = options["add_inputs"].get_bool();
@@ -1407,6 +1415,7 @@ RPCMethod sendall()
             }
 
             CCoinControl coin_control;
+            if (options.exists("p2mr_recovery")) coin_control.m_p2mr_recovery = options["p2mr_recovery"].get_bool(); // PQCH
 
             SetFeeEstimateMode(*pwallet, coin_control, options["conf_target"], options["estimate_mode"], options["fee_rate"], /*override_min_fee=*/false);
 
@@ -1511,7 +1520,7 @@ RPCMethod sendall()
             }
 
             // estimate final size of tx
-            const TxSize tx_size{CalculateMaximumSignedTxSize(CTransaction(rawTx), pwallet.get())};
+            const TxSize tx_size{CalculateMaximumSignedTxSize(CTransaction(rawTx), pwallet.get(), &coin_control)};
             if (tx_size.vsize == -1) {
                 throw JSONRPCError(RPC_WALLET_ERROR, "Unable to determine the size of the transaction, the wallet contains unsolvable descriptors");
             }
@@ -1607,6 +1616,7 @@ RPCMethod walletprocesspsbt()
             "       \"SINGLE|ANYONECANPAY\""},
                     {"bip32derivs", RPCArg::Type::BOOL, RPCArg::Default{true}, "Include BIP 32 derivation paths for public keys if we know them"},
                     {"finalize", RPCArg::Type::BOOL, RPCArg::Default{true}, "Also finalize inputs if possible"},
+                    {"p2mr_recovery", RPCArg::Type::BOOL, RPCArg::Default{false}, "PQCH: sign P2MR inputs through the recovery leaf (SLH-DSA-128s) instead of the hybrid leaf"},
                 },
                 RPCResult{
                     RPCResult::Type::OBJ, "", "",
@@ -1643,11 +1653,12 @@ RPCMethod walletprocesspsbt()
     bool sign = request.params[1].isNull() ? true : request.params[1].get_bool();
     bool bip32derivs = request.params[3].isNull() ? true : request.params[3].get_bool();
     bool finalize = request.params[4].isNull() ? true : request.params[4].get_bool();
+    const bool p2mr_recovery{!request.params[5].isNull() && request.params[5].get_bool()}; // PQCH
     bool complete = true;
 
     if (sign) EnsureWalletIsUnlocked(*pwallet);
 
-    const auto err{wallet.FillPSBT(psbtx, {.sign = sign, .sighash_type = nHashType, .finalize = finalize, .bip32_derivs = bip32derivs}, complete)};
+    const auto err{wallet.FillPSBT(psbtx, {.sign = sign, .sighash_type = nHashType, .finalize = finalize, .bip32_derivs = bip32derivs, .p2mr_recovery = p2mr_recovery}, complete)};
     if (err) {
         throw JSONRPCPSBTError(*err);
     }

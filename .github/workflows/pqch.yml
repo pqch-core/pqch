@@ -72,7 +72,8 @@ jobs:
             mempool_accept.py rpc_blockchain.py mining_basic.py mempool_limit.py \
             feature_nulldummy.py feature_utxo_set_hash.py p2p_invalid_tx.py p2p_invalid_block.py \
             p2p_invalid_messages.py rpc_validateaddress.py p2p_segwit.py feature_assumevalid.py \
-            feature_coinstatsindex.py rpc_getblockstats.py feature_bip68_sequence.py p2p_ibd_stalling.py
+            feature_coinstatsindex.py rpc_getblockstats.py feature_bip68_sequence.py p2p_ibd_stalling.py \
+            wallet_pqch_locked.py wallet_pqch_recovery.py rpc_help.py
 
   sanitizers:
     name: 'ASan + UBSan'

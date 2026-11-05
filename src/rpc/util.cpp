@@ -55,6 +55,7 @@ std::string GetAllOutputTypes()
     for (U i = (U)TxoutType::NONSTANDARD; i <= (U)TxoutType::WITNESS_UNKNOWN; ++i) {
         ret.emplace_back(GetTxnOutputType(static_cast<TxoutType>(i)));
     }
+    ret.emplace_back("p2mr"); // PQCH: witness v1 on post-quantum chains (RPCOutputTypeName)
     return Join(ret, ", ");
 }
 

@@ -268,7 +268,7 @@ public:
         // Always present: script type and redeemscript
         std::vector<std::vector<unsigned char>> solutions_data;
         TxoutType which_type = Solver(subscript, solutions_data);
-        obj.pushKV("script", GetTxnOutputType(which_type));
+        obj.pushKV("script", RPCOutputTypeName(which_type));
         obj.pushKV("hex", HexStr(subscript));
 
         CTxDestination embedded;

@@ -71,8 +71,10 @@ static bool UseMaxSig(const std::optional<CTxIn>& txin, const CCoinControl* coin
 static std::optional<int64_t> MaxInputWeight(const Descriptor& desc, const std::optional<CTxIn>& txin,
                                              const CCoinControl* coin_control, const bool tx_is_segwit,
                                              const bool can_grind_r) {
-    if (const auto sat_weight = desc.MaxSatisfactionWeight(!can_grind_r || UseMaxSig(txin, coin_control))) {
-        if (const auto elems_count = desc.MaxSatisfactionElems()) {
+    // PQCH: a spend through the P2MR recovery leaf is about twice the size of the hybrid one.
+    const auto recovery{coin_control && coin_control->m_p2mr_recovery ? desc.MaxP2MRRecoverySatisfaction() : std::nullopt};
+    if (const auto sat_weight = recovery ? std::optional<int64_t>{recovery->first} : desc.MaxSatisfactionWeight(!can_grind_r || UseMaxSig(txin, coin_control))) {
+        if (const auto elems_count = recovery ? std::optional<int64_t>{recovery->second} : desc.MaxSatisfactionElems()) {
             const bool is_segwit = IsSegwit(desc);
             // Account for the size of the scriptsig and the number of elements on the witness stack. Note
             // that if any input in the transaction is spending a witness program, we need to specify the
@@ -1418,7 +1420,7 @@ static util::Result<CreatedTransactionResult> CreateTransactionInternal(
         }
     }
 
-    if (sign && !wallet.SignTransaction(txNew)) {
+    if (sign && !wallet.SignTransaction(txNew, coin_control.m_p2mr_recovery)) {
         return util::Error{_("Signing transaction failed")};
     }
 

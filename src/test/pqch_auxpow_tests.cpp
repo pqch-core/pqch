@@ -12,6 +12,7 @@
 #include <node/mergemining.h>
 #include <pubkey.h>
 #include <pow.h>
+#include <rpc/blockchain.h>
 #include <pow_randomx.h>
 #include <primitives/block.h>
 #include <rpc/server.h>
@@ -561,6 +562,19 @@ BOOST_AUTO_TEST_CASE(merged_mined_block_accepted)
     BOOST_REQUIRE(from_disk.auxpow);
     BOOST_CHECK(Serialized(*from_disk.auxpow) == Serialized(*a));
     BOOST_CHECK(from_disk.m_auxpow_head.head == block.m_auxpow_head.head);
+
+    // getblockheader / getblock show the proof (Monero hashes in Monero's byte order).
+    {
+        const UniValue json{blockheaderToJSON(*idx, *idx, params.powLimit)};
+        const UniValue& aux{json.find_value("auxpow")};
+        BOOST_REQUIRE(aux.isObject());
+        BOOST_CHECK_EQUAL(aux.find_value("seed_hash").get_str(), HexStr(seed));
+        BOOST_CHECK_EQUAL(aux.find_value("parent_header").get_str(), HexStr(a->parent_header));
+        BOOST_CHECK_EQUAL(aux.find_value("coinbase_extra").get_str(), HexStr(a->coinbase_extra));
+        BOOST_CHECK_EQUAL(aux.find_value("aux_branch").size(), a->aux_branch.size());
+        BOOST_CHECK_EQUAL(aux.find_value("tx_count").getInt<uint64_t>(), 3U);
+        BOOST_CHECK(blockheaderToJSON(*idx, *Assert(idx->pprev), params.powLimit).find_value("auxpow").isNull());
+    }
 
     // A normal block can follow.
     CreateAndProcessBlock({}, m_coinbase_script);
