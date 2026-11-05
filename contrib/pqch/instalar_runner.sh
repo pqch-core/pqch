@@ -46,7 +46,7 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update -q
 apt-get install -y -q --no-install-recommends \
     build-essential cmake pkgconf python3 libevent-dev libboost-dev libsqlite3-dev ccache \
-    clang git curl ca-certificates jq tar
+    clang llvm git curl ca-certificates jq tar  # llvm: llvm-symbolizer, for readable sanitizer reports
 # Runtime dos sanitizers e do libFuzzer, na versão do clang instalado.
 CLANG_MAJOR="$(clang --version | sed -n 's/.*clang version \([0-9]*\).*/\1/p' | head -1)"
 apt-get install -y -q --no-install-recommends "libclang-rt-${CLANG_MAJOR}-dev" || \
