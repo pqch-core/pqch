@@ -9,6 +9,12 @@
 #   fuzz         pull requests and pushes to main: the PQCH fuzz targets, one minute each.
 #   tsan         weekly and by hand: unit tests with ThreadSanitizer.
 # The inherited Bitcoin Core matrix (ci.yml) only runs by hand.
+#
+# Where the jobs run: the repository variable PQCH_RUNS_ON (Settings > Secrets and variables >
+# Actions > Variables), a JSON label list such as ["self-hosted","linux","x64","pqch"] for the
+# project's own runner (contrib/pqch/RUNNER.md). Without it, GitHub's ubuntu-24.04 runners.
+# On a self-hosted runner the packages are installed once by contrib/pqch/instalar_runner.sh and
+# ccache lives in the runner's home directory.
 
 name: PQCH CI
 on:
@@ -36,13 +42,18 @@ jobs:
   build-test:
     name: 'Build and test'
     if: github.event_name != 'schedule'
-    runs-on: ubuntu-24.04
+    runs-on: ${{ fromJSON(vars.PQCH_RUNS_ON || '"ubuntu-24.04"') }}
     timeout-minutes: 150
     steps:
       - uses: actions/checkout@v4
       - name: Install packages
+        if: runner.environment == 'github-hosted'
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends $DEPS
+      - name: ccache in the runner's home (self-hosted)
+        if: runner.environment == 'self-hosted'
+        run: echo "CCACHE_DIR=$HOME/.ccache" >> "$GITHUB_ENV"
       - uses: actions/cache@v4
+        if: runner.environment == 'github-hosted'
         with:
           path: .ccache
           key: ccache-release-${{ github.sha }}
@@ -66,7 +77,7 @@ jobs:
   sanitizers:
     name: 'ASan + UBSan'
     if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-24.04
+    runs-on: ${{ fromJSON(vars.PQCH_RUNS_ON || '"ubuntu-24.04"') }}
     timeout-minutes: 240
     env:
       ASAN_OPTIONS: detect_leaks=1:detect_stack_use_after_return=1
@@ -74,8 +85,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install packages
+        if: runner.environment == 'github-hosted'
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends $DEPS clang
+      - name: ccache in the runner's home (self-hosted)
+        if: runner.environment == 'self-hosted'
+        run: echo "CCACHE_DIR=$HOME/.ccache" >> "$GITHUB_ENV"
       - uses: actions/cache@v4
+        if: runner.environment == 'github-hosted'
         with:
           path: .ccache
           key: ccache-asan-${{ github.sha }}
@@ -93,13 +109,18 @@ jobs:
   fuzz:
     name: 'Fuzz (PQCH targets)'
     if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-24.04
+    runs-on: ${{ fromJSON(vars.PQCH_RUNS_ON || '"ubuntu-24.04"') }}
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
       - name: Install packages
+        if: runner.environment == 'github-hosted'
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends $DEPS clang libclang-rt-18-dev
+      - name: ccache in the runner's home (self-hosted)
+        if: runner.environment == 'self-hosted'
+        run: echo "CCACHE_DIR=$HOME/.ccache" >> "$GITHUB_ENV"
       - uses: actions/cache@v4
+        if: runner.environment == 'github-hosted'
         with:
           path: .ccache
           key: ccache-fuzz-${{ github.sha }}
@@ -129,13 +150,14 @@ jobs:
   tsan:
     name: 'TSan'
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-24.04
+    runs-on: ${{ fromJSON(vars.PQCH_RUNS_ON || '"ubuntu-24.04"') }}
     timeout-minutes: 300
     env:
       TSAN_OPTIONS: halt_on_error=1:second_deadlock_stack=1
     steps:
       - uses: actions/checkout@v4
       - name: Install packages
+        if: runner.environment == 'github-hosted'
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends $DEPS clang
       - name: Configure
         run: |
