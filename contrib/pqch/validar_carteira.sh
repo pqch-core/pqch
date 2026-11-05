@@ -79,11 +79,17 @@ for _ in $(seq 1 60); do c C getblockcount >/dev/null 2>&1 && break; sleep 1; do
 contem "-addresstype=bech32 recusado" "$(c C createwallet c 2>&1 || true)" "only bech32m"
 para C
 
+contem "createwalletdescriptor bech32 recusado" "$(w A a createwalletdescriptor bech32 2>&1 || true)" "only bech32m"
+
 echo "=== Minerar e enviar ==="
 c A generatetoaddress 101 "$ADDR_A" >/dev/null
 espera_altura B 101 || true
 verifica "Saldo disponivel em A (1 recompensa madura)" "$(w A a getbalance)" "12.50000000"
 ADDR_B=$(w B b getnewaddress)
+OLD=$(c A deriveaddresses "$(c A getdescriptorinfo "wpkh($(w A a listdescriptors | js 'd["descriptors"][0]["desc"].split("(")[1].split("/")[0]')/0/0)" | js 'd["descriptor"]')" | js 'd[0]')
+contem "Envio para endereco antigo ($OLD) recusado" "$(w A a sendtoaddress "$OLD" 1 2>&1 || true)" "not valid on this network"
+HEX=$(w A a send "{\"$ADDR_A\": 1}" null "unset" null "{\"change_type\": \"bech32\", \"add_to_wallet\": false}" | js 'd["hex"]')
+verifica "Troco pedido como bech32 sai P2MR" "$(c A decoderawtransaction "$HEX" | js 'len(d["vout"])==2 and all(o["scriptPubKey"]["address"].startswith("pqcrt1p") for o in d["vout"])')" "True"
 TX=$(w A a sendtoaddress "$ADDR_B" 5)
 espera_mempool B "$TX" && verifica "Transacao chegou ao no B pela rede" "sim" "sim" || verifica "Transacao chegou ao no B pela rede" "nao" "sim"
 WIT=$(c A getrawtransaction "$TX" 1 | js '[len(x)//2 for x in d["vin"][0]["txinwitness"]]')

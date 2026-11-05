@@ -1224,7 +1224,7 @@ public:
     bool IsSingleType() const final { return true; }
     bool ToPrivateString(const SigningProvider& arg, std::string& out) const final { return false; }
     std::optional<int64_t> ScriptSize() const override { return m_script.size(); }
-    std::optional<int64_t> MaxSatSize(bool use_max_sig) const override { return p2mr::HybridWitnessSize(use_max_sig); }
+    std::optional<int64_t> MaxSatSize(bool) const override { return p2mr::HybridWitnessSize(/*explicit_hashtype=*/true) - GetSizeOfCompactSize(4); }
     std::optional<int64_t> MaxSatisfactionWeight(bool use_max_sig) const override { return MaxSatSize(use_max_sig); }
     std::optional<int64_t> MaxSatisfactionElems() const override { return 4; }
     std::unique_ptr<DescriptorImpl> Clone() const override { return std::make_unique<SolvedP2MRDescriptor>(m_script); }
@@ -1580,6 +1580,8 @@ class P2MRDescriptor final : public DescriptorImpl
 protected:
     bool ExpandExtra(int pos, const SigningProvider& arg, const std::vector<CPubKey>& pubkeys, const DescriptorCache* read_cache, DescriptorCache* write_cache, FlatSigningProvider& out) const override
     {
+        // The recovery key's position is never an address.
+        if (m_pubkey_args.at(0)->IsRange() && static_cast<uint32_t>(pos) == p2mr::RECOVERY_KEY_INDEX) return false;
         const CPubKey& child{pubkeys.at(0)};
         p2mr::AddressKeys keys;
         if (!read_cache || !read_cache->GetCachedP2MRKeys(child, keys)) {
@@ -1618,8 +1620,9 @@ public:
 
     std::optional<int64_t> ScriptSize() const override { return 1 + 1 + 32; }
 
-    // Leaf A (hybrid) is the spending path wallets use.
-    std::optional<int64_t> MaxSatSize(bool use_max_sig) const override { return p2mr::HybridWitnessSize(use_max_sig); }
+    // Leaf A (hybrid) is the spending path wallets use. Sizes exclude the witness element count
+    // (MaxInputWeight adds it) and assume explicit sighash bytes (the largest case).
+    std::optional<int64_t> MaxSatSize(bool) const override { return p2mr::HybridWitnessSize(/*explicit_hashtype=*/true) - GetSizeOfCompactSize(4); }
     std::optional<int64_t> MaxSatisfactionWeight(bool use_max_sig) const override { return MaxSatSize(use_max_sig); }
     std::optional<int64_t> MaxSatisfactionElems() const override { return 4; }
 

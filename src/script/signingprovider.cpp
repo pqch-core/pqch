@@ -164,7 +164,8 @@ FlatSigningProvider& FlatSigningProvider::Merge(FlatSigningProvider&& b)
     tr_trees.merge(b.tr_trees);
     aggregate_pubkeys.merge(b.aggregate_pubkeys);
     p2mr_spenddata.merge(b.p2mr_spenddata);
-    p2mr_keys.merge(b.p2mr_keys);
+    // The latest expansion wins: P2MRDescriptor::MakeScripts reads the keys it has just derived.
+    for (auto& [child, keys] : b.p2mr_keys) p2mr_keys.insert_or_assign(child, std::move(keys));
     // We shouldn't be merging 2 different sessions, just overwrite with b's sessions.
     if (!musig2_secnonces) musig2_secnonces = b.musig2_secnonces;
     return *this;

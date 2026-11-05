@@ -56,7 +56,12 @@ p2mr([fingerprint/360h/1h/0h]tpub…/0h/*h)
 - `importdescriptors` aceita só `p2mr()`, `addr()` e `raw()`, e estes dois últimos apenas com saídas
   válidas na PQCH. Um `tr()` é recusado: na PQCH a sua saída seria lida como uma raiz P2MR e o
   dinheiro ficaria perdido.
-- O troco é sempre P2MR.
+- O troco é sempre P2MR, mesmo que se peça outro tipo (`change_type`, `-changetype`).
+- `createwalletdescriptor` só cria descritores `bech32m`.
+- Envios para endereços que a rede não aceita (`1…`, `3…`, `pqc1q…`) são recusados antes de criar a
+  transação. Todas as saídas voltam a ser verificadas antes de assinar.
+- Os assinadores externos (carteiras de hardware atuais) são recusados, porque ainda não assinam P2MR.
+- Ao carregar uma carteira, recusa-se a que tenha um descritor ativo que não seja `p2mr()`.
 - No modo de teste herdado (`-testactivationheight=pqrules@…`), a carteira volta a comportar-se
   como a do Bitcoin, para os testes herdados.
 
@@ -84,6 +89,34 @@ p2mr([fingerprint/360h/1h/0h]tpub…/0h/*h)
   - testa a carteira cifrada.
 - As 18 suítes de testes da carteira herdadas do Bitcoin passam.
 
+## Revisão independente
+
+Uma revisão feita por quem não escreveu o código encontrou sete erros, todos corrigidos e testados:
+
+| Erro | Correção |
+| --- | --- |
+| Assinadores externos podiam dar endereços `tr()` (perdidos na PQCH) | recusados nas redes PQCH, na criação e no carregamento |
+| Envios para endereços antigos criavam transações inválidas e prendiam as moedas | destino verificado; todas as saídas verificadas antes de assinar |
+| `createwalletdescriptor` e `change_type` ainda criavam tipos antigos | só bech32m |
+| A verificação depois de assinar podia aceitar Taproot | usa as regras da rede (`StandardSigningVerifyFlags`) e nunca assina Taproot na PQCH |
+| Dois descritores com a mesma chave filha num provedor partilhado | a expansão mais recente vence |
+| Chave secreta PQ não era apagada em todos os caminhos | `pqc::KeyPair` apaga-a ao ser destruído |
+| O índice `0x7FFFFFFF` podia ser usado como endereço | recusado |
+
+A estimativa de taxas também foi corrigida: contava a contagem de elementos duas vezes e não
+contava o byte de sighash. Agora assume sempre o caso maior.
+
+## Risco conhecido: ficheiro da carteira + computador quântico
+
+Na cadeia de blocos nenhuma chave de curva elíptica da cadeia de derivação fica exposta. O ficheiro
+da carteira, porém, guarda essas chaves públicas: a xpub mestra nos descritores, as xpub filhas no
+cache e a chave `recovery_owner`. Quem tiver o ficheiro **e** um computador quântico tira delas as
+chaves privadas, e daí todas as chaves ML-DSA e SLH-DSA, **mesmo com a carteira cifrada**. Com um
+computador clássico, a cifra da carteira continua a proteger. A correção de fundo é uma semente
+pós-quântica própria, guardada só cifrada, sem chaves públicas de curva elíptica no ficheiro. Fica
+como decisão antes do lançamento, porque muda a derivação, e a derivação fica fixa para sempre
+depois do lançamento.
+
 ## Pendente
 
 - Escolher a folha de recuperação por RPC (`send` / `walletcreatefundedpsbt`), para o dia em que o
@@ -93,6 +126,12 @@ p2mr([fingerprint/360h/1h/0h]tpub…/0h/*h)
 - Registar `coin_type` no SLIP-0044 e o prefixo no SLIP-0173. O caminho usa `0h` na rede principal
   provisoriamente.
 - Mostrar a árvore P2MR em `getaddressinfo`; hoje o `desc` de um endereço é `addr(…)`.
+- Ao desbloquear a carteira, voltar a derivar as chaves P2MR guardadas em cache e compará-las.
+- A troca para as regras da carteira usa `PQRulesHeight == 0`, sem olhar para a altura (só afeta
+  testes com `-testactivationheight=pqrules@N`).
+- Rever os alvos de fuzzing que assinam ou inferem descritores, porque agora leem os parâmetros da
+  rede. O `psbt` já foi corrigido.
+- A migração de carteiras antigas do Bitcoin para descritores não é suportada nas redes PQCH.
 - Carteiras de hardware com ML-DSA e SLH-DSA.
 - Palavras de recuperação BIP39 (24 palavras, secção 21.5) e a cópia de segurança obrigatória no
   primeiro arranque (secção 20). Ficam para a aplicação; o nó guarda a semente no ficheiro da

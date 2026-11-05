@@ -7,6 +7,7 @@
 #include <common/messages.h>
 #include <common/system.h>
 #include <consensus/amount.h>
+#include <consensus/tx_verify.h>
 #include <consensus/validation.h>
 #include <interfaces/chain.h>
 #include <node/types.h>
@@ -29,6 +30,7 @@
 #include <wallet/spend.h>
 #include <wallet/transaction.h>
 #include <wallet/wallet.h>
+#include <wallet/walletutil.h>
 
 #include <cmath>
 
@@ -1090,6 +1092,10 @@ static util::Result<CreatedTransactionResult> CreateTransactionInternal(
     ReserveDestination reservedest(&wallet, change_type);
     unsigned int outputs_to_subtract_fee_from = 0; // The number of outputs which we are subtracting the fee from
     for (const auto& recipient : vecSend) {
+        // PQCH: only outputs valid under the post-quantum rules (P2MR addresses, OP_RETURN, ...).
+        if (IsPQWalletChain() && !Consensus::IsPQAllowedOutput(GetScriptForDestination(recipient.dest))) {
+            return util::Error{_("This address type is not valid on this network: send only to post-quantum (P2MR) addresses")};
+        }
         if (IsDust(recipient, wallet.chain().relayDustFee())) {
             return util::Error{_("Transaction amount too small")};
         }
@@ -1401,6 +1407,15 @@ static util::Result<CreatedTransactionResult> CreateTransactionInternal(
     // Give up if change keypool ran out and change is required
     if (scriptChange.empty() && change_pos) {
         return util::Error{error};
+    }
+
+    // PQCH: a last check of every output (change included) before signing.
+    if (IsPQWalletChain()) {
+        for (const CTxOut& out : txNew.vout) {
+            if (!Consensus::IsPQAllowedOutput(out.scriptPubKey)) {
+                return util::Error{_("Transaction would have an output that is not valid on this network")};
+            }
+        }
     }
 
     if (sign && !wallet.SignTransaction(txNew)) {

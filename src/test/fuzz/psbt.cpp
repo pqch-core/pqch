@@ -2,6 +2,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include <chainparams.h>
 #include <node/psbt.h>
 #include <psbt.h>
 #include <pubkey.h>
@@ -21,7 +22,13 @@ using node::AnalyzePSBT;
 using node::PSBTAnalysis;
 using node::PSBTInputAnalysis;
 
-FUZZ_TARGET(psbt)
+// PQCH: signature checks read the selected chain (StandardSigningVerifyFlags).
+static void initialize_psbt()
+{
+    SelectParams(ChainType::MAIN);
+}
+
+FUZZ_TARGET(psbt, .init = initialize_psbt)
 {
     SeedRandomStateForTest(SeedRand::ZEROS);
     FuzzedDataProvider fuzzed_data_provider{buffer.data(), buffer.size()};

@@ -802,6 +802,8 @@ static bool SignStep(const SigningProvider& provider, const BaseSignatureCreator
         if (provider.GetP2MRSpendData(uint256{std::span<const unsigned char>{vSolutions[0]}}, spend)) {
             return SignP2MR(provider, creator, spend, sigdata, ret);
         }
+        // On PQCH chains a witness v1 output is never Taproot.
+        if (StandardSigningVerifyFlags() & SCRIPT_VERIFY_P2MR) return false;
         return SignTaproot(provider, creator, WitnessV1Taproot(XOnlyPubKey{vSolutions[0]}), sigdata, ret);
     }
 
@@ -898,7 +900,9 @@ bool ProduceSignature(const SigningProvider& provider, const BaseSignatureCreato
     sigdata.scriptSig = PushAll(result);
 
     // Test solution
-    script_verify_flags verify_flags{STANDARD_SCRIPT_VERIFY_FLAGS};
+    // PQCH: check with the rules of the selected chain (P2MR on PQCH chains), so that a Taproot
+    // signature for a witness v1 output is never reported complete where consensus rejects it.
+    script_verify_flags verify_flags{StandardSigningVerifyFlags()};
     if (sigdata.p2mr) verify_flags |= SCRIPT_VERIFY_P2MR;
     sigdata.complete = solved && VerifyScript(sigdata.scriptSig, fromPubKey, &sigdata.scriptWitness, verify_flags, creator.Checker());
     return sigdata.complete;

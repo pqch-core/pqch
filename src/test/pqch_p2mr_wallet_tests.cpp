@@ -124,7 +124,7 @@ BOOST_AUTO_TEST_CASE(p2mr_descriptor_parse)
     BOOST_CHECK(ok[0]->IsRange());
     BOOST_CHECK(ok[0]->GetOutputType() == OutputType::BECH32M);
     BOOST_CHECK(ok[0]->ToString().starts_with("p2mr(" + xpub + "/360h/0h/0h/0h/*h)#"));
-    BOOST_CHECK_EQUAL(*ok[0]->MaxSatisfactionWeight(false), 3876);
+    BOOST_CHECK_EQUAL(*ok[0]->MaxSatisfactionWeight(false), p2mr::HybridWitnessSize(true) - 1); // without the element count
 
     // Unhardened steps cannot work (no public derivation of post-quantum keys).
     for (const std::string& bad : {"p2mr(" + xpub + "/0/*)", "p2mr(" + xprv + "/360h/*)", "p2mr(" + xprv + "/0h/1/*h)"}) {
@@ -162,6 +162,23 @@ BOOST_AUTO_TEST_CASE(p2mr_descriptor_expand_and_sign)
     // Without the private key and without the cache, nothing can be derived.
     Expanded nothing;
     BOOST_CHECK(!desc.Expand(0, DUMMY_SIGNING_PROVIDER, nothing.scripts, nothing.out));
+    // The recovery key's position is not an address.
+    Expanded reserved;
+    BOOST_CHECK(!desc.Expand(p2mr::RECOVERY_KEY_INDEX, keys, reserved.scripts, reserved.out));
+    // A provider shared between two descriptors whose keys coincide (same child key, other
+    // recovery key) still gives each descriptor its own output.
+    {
+        auto fixed{Parse("p2mr(" + EncodeExtKey(master) + "/360h/0h/0h/0h/5h)", keys, error, false)};
+        BOOST_REQUIRE(fixed.size() == 1);
+        Expanded alone, ranged5;
+        BOOST_REQUIRE(fixed[0]->Expand(0, keys, alone.scripts, alone.out));
+        FlatSigningProvider shared;
+        std::vector<CScript> s1, s2;
+        BOOST_REQUIRE(desc.Expand(5, keys, s1, shared));
+        BOOST_REQUIRE(fixed[0]->Expand(0, keys, s2, shared));
+        BOOST_CHECK(s2 == alone.scripts);
+        BOOST_CHECK(s1 != s2);
+    }
     // Other indexes give other outputs.
     Expanded e1;
     BOOST_REQUIRE(desc.Expand(1, keys, e1.scripts, e1.out, &e1.cache));

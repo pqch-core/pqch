@@ -5,6 +5,8 @@
 #ifndef BITCOIN_CRYPTO_PQC_PQC_H
 #define BITCOIN_CRYPTO_PQC_PQC_H
 
+#include <support/cleanse.h>
+
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -47,10 +49,23 @@ inline constexpr std::array<unsigned char, 10> TX_SIGNATURE_CONTEXT{'P', 'Q', 'C
 [[nodiscard]] bool SLHDSA128sVerify(std::span<const unsigned char> sig, std::span<const unsigned char> msg,
                                     std::span<const unsigned char> ctx, std::span<const unsigned char> pubkey);
 
-/** Key pair (wallet side; not consensus critical). */
+/** Key pair (wallet side; not consensus critical). The secret key is wiped when it goes away. */
 struct KeyPair {
     std::vector<unsigned char> pubkey;
     std::vector<unsigned char> seckey;
+
+    KeyPair() = default;
+    KeyPair(const KeyPair&) = default;
+    KeyPair(KeyPair&&) = default;
+    KeyPair& operator=(const KeyPair&) = default;
+    KeyPair& operator=(KeyPair&& other)
+    {
+        memory_cleanse(seckey.data(), seckey.size());
+        pubkey = std::move(other.pubkey);
+        seckey = std::move(other.seckey);
+        return *this;
+    }
+    ~KeyPair() { memory_cleanse(seckey.data(), seckey.size()); }
 };
 
 /** ML-DSA-44 key pair from a 32-byte seed (FIPS 204, Algorithm 6, ML-DSA.KeyGen_internal). */

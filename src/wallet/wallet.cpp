@@ -2297,13 +2297,13 @@ SigningResult CWallet::SignMessage(const std::string& message, const PKHash& pkh
 
 OutputType CWallet::TransactionChangeType(const std::optional<OutputType>& change_type, const std::vector<CRecipient>& vecSend) const
 {
+    // PQCH: change is always P2MR on PQCH chains, whatever was asked.
+    if (IsPQWalletChain()) return OutputType::BECH32M;
+
     // If -changetype is specified, always use that change type.
     if (change_type) {
         return *change_type;
     }
-
-    // PQCH: change is always P2MR on PQCH chains.
-    if (IsPQWalletChain()) return OutputType::BECH32M;
 
     // if m_default_address_type is legacy, use legacy address as change.
     if (m_default_address_type == OutputType::LEGACY) {
@@ -3221,6 +3221,24 @@ std::shared_ptr<CWallet> CWallet::LoadExisting(WalletContext& context, const std
         return nullptr;
     }
 
+    // PQCH: a wallet made by an older build may have active descriptors that hand out addresses
+    // this network cannot spend (tr()) or does not accept (wpkh() and the like). Refuse it.
+    if (IsPQWalletChain()) {
+        if (walletInstance->IsWalletFlagSet(WALLET_FLAG_EXTERNAL_SIGNER)) {
+            error = _("External signer wallets are not supported on this network yet");
+            return nullptr;
+        }
+        for (auto spk_man : walletInstance->GetActiveScriptPubKeyMans()) {
+            auto desc_spkm{dynamic_cast<DescriptorScriptPubKeyMan*>(spk_man)};
+            if (!desc_spkm) continue;
+            const std::string desc{WITH_LOCK(desc_spkm->cs_desc_man, return desc_spkm->GetWalletDescriptor().descriptor->ToString())};
+            if (!desc.starts_with("p2mr(")) {
+                error = strprintf(_("Wallet %s has an active %s descriptor, which cannot be used on this network (only p2mr()). Move the funds with another build, or remove the descriptor."), name, desc.substr(0, desc.find('(')));
+                return nullptr;
+            }
+        }
+    }
+
     if (walletInstance->IsWalletFlagSet(WALLET_FLAG_DISABLE_PRIVATE_KEYS)) {
         for (auto spk_man : walletInstance->GetActiveScriptPubKeyMans()) {
             if (spk_man->HavePrivateKeys()) {
@@ -3656,6 +3674,10 @@ DescriptorScriptPubKeyMan& CWallet::SetupDescriptorScriptPubKeyMan(WalletBatch& 
     if (IsLocked()) {
         throw std::runtime_error(std::string(__func__) + ": Wallet is locked, cannot setup new descriptors");
     }
+    // PQCH: other output types would be invalid (or, for tr(), unspendable) on PQCH chains.
+    if (IsPQWalletChain() && output_type != OutputType::BECH32M) {
+        throw std::runtime_error(std::string(__func__) + ": only bech32m (post-quantum P2MR) descriptors can be created on this network");
+    }
     auto spk_manager = DescriptorScriptPubKeyMan::GenerateNewSingleSig(*this, batch, m_keypool_size, master_key, output_type, internal);
     DescriptorScriptPubKeyMan* out = spk_manager.get();
     uint256 id = spk_manager->GetID();
@@ -3702,6 +3724,9 @@ void CWallet::SetupDescriptorScriptPubKeyMans()
             return true;
         })) throw std::runtime_error("Error: cannot process db transaction for descriptors setup");
     } else {
+        // PQCH: external signers (hardware wallets) cannot sign P2MR outputs yet, and the
+        // descriptors they offer (tr(), wpkh()) would be unspendable or invalid here.
+        if (IsPQWalletChain()) throw std::runtime_error("External signers are not supported on this network yet (no post-quantum signing)");
         auto signer = ExternalSignerScriptPubKeyMan::GetExternalSigner();
         if (!signer) throw std::runtime_error(util::ErrorString(signer).original);
 
