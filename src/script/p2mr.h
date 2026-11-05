@@ -14,6 +14,8 @@
 #include <uint256.h>
 
 #include <array>
+#include <optional>
+#include <string_view>
 #include <cstdint>
 #include <span>
 #include <vector>
@@ -69,6 +71,12 @@ struct PQSeed {
 
 /** The seed of a new wallet from the random master key material it creates (key and chain code). */
 PQSeed SeedFromMasterKey(const CExtKey& master);
+
+/**
+ * The seed from 24 BIP39 words and an optional passphrase (script/bip39.h):
+ * HMAC-SHA512("PQCH/P2MR/v2/bip39", BIP39 seed)[0:32]. Nullopt if the words or passphrase are invalid.
+ */
+std::optional<PQSeed> SeedFromMnemonic(std::string_view mnemonic, std::string_view passphrase);
 
 /** Public data of one address: what the descriptor cache keeps (no secrets). */
 struct AddressKeys {

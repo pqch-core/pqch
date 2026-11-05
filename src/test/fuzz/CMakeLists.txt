@@ -100,6 +100,7 @@ add_executable(fuzz
   process_message.cpp
   process_messages.cpp
   protocol.cpp
+  pqch.cpp
   psbt.cpp
   random.cpp
   rbf.cpp

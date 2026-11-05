@@ -6,6 +6,7 @@
 #include <key_io.h>
 #include <policy/policy.h>
 #include <primitives/transaction.h>
+#include <script/bip39.h>
 #include <script/descriptor.h>
 #include <script/interpreter.h>
 #include <script/p2mr.h>
@@ -120,6 +121,54 @@ BOOST_AUTO_TEST_CASE(p2mr_key_derivation)
     BOOST_CHECK_EQUAL(HexStr(a.schnorr), "bcf67cf39ef75c31a813008dd8834a798f68464a9185ab27c35344d9209a9d8f");
     BOOST_CHECK_EQUAL(HexStr(a.salt), "4bb7196e788b8026f67e4bc5c1b6afb7");
     BOOST_CHECK_EQUAL(sa.Root().GetHex(), "213f422e9312793b15c051f98aa8501a313bb6fe5ab52881a95006bcf043ec52");
+}
+
+BOOST_AUTO_TEST_CASE(bip39_recovery_words)
+{
+    // Official BIP39 vectors (Trezor, passphrase "TREZOR"); the PQCH seeds were computed with an
+    // independent Python implementation (hashlib PBKDF2 and HMAC).
+    struct Vector { std::string entropy, words, passphrase, bip39_seed, pq_seed; };
+    const Vector vectors[]{
+        {std::string(64, '0'),
+         "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art",
+         "TREZOR",
+         "bda85446c68413707090a52022edd26a1c9462295029f2e60cd7c4f2bbd3097170af7a4d73245cafa9c3cca8d561a7c3de6f5d4a10be8ed2a5e608d68f92fcc8",
+         "a855eaa0d7cdcb440a9f75d0560f6f268fc175938903fcaa2dfdf399962496a7"},
+        {"7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f",
+         "legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth title",
+         "TREZOR",
+         "bc09fca1804f7e69da93c2f2028eb238c227f2e9dda30cd63699232578480a4021b146ad717fbb7e451ce9eb835f43620bf5c514db0f8add49f5d121449d3e87",
+         "d14480330700192ce3e6c1ba480a7c0333eb8b80e0fe1036ca2c1a2c63d7ec65"},
+        {"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+         "abandon amount liar amount expire adjust cage candy arch gather drum bullet absurd math era live bid rhythm alien crouch range attend journey unaware",
+         "",
+         "0a6d060f6242aece4b074e48e7d8166f792a9b2bb7b295fa5ac289eda7647290c3d80e7436d6e9e34e72769c06f6582192d0b57ae4a97e9e24c8972a770a57d9",
+         "f336e7e66cf493dde725edbc904755a3e1c43a24e9719ee5b2fec1a5455970c1"},
+    };
+    for (const auto& v : vectors) {
+        const auto entropy{ParseHex(v.entropy)};
+        BOOST_CHECK_EQUAL(bip39::MnemonicFromEntropy(std::span<const unsigned char, 32>{entropy.data(), 32}), v.words);
+        const auto back{bip39::EntropyFromMnemonic(v.words)};
+        BOOST_REQUIRE(back);
+        BOOST_CHECK_EQUAL(HexStr(*back), v.entropy);
+        const auto seed{bip39::SeedFromMnemonic(v.words, v.passphrase)};
+        BOOST_REQUIRE(seed);
+        BOOST_CHECK_EQUAL(HexStr(*seed), v.bip39_seed);
+        const auto pq{p2mr::SeedFromMnemonic(v.words, v.passphrase)};
+        BOOST_REQUIRE(pq);
+        BOOST_CHECK_EQUAL(HexStr(pq->bytes), v.pq_seed);
+    }
+    const std::string ok{vectors[0].words};
+    // Extra whitespace is fine; the canonical form has single spaces.
+    BOOST_CHECK_EQUAL(*bip39::NormalizeMnemonic("  " + ok + " \n"), ok);
+    // Wrong checksum, unknown word, wrong count, upper case, non-ASCII passphrase: refused.
+    BOOST_CHECK(!bip39::EntropyFromMnemonic(ok.substr(0, ok.size() - 3) + "ability"));
+    BOOST_CHECK(!bip39::EntropyFromMnemonic(ok.substr(0, ok.size() - 3) + "pqchx"));
+    BOOST_CHECK(!bip39::EntropyFromMnemonic("abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"));
+    BOOST_CHECK(!bip39::EntropyFromMnemonic("Abandon" + ok.substr(7)));
+    BOOST_CHECK(!p2mr::SeedFromMnemonic(ok, "pa\xc3\xa7o"));
+    // Another passphrase gives another wallet.
+    BOOST_CHECK(p2mr::SeedFromMnemonic(ok, "")->bytes != p2mr::SeedFromMnemonic(ok, "TREZOR")->bytes);
 }
 
 BOOST_AUTO_TEST_CASE(p2mr_descriptor_parse)

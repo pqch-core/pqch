@@ -9,6 +9,7 @@
 #include <tinyformat.h>
 
 #include <algorithm>
+#include <bit>
 #include <cassert>
 #include <cstring>
 
@@ -86,12 +87,11 @@ namespace {
 /** Largest power of two not above count (count >= 3 here). */
 uint64_t TreeWidth(uint64_t count)
 {
-    uint64_t cnt{1};
-    do {
-        cnt <<= 1;
-    } while (cnt <= count);
-    return cnt >> 1;
+    // std::bit_floor: no overflow for any count (a shifting loop never ends above 2^63).
+    return std::bit_floor(count);
 }
+/** Trees larger than this are refused (consensus limits are far smaller: 2^20 transactions). */
+constexpr uint64_t MAX_TREE_SIZE{uint64_t{1} << 32};
 } // namespace
 
 uint256 MoneroTreeHash(const std::vector<uint256>& hashes)
@@ -114,7 +114,7 @@ uint256 MoneroTreeHash(const std::vector<uint256>& hashes)
 
 bool MoneroRootFromProof(const uint256& leaf, const std::vector<uint256>& proof, uint64_t index, uint64_t count, uint256& root)
 {
-    if (count == 0 || index >= count) return false;
+    if (count == 0 || index >= count || count > MAX_TREE_SIZE) return false;
     uint256 h{leaf};
     if (count == 1) {
         if (!proof.empty()) return false;

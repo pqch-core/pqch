@@ -193,6 +193,10 @@ BOOST_AUTO_TEST_CASE(monero_tree_and_proofs)
         uint256 r;
         BOOST_CHECK(!MoneroRootFromProof(leaves[0], MoneroProof(leaves, 0), n, n, r)); // index out of range
     }
+    // Huge tree sizes are refused at once (found by fuzzing: the width loop never ended above 2^63).
+    uint256 r;
+    BOOST_CHECK(!MoneroRootFromProof(Tagged(1), {}, 0, std::numeric_limits<uint64_t>::max(), r));
+    BOOST_CHECK(!MoneroRootFromProof(Tagged(1), {}, 5, (uint64_t{1} << 63) + 1, r));
 }
 
 BOOST_AUTO_TEST_CASE(merge_mining_params_and_slot)

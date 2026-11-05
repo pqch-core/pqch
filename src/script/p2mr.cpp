@@ -5,6 +5,7 @@
 #include <script/p2mr.h>
 
 #include <crypto/hmac_sha512.h>
+#include <script/bip39.h>
 #include <hash.h>
 #include <script/interpreter.h>
 #include <serialize.h>
@@ -83,6 +84,19 @@ PQSeed SeedFromMasterKey(const CExtKey& master)
     h.Finalize(buf);
     PQSeed seed{std::span<const unsigned char>{buf, SEED_SIZE}};
     memory_cleanse(buf, sizeof(buf));
+    return seed;
+}
+
+std::optional<PQSeed> SeedFromMnemonic(std::string_view mnemonic, std::string_view passphrase)
+{
+    auto bip39_seed{bip39::SeedFromMnemonic(mnemonic, passphrase)};
+    if (!bip39_seed) return std::nullopt;
+    static constexpr std::string_view LABEL{"PQCH/P2MR/v2/bip39"};
+    unsigned char buf[CHMAC_SHA512::OUTPUT_SIZE];
+    CHMAC_SHA512{reinterpret_cast<const unsigned char*>(LABEL.data()), LABEL.size()}.Write(bip39_seed->data(), bip39_seed->size()).Finalize(buf);
+    PQSeed seed{std::span<const unsigned char>{buf, SEED_SIZE}};
+    memory_cleanse(buf, sizeof(buf));
+    memory_cleanse(bip39_seed->data(), bip39_seed->size());
     return seed;
 }
 
