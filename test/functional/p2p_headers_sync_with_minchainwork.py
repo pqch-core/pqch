@@ -20,7 +20,7 @@ from test_framework.blocktools import (
     create_block,
 )
 
-from test_framework.util import assert_equal
+from test_framework.util import assert_equal, p2p_port
 
 import re
 import time
@@ -179,10 +179,12 @@ class RejectLowDifficultyHeadersTest(BitcoinTestFramework):
                 self.generate(node, batch, sync_fun=self.no_op)
                 count -= batch
 
-        self.reconnect_all()
-
         self.mocktime_all(int(time.time()))  # Temporarily hold time to avoid internal timeouts
-        self.sync_blocks(timeout=300) # Ensure tips eventually agree
+        # PQCH: node0 is busy checking the RandomX proofs of the reorg as soon as it sees node1's
+        # chain, too busy to answer the handshake pings reconnect_all waits for; connect without waiting.
+        for i in (1, 2, 3):
+            self.nodes[0].addnode(f"127.0.0.1:{p2p_port(i)}", "onetry")
+        self.sync_blocks(timeout=1200) # Ensure tips eventually agree
         self.mocktime_all(0)
 
 
