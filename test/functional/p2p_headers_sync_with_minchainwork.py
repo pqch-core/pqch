@@ -172,8 +172,12 @@ class RejectLowDifficultyHeadersTest(BitcoinTestFramework):
         # received headers during a sync are fully between locator entries.
         BLOCKS_TO_MINE = 4110
 
-        self.generate(self.nodes[0], BLOCKS_TO_MINE, sync_fun=self.no_op)
-        self.generate(self.nodes[1], BLOCKS_TO_MINE+2, sync_fun=self.no_op)
+        # PQCH: RandomX blocks take longer to mine; mine in batches so that no call times out.
+        for node, count in ((self.nodes[0], BLOCKS_TO_MINE), (self.nodes[1], BLOCKS_TO_MINE + 2)):
+            while count > 0:
+                batch = min(count, 500)
+                self.generate(node, batch, sync_fun=self.no_op)
+                count -= batch
 
         self.reconnect_all()
 
