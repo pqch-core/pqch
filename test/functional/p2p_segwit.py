@@ -92,7 +92,7 @@ from test_framework.wallet import MiniWallet
 from test_framework.wallet_util import generate_keypair
 
 
-MAX_SIGOP_COST = 80000
+MAX_SIGOP_COST = 40000  # PQCH: halved with the block weight (Bitcoin: 80,000)
 
 SEGWIT_HEIGHT = 120
 
@@ -897,7 +897,7 @@ class SegWitTest(BitcoinTestFramework):
         # This should give us plenty of room to tweak the spending tx's
         # virtual size.
         NUM_DROPS = 200  # 201 max ops per script!
-        NUM_OUTPUTS = 50
+        NUM_OUTPUTS = 25  # PQCH: half of Bitcoin's 50, for blocks of 2,000,000 weight units
 
         witness_script = CScript([OP_2DROP] * NUM_DROPS + [OP_TRUE])
         script_pubkey = script_to_p2wsh_script(witness_script)
@@ -936,8 +936,8 @@ class SegWitTest(BitcoinTestFramework):
         block.solve()
         assert_equal(block.get_weight(), MAX_BLOCK_WEIGHT + 1)
         # Make sure that our test case would exceed the old max-network-message
-        # limit
-        assert len(block.serialize()) > 2 * 1024 * 1024
+        # limit (PQCH: half of it, for blocks of half the weight)
+        assert len(block.serialize()) > 1024 * 1024
 
         test_witness_block(self.nodes[0], self.test_node, block, accepted=False, reason='bad-blk-weight')
 
@@ -1864,10 +1864,12 @@ class SegWitTest(BitcoinTestFramework):
         """Test sigop counting is correct inside witnesses."""
 
         # Keep this under MAX_OPS_PER_SCRIPT (201)
-        witness_script = CScript([OP_TRUE, OP_IF, OP_TRUE, OP_ELSE] + [OP_CHECKMULTISIG] * 5 + [OP_CHECKSIG] * 193 + [OP_ENDIF])
+        # PQCH: 172 checksigs (Bitcoin: 193) so that the remainder below stays under 100 with the
+        # halved sigop limit.
+        witness_script = CScript([OP_TRUE, OP_IF, OP_TRUE, OP_ELSE] + [OP_CHECKMULTISIG] * 5 + [OP_CHECKSIG] * 172 + [OP_ENDIF])
         script_pubkey = script_to_p2wsh_script(witness_script)
 
-        sigops_per_script = 20 * 5 + 193 * 1
+        sigops_per_script = 20 * 5 + 172 * 1
         # We'll produce 2 extra outputs, one with a program that would take us
         # over max sig ops, and one with a program that would exactly reach max
         # sig ops

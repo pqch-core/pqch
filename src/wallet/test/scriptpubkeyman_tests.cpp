@@ -41,13 +41,22 @@ BOOST_AUTO_TEST_CASE(DescriptorScriptPubKeyManTests)
 BOOST_AUTO_TEST_CASE(desc_spkm_topup_fail)
 {
     // Attempting to construct a DescriptorSPKM that cannot be topped up (hardened derivation without private keys)
-    // should throw even though it is valid and can be parsed
+    // should fail even though it is valid and can be parsed.
+    // PQCH: AddWalletDescriptor returns the error (it runs in a database transaction) instead of throwing.
     CExtKey extkey;
     extkey.SetSeed(std::array<std::byte, 32>{});
     CWallet keystore(m_node.chain.get(), "", CreateMockableWalletDatabase());
-    BOOST_CHECK_EXCEPTION(
-        CreateDescriptor(keystore, "wpkh(" + EncodeExtPubKey(extkey.Neuter()) + "/*h)", /*success=*/true),
-        std::runtime_error, HasReason("Could not top up scriptPubKeys"));
+    keystore.SetWalletFlag(WALLET_FLAG_DESCRIPTORS);
+    FlatSigningProvider keys;
+    std::string error;
+    auto descs{Parse("wpkh(" + EncodeExtPubKey(extkey.Neuter()) + "/*h)", keys, error, /*require_checksum=*/false)};
+    BOOST_REQUIRE_EQUAL(descs.size(), 1U);
+    WalletDescriptor w_desc{std::move(descs.at(0)), /*creation_time=*/1, /*range_start=*/0, /*range_end=*/1, /*next_index=*/0};
+    LOCK(keystore.cs_wallet);
+    const auto res{keystore.AddWalletDescriptor(w_desc, keys, "", false)};
+    BOOST_REQUIRE(!res);
+    BOOST_CHECK_EQUAL(util::ErrorString(res).original, "Could not top up scriptPubKeys");
+    BOOST_CHECK(keystore.GetAllScriptPubKeyMans().empty());
 }
 
 BOOST_AUTO_TEST_SUITE_END()
