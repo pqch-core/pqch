@@ -60,12 +60,16 @@ struct KeyPair {
     KeyPair& operator=(const KeyPair&) = default;
     KeyPair& operator=(KeyPair&& other)
     {
-        memory_cleanse(seckey.data(), seckey.size());
+        WipeSecret();
         pubkey = std::move(other.pubkey);
         seckey = std::move(other.seckey);
         return *this;
     }
-    ~KeyPair() { memory_cleanse(seckey.data(), seckey.size()); }
+    ~KeyPair() { WipeSecret(); }
+
+private:
+    //! An empty vector may have a null data(): memset on it is undefined even with length 0.
+    void WipeSecret() { if (!seckey.empty()) memory_cleanse(seckey.data(), seckey.size()); }
 };
 
 /** ML-DSA-44 key pair from a 32-byte seed (FIPS 204, Algorithm 6, ML-DSA.KeyGen_internal). */
