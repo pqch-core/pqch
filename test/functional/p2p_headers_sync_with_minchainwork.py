@@ -137,8 +137,13 @@ class RejectLowDifficultyHeadersTest(BitcoinTestFramework):
         # Send a group of 2000 headers, forking from genesis.
         new_blocks = []
         hashPrevBlock = int(node.getblockhash(0), 16)
+        tmpl = node.getblocktemplate(NORMAL_GBT_REQUEST_PARAMS)
         for i in range(2000):
-            block = create_block(hashprev = hashPrevBlock, tmpl=node.getblocktemplate(NORMAL_GBT_REQUEST_PARAMS))
+            # PQCH: the coinbase carries the block's real height on the fork (i + 1), which picks the
+            # RandomX key; the template's height is the tip's.
+            # The presync checks the median time past too, so the times increase (ending before
+            # the template's, inside the 600 s future limit).
+            block = create_block(hashprev = hashPrevBlock, height=i + 1, ntime=tmpl['curtime'] - 2000 + i, tmpl=tmpl)
             block.solve()
             new_blocks.append(block)
             hashPrevBlock = block.hash_int
