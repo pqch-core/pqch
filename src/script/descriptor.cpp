@@ -1603,7 +1603,7 @@ protected:
     {
         if (pos < 0 || (m_range && static_cast<uint32_t>(pos) >= p2mr::RECOVERY_KEY_INDEX)) return std::vector<CScript>{};
         const uint32_t index{m_range ? static_cast<uint32_t>(pos) : 0};
-        p2mr::SpendData spend{.seed_id = m_seed_id, .path = AddressPath(pos), .recovery_path = RecoveryPath()};
+        p2mr::SpendData spend{.keys = {}, .seed_id = m_seed_id, .path = AddressPath(pos), .recovery_path = RecoveryPath()};
         if (!read_cache || !read_cache->GetCachedP2MRKeys(index, spend.keys)) {
             // The keys need the seed: there is no public derivation.
             p2mr::PQSeed seed;

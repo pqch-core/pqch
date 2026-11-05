@@ -36,6 +36,8 @@ class GetblockstatsTest(BitcoinTestFramework):
     def set_test_params(self):
         self.num_nodes = 1
         self.setup_clean_chain = True
+        # PQCH: --gen-test-data needs the wallet; checking the stored data does not.
+        self.uses_wallet = None
 
     def get_stats(self):
         return [self.nodes[0].getblockstats(hash_or_height=self.start_height + i) for i in range(self.max_stat_pos+1)]
@@ -171,16 +173,17 @@ class GetblockstatsTest(BitcoinTestFramework):
         genesis_stats = self.nodes[0].getblockstats(0)
         assert_equal(genesis_stats["blockhash"], "dc23bf8241b903f340911cf5199292b79b6ca42078d45c1dca9ccfe18678364b")
         assert_equal(genesis_stats["utxo_increase"], 1)
-        assert_equal(genesis_stats["utxo_size_inc"], 116)
+        assert_equal(genesis_stats["utxo_size_inc"], 55)  # PQCH genesis output (Bitcoin: 116)
         assert_equal(genesis_stats["utxo_increase_actual"], 0)
         assert_equal(genesis_stats["utxo_size_inc_actual"], 0)
 
         self.log.info('Test tip including OP_RETURN')
         tip_stats = self.nodes[0].getblockstats(tip)
-        assert_equal(tip_stats["utxo_increase"], 6)
-        assert_equal(tip_stats["utxo_size_inc"], 435)
-        assert_equal(tip_stats["utxo_increase_actual"], 4)
-        assert_equal(tip_stats["utxo_size_inc_actual"], 296)
+        # PQCH values from the regenerated data (Bitcoin: 6, 435, 4, 296).
+        assert_equal(tip_stats["utxo_increase"], 5)
+        assert_equal(tip_stats["utxo_size_inc"], 370)
+        assert_equal(tip_stats["utxo_increase_actual"], 3)
+        assert_equal(tip_stats["utxo_size_inc_actual"], 231)
 
         self.log.info("Test when only header is known")
         block = self.generateblock(self.nodes[0], output="raw(55)", transactions=[], submit=False)

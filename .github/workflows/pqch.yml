@@ -1,0 +1,149 @@
+# Copyright (c) 2026 The PQCH developers
+# Distributed under the MIT software license, see the accompanying
+# file COPYING or https://opensource.org/license/mit.
+
+# PQCH continuous integration: Linux only, to keep within a private repository's Actions budget.
+#   build-test   every push and pull request: build with the wallet, unit tests, wallet validation,
+#                and the essential functional tests.
+#   sanitizers   pull requests and pushes to main: unit tests with ASan + UBSan (clang).
+#   fuzz         pull requests and pushes to main: the PQCH fuzz targets, one minute each.
+#   tsan         weekly and by hand: unit tests with ThreadSanitizer.
+# The inherited Bitcoin Core matrix (ci.yml) only runs by hand.
+
+name: PQCH CI
+on:
+  push:
+    branches: ['**']
+    tags-ignore: ['**']
+  pull_request:
+  schedule:
+    - cron: '17 3 * * 1'  # Mondays 03:17 UTC (TSan)
+  workflow_dispatch:
+
+concurrency:
+  group: pqch-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  DEPS: build-essential cmake pkgconf python3 libevent-dev libboost-dev libsqlite3-dev ccache
+  CCACHE_DIR: ${{ github.workspace }}/.ccache
+  CCACHE_MAXSIZE: 500M
+
+jobs:
+  build-test:
+    name: 'Build and test'
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install packages
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends $DEPS
+      - uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: ccache-release-${{ github.sha }}
+          restore-keys: ccache-release-
+      - name: Configure
+        run: cmake -B build -DENABLE_WALLET=ON -DENABLE_IPC=OFF -DBUILD_GUI=OFF -DWITH_CCACHE=ON
+      - name: Build
+        run: cmake --build build -j$(nproc)
+      - name: Unit tests
+        run: ctest --test-dir build -j$(nproc) --timeout 1800 --output-on-failure
+      - name: Wallet validation (regtest, 2 nodes)
+        run: contrib/pqch/validar_carteira.sh build
+      - name: Functional tests (essential set)
+        run: |
+          build/test/functional/test_runner.py --jobs=$(nproc) --timeout-factor=4 \
+            mempool_accept.py rpc_blockchain.py mining_basic.py mempool_limit.py \
+            feature_nulldummy.py feature_utxo_set_hash.py p2p_invalid_tx.py p2p_invalid_block.py \
+            p2p_invalid_messages.py rpc_validateaddress.py p2p_segwit.py feature_assumevalid.py \
+            feature_coinstatsindex.py rpc_getblockstats.py feature_bip68_sequence.py p2p_ibd_stalling.py
+
+  sanitizers:
+    name: 'ASan + UBSan'
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    env:
+      ASAN_OPTIONS: detect_leaks=1:detect_stack_use_after_return=1
+      UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install packages
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends $DEPS clang
+      - uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: ccache-asan-${{ github.sha }}
+          restore-keys: ccache-asan-
+      - name: Configure
+        run: |
+          cmake -B build -DSANITIZERS=address,undefined -DCMAKE_BUILD_TYPE=Debug -DENABLE_WALLET=ON -DENABLE_IPC=OFF \
+            -DBUILD_GUI=OFF -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DWITH_CCACHE=ON
+      - name: Build
+        run: cmake --build build -j$(nproc) --target test_bitcoin
+      - name: Unit tests
+        # Only test_bitcoin is built: skip the univalue and secp256k1 suites.
+        run: ctest --test-dir build -E "univalue|secp256k1|DISCOVERY_FAILURE" -j$(nproc) --timeout 3600 --output-on-failure
+
+  fuzz:
+    name: 'Fuzz (PQCH targets)'
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install packages
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends $DEPS clang libclang-rt-18-dev
+      - uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: ccache-fuzz-${{ github.sha }}
+          restore-keys: ccache-fuzz-
+      - name: Configure
+        run: cmake --preset=libfuzzer -DENABLE_WALLET=OFF -DENABLE_IPC=OFF -DWITH_CCACHE=ON
+      - name: Build
+        run: cmake --build build_fuzz -j$(nproc)
+      - name: Fuzz
+        run: |
+          for t in pqch_auxpow_header pqch_auxpow_monero_block pqch_monero_primitives pqch_pq_verify pqch_p2mr_descriptor headers_sync_state psbt; do
+            mkdir -p corpus/$t
+            echo "::group::$t"
+            FUZZ=$t build_fuzz/bin/fuzz -max_total_time=60 -timeout=20 -rss_limit_mb=3000 corpus/$t
+            echo "::endgroup::"
+          done
+      - name: Keep crashing inputs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-crashes
+          path: |
+            crash-*
+            timeout-*
+            leak-*
+
+  tsan:
+    name: 'TSan'
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    env:
+      TSAN_OPTIONS: halt_on_error=1:second_deadlock_stack=1
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install packages
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends $DEPS clang
+      - name: Configure
+        run: |
+          cmake -B build -DSANITIZERS=thread -DCMAKE_BUILD_TYPE=Debug -DENABLE_WALLET=ON -DENABLE_IPC=OFF \
+            -DBUILD_GUI=OFF -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+      - name: Build
+        run: cmake --build build -j$(nproc) --target test_bitcoin
+      - name: Unit tests
+        # Only test_bitcoin is built: skip the univalue and secp256k1 suites.
+        run: ctest --test-dir build -E "univalue|secp256k1|DISCOVERY_FAILURE" -j$(nproc) --timeout 3600 --output-on-failure

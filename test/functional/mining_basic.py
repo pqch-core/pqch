@@ -79,9 +79,10 @@ class MiningTest(BitcoinTestFramework):
         assert_equal(mining_info['currentblockweight'], DEFAULT_BLOCK_RESERVED_WEIGHT)
 
         self.log.info('test blockversion')
-        self.restart_node(0, extra_args=[f'-mocktime={t}', '-blockversion=1337'])
+        # PQCH: 1081 = 1337 without bit 8, the merged mining (AuxPoW) bit, which the miner always clears.
+        self.restart_node(0, extra_args=[f'-mocktime={t}', '-blockversion=1081'])
         self.connect_nodes(0, 1)
-        assert_equal(1337, self.nodes[0].getblocktemplate(NORMAL_GBT_REQUEST_PARAMS)['version'])
+        assert_equal(1081, self.nodes[0].getblocktemplate(NORMAL_GBT_REQUEST_PARAMS)['version'])
         self.restart_node(0, extra_args=[f'-mocktime={t}'])
         self.connect_nodes(0, 1)
         assert_equal(VERSIONBITS_TOP_BITS + (1 << VERSIONBITS_DEPLOYMENT_TESTDUMMY_BIT), self.nodes[0].getblocktemplate(NORMAL_GBT_REQUEST_PARAMS)['version'])
@@ -240,7 +241,9 @@ class MiningTest(BitcoinTestFramework):
         }), None)
 
         bad_block = copy.deepcopy(block)
-        bad_block.nTime = t
+        # PQCH: with a 600 s future limit (Bitcoin: 2 h), equal to MAX_TIMEWARP, the time t is exactly
+        # on the boundary and valid; go one MAX_TIMEWARP earlier.
+        bad_block.nTime = t - MAX_TIMEWARP
         bad_block.solve()
         assert_raises_rpc_error(-25, 'time-timewarp-attack', lambda: node.submitheader(hexdata=CBlockHeader(bad_block).serialize().hex()))
 

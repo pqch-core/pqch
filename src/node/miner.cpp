@@ -5,6 +5,8 @@
 
 #include <node/miner.h>
 
+#include <auxpow.h>
+
 #include <chain.h>
 #include <chainparams.h>
 #include <common/args.h>
@@ -153,6 +155,9 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock()
     // -blockversion=N to test forking scenarios
     if (chainparams.MineBlocksOnDemand()) {
         pblock->nVersion = gArgs.GetIntArg("-blockversion", pblock->nVersion);
+        // PQCH: never the merged mining bit: a template carries no AuxPoW proof, and a header with
+        // the bit but no proof cannot be serialized (createauxblock adds both together).
+        pblock->nVersion &= ~auxpow::VERSION_AUXPOW;
     }
 
     pblock->nTime = TicksSinceEpoch<std::chrono::seconds>(NodeClock::now());
