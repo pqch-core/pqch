@@ -48,6 +48,17 @@ arith_uint256 CalculateASERT(const arith_uint256& refTarget, int64_t nPowTargetS
 /** PQCH: compact target required for the block after pindexPrev under ASERT. */
 unsigned int GetNextASERTWorkRequired(const CBlockIndex* pindexPrev, const Consensus::Params& params);
 
+/** PQCH: what ASERT needs from its anchor block, so that headers not in the block index can be checked. */
+struct ASERTAnchor {
+    int64_t height{0};
+    uint32_t nBits{0};
+    int64_t parent_time{0}; //!< time of the anchor's parent (one block interval before a genesis anchor)
+};
+/** The ASERT anchor of the chain `index` is on (index at or above the anchor height). */
+ASERTAnchor GetASERTAnchor(const CBlockIndex& index, const Consensus::Params& params);
+/** Compact target of the block after one at (prev_height, prev_time), under ASERT with `anchor`. */
+unsigned int ASERTWorkRequiredAfter(int64_t prev_height, int64_t prev_time, const ASERTAnchor& anchor, const Consensus::Params& params);
+
 /** Check whether a block hash satisfies the proof-of-work requirement specified by nBits */
 bool CheckProofOfWork(uint256 hash, unsigned int nBits, const Consensus::Params&);
 bool CheckProofOfWorkImpl(uint256 hash, unsigned int nBits, const Consensus::Params&);

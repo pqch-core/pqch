@@ -148,7 +148,7 @@ bool CheckBlockProofOfWork(const CBlockHeader& header, const CBlockIndex* pindex
     return CheckBlockProofOfWork(header, pindexPrev, params, error);
 }
 
-bool CheckBlockProofOfWork(const CBlockHeader& header, const CBlockIndex* pindexPrev, const Consensus::Params& params, std::string& error)
+bool CheckHeaderProofOfWork(const CBlockHeader& header, int height, const uint256& seed, const Consensus::Params& params, std::string& error)
 {
     if (!params.fPowUseRandomX) {
         if (header.IsAuxPow()) { error = "auxpow not allowed"; return false; }
@@ -159,7 +159,7 @@ bool CheckBlockProofOfWork(const CBlockHeader& header, const CBlockIndex* pindex
     if (header.IsAuxPow()) {
         // PQCH: merged mined with Monero (auxpow.h). Cheap structural checks first, then one RandomX
         // hash of the Monero hashing blob under the Monero key.
-        if (pindexPrev->nHeight + 1 < params.nAuxPowHeight) { error = "auxpow-not-active"; return false; }
+        if (height < params.nAuxPowHeight) { error = "auxpow-not-active"; return false; }
         if (!header.auxpow) { error = "auxpow-missing"; return false; }
         std::vector<unsigned char> blob;
         std::string detail;
@@ -167,15 +167,20 @@ bool CheckBlockProofOfWork(const CBlockHeader& header, const CBlockIndex* pindex
             error = "bad-auxpow (" + detail + ")";
             return false;
         }
-        const uint256& seed{header.auxpow->seed_hash};
-        if (CheckProofOfWork(RandomXHash(std::span<const unsigned char>{seed.data(), seed.size()}, blob), header.nBits, params)) return true;
+        const uint256& aux_seed{header.auxpow->seed_hash};
+        if (CheckProofOfWork(RandomXHash(std::span<const unsigned char>{aux_seed.data(), aux_seed.size()}, blob), header.nBits, params)) return true;
         error = "high-hash";
         return false;
     }
-    const uint256 seed{GetRandomXSeedHash(pindexPrev, params)};
     if (CheckProofOfWork(GetRandomXPowHash(header, seed), header.nBits, params)) return true;
     error = "high-hash";
     return false;
+}
+
+bool CheckBlockProofOfWork(const CBlockHeader& header, const CBlockIndex* pindexPrev, const Consensus::Params& params, std::string& error)
+{
+    const bool direct{params.fPowUseRandomX && !header.IsAuxPow()};
+    return CheckHeaderProofOfWork(header, pindexPrev->nHeight + 1, direct ? GetRandomXSeedHash(pindexPrev, params) : uint256{}, params, error);
 }
 
 bool CheckAuxSeed(const uint256& seed, const CBlockIndex* pindexPrev, const Consensus::Params& params, bool& is_new, std::string& error)

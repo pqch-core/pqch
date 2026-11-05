@@ -152,27 +152,33 @@ arith_uint256 CalculateASERT(const arith_uint256& refTarget, const int64_t nPowT
     return nextTarget;
 }
 
+ASERTAnchor GetASERTAnchor(const CBlockIndex& index, const Consensus::Params& params)
+{
+    assert(index.nHeight >= params.nASERTAnchorHeight);
+    const CBlockIndex* pindexAnchor = index.GetAncestor(params.nASERTAnchorHeight);
+    assert(pindexAnchor != nullptr);
+    // The absolute ASERT formulation uses the timestamp of the anchor block's parent.
+    // For a genesis anchor there is no parent: use one ideal block interval before genesis.
+    return ASERTAnchor{
+        .height = pindexAnchor->nHeight,
+        .nBits = pindexAnchor->nBits,
+        .parent_time = pindexAnchor->pprev ? pindexAnchor->pprev->GetBlockTime() : pindexAnchor->GetBlockTime() - params.nPowTargetSpacing,
+    };
+}
+
+unsigned int ASERTWorkRequiredAfter(int64_t prev_height, int64_t prev_time, const ASERTAnchor& anchor, const Consensus::Params& params)
+{
+    assert(prev_height >= anchor.height);
+    const arith_uint256 powLimit = UintToArith256(params.powLimit);
+    arith_uint256 refTarget;
+    refTarget.SetCompact(anchor.nBits);
+    return CalculateASERT(refTarget, params.nPowTargetSpacing, prev_time - anchor.parent_time, prev_height - anchor.height, powLimit, params.nASERTHalfLife).GetCompact();
+}
+
 unsigned int GetNextASERTWorkRequired(const CBlockIndex* pindexPrev, const Consensus::Params& params)
 {
     assert(pindexPrev != nullptr);
-    assert(pindexPrev->nHeight >= params.nASERTAnchorHeight);
-
-    const CBlockIndex* pindexAnchor = pindexPrev->GetAncestor(params.nASERTAnchorHeight);
-    assert(pindexAnchor != nullptr);
-
-    // The absolute ASERT formulation uses the timestamp of the anchor block's parent.
-    // For a genesis anchor there is no parent: use one ideal block interval before genesis.
-    const int64_t nAnchorParentTime = pindexAnchor->pprev ? pindexAnchor->pprev->GetBlockTime()
-                                                          : pindexAnchor->GetBlockTime() - params.nPowTargetSpacing;
-
-    const int64_t nTimeDiff = pindexPrev->GetBlockTime() - nAnchorParentTime;
-    const int64_t nHeightDiff = pindexPrev->nHeight - pindexAnchor->nHeight;
-
-    const arith_uint256 powLimit = UintToArith256(params.powLimit);
-    arith_uint256 refTarget;
-    refTarget.SetCompact(pindexAnchor->nBits);
-
-    return CalculateASERT(refTarget, params.nPowTargetSpacing, nTimeDiff, nHeightDiff, powLimit, params.nASERTHalfLife).GetCompact();
+    return ASERTWorkRequiredAfter(pindexPrev->nHeight, pindexPrev->GetBlockTime(), GetASERTAnchor(*pindexPrev, params), params);
 }
 
 // Check that on difficulty adjustments, the new difficulty does not increase
@@ -182,8 +188,7 @@ bool PermittedDifficultyTransition(const Consensus::Params& params, int64_t heig
     if (params.fPowAllowMinDifficultyBlocks) return true;
 
     // PQCH: under ASERT the target changes on every block, as a function of timestamps that are not
-    // available here. Header presync therefore relies on its other protections (minimum chain work
-    // commitments). TODO(PQCH phase 4): review a timestamp-aware bound for header presync.
+    // available here. Header presync checks the exact ASERT target instead (headerssync.cpp).
     if (params.fPowUseASERT) return true;
 
     if (height % params.DifficultyAdjustmentInterval() == 0) {

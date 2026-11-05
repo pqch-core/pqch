@@ -60,6 +60,12 @@ bool CheckBlockProofOfWork(const CBlockHeader& header, const CBlockIndex* pindex
 bool CheckBlockProofOfWork(const CBlockHeader& header, const CBlockIndex* pindexPrev, const Consensus::Params& params, std::string& error);
 
 /**
+ * PQCH: proof of work of a header at `height` whose direct RandomX key is `seed` (unused for merged
+ * mined headers, which carry their Monero key). For headers outside the block index (presync).
+ */
+bool CheckHeaderProofOfWork(const CBlockHeader& header, int height, const uint256& seed, const Consensus::Params& params, std::string& error);
+
+/**
  * PQCH: Monero key rule for a merged mined header at pindexPrev->nHeight + 1 using `seed`
  * (Consensus::Params::nAuxSeedWindow). Sets `is_new` when no block of the window on this chain
  * introduced the key. Fails ("auxpow-too-many-seeds") if a new key would exceed the window's limit.

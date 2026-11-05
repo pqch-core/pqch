@@ -82,8 +82,16 @@ struct HeadersGeneratorSetup : public RegTestingSetup {
 
     HeadersSyncState CreateState()
     {
+        // PQCH: these tests cover the commitment logic with SHA256d-mined headers; presync's
+        // RandomX checks are covered by pqch_presync_tests (mining thousands of RandomX headers
+        // here would take minutes).
+        static const Consensus::Params sha256_params{[] {
+            Consensus::Params p{Params().GetConsensus()};
+            p.fPowUseRandomX = false;
+            return p;
+        }()};
         return {/*id=*/0,
-                Params().GetConsensus(),
+                sha256_params,
                 HeadersSyncParams{
                     .commitment_period = COMMITMENT_PERIOD,
                     .redownload_buffer_size = REDOWNLOAD_BUFFER_SIZE,

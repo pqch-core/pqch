@@ -4,11 +4,16 @@
 
 #include <headerssync.h>
 
+#include <auxpow.h>
+#include <pow_randomx.h>
+
 #include <pow.h>
 #include <util/check.h>
 #include <util/log.h>
 #include <util/time.h>
 #include <util/vector.h>
+
+#include <algorithm>
 
 // Our memory analysis in headerssync-params.py assumes this many bytes for a
 // CompressedHeader (we should re-calculate parameters if we compress further).
@@ -49,6 +54,14 @@ HeadersSyncState::HeadersSyncState(NodeId id,
             FormatISO8601DateTime(chain_start.GetMedianTimePast()))};
     }
     m_max_commitments = 6 * max_seconds_since_start / m_params.commitment_period;
+
+    // PQCH: state for the presync checks of RandomX, ASERT and merged mined headers.
+    if (m_consensus_params.fPowUseASERT && chain_start.nHeight >= m_consensus_params.nASERTAnchorHeight) {
+        m_asert_anchor = GetASERTAnchor(chain_start, m_consensus_params);
+    }
+    for (const CBlockIndex* p{&chain_start}; p && m_recent_times.size() < 11; p = p->pprev) {
+        m_recent_times.push_front(p->GetBlockTime());
+    }
 
     LogDebug(BCLog::NET, "Initial headers sync started with peer=%d: height=%i, max_commitments=%i, min_work=%s\n", m_id, m_current_height, m_max_commitments, m_minimum_required_work.ToString());
 }
@@ -200,6 +213,8 @@ bool HeadersSyncState::ValidateAndProcessSingleHeader(const CBlockHeader& curren
         return false;
     }
 
+    if (!CheckPresyncHeader(current, next_height)) return false;
+
     if (next_height % m_params.commitment_period == m_commit_offset) {
         // Add a commitment.
         m_header_commitments.push_back(m_hasher(current.GetHash()) & 1);
@@ -217,6 +232,89 @@ bool HeadersSyncState::ValidateAndProcessSingleHeader(const CBlockHeader& curren
     m_last_header_received = current;
     m_current_height = next_height;
 
+    return true;
+}
+
+std::optional<uint256> HeadersSyncState::SeedHashFor(int64_t height) const
+{
+    const int64_t seed_height{GetRandomXSeedHeight(height, m_consensus_params)};
+    if (seed_height <= m_chain_start.nHeight) return m_chain_start.GetAncestor(seed_height)->GetBlockHash();
+    const auto it{m_seed_hashes.find(seed_height)};
+    if (it == m_seed_hashes.end()) return std::nullopt;
+    return it->second;
+}
+
+bool HeadersSyncState::CheckPresyncHeader(const CBlockHeader& current, int64_t height)
+{
+    const Consensus::Params& params{m_consensus_params};
+    const auto abort{[&](const char* reason) {
+        LogDebug(BCLog::NET, "Initial headers sync aborted with peer=%d: %s at height=%i (presync phase)\n", m_id, reason, height);
+        return false;
+    }};
+
+    // Timestamps: after the median of the last 11, not too far in the future. Without these the
+    // ASERT target, which follows the timestamps, could be pushed up to claim work cheaply.
+    std::vector<int64_t> times{m_recent_times.begin(), m_recent_times.end()};
+    std::sort(times.begin(), times.end());
+    if (!times.empty() && current.GetBlockTime() <= times[times.size() / 2]) return abort("time-too-old");
+    if (current.GetBlockTime() > TicksSinceEpoch<std::chrono::seconds>(NodeClock::now()) + MAX_FUTURE_BLOCK_TIME) return abort("time-too-new");
+
+    // Difficulty: under ASERT the target of every header follows from its parent's time and height.
+    if (params.fPowUseASERT && height - 1 >= m_asert_anchor.height &&
+        current.nBits != ASERTWorkRequiredAfter(height - 1, m_last_header_received.GetBlockTime(), m_asert_anchor, params)) {
+        return abort("bad-diffbits");
+    }
+
+    // Merged mining: the proof's structure binds it to this header (cheap, every header), and the
+    // Monero key rule bounds the RandomX caches a peer can make us build.
+    std::optional<uint256> new_aux_seed;
+    if (current.IsAuxPow()) {
+        if (height < params.nAuxPowHeight) return abort("auxpow-not-active");
+        if (!current.auxpow) return abort("auxpow-missing");
+        std::vector<unsigned char> blob;
+        std::string detail;
+        if (!auxpow::CheckAuxPowHeader(*current.auxpow, current.GetHash(), params.hashGenesisBlock, blob, detail)) return abort("bad-auxpow");
+        const uint256& seed{current.auxpow->seed_hash};
+        const int64_t window_start{height - params.nAuxSeedWindow};
+        std::erase_if(m_new_aux_seeds, [&](const auto& e) { return e.first <= window_start; });
+        bool known{std::any_of(m_new_aux_seeds.begin(), m_new_aux_seeds.end(), [&](const auto& e) { return e.second == seed; })};
+        int new_in_window{static_cast<int>(m_new_aux_seeds.size())};
+        // Keys introduced in the block index part of the window (up to m_chain_start).
+        const CBlockIndex* p{m_chain_start.m_last_new_aux_seed};
+        for (int steps{0}; p && p->nHeight > window_start && steps <= params.nAuxNewSeedsPerWindow; ++steps) {
+            if (p->AuxSeed() == seed) known = true;
+            ++new_in_window;
+            p = p->pprev ? p->pprev->m_last_new_aux_seed : nullptr;
+        }
+        if (!known) {
+            if (new_in_window >= params.nAuxNewSeedsPerWindow) return abort("auxpow-too-many-seeds");
+            new_aux_seed = seed;
+        }
+    }
+
+    // Proof of work, for a random sample of headers and for the one that reaches the minimum work.
+    // A peer cannot tell which headers are checked, so a chain with fake work is caught with high
+    // probability before it is ever redownloaded.
+    if (params.fPowUseRandomX) {
+        const bool reaches_min_work{m_current_chain_work < m_minimum_required_work && m_current_chain_work + GetBlockProof(current) >= m_minimum_required_work};
+        const uint32_t period{std::max<uint32_t>(1, m_params.pow_sample_period)};
+        if (reaches_min_work || m_rng.randrange(period) == 0) {
+            uint256 seed;
+            if (!current.IsAuxPow()) {
+                const auto s{SeedHashFor(height)};
+                if (!s) return abort("unknown-randomx-key");
+                seed = *s;
+            }
+            std::string error;
+            if (!CheckHeaderProofOfWork(current, height, seed, params, error)) return abort("high-hash");
+        }
+    }
+
+    // Record what later headers need.
+    if (height % params.nRandomXSeedInterval == 0) m_seed_hashes[height] = current.GetHash();
+    m_recent_times.push_back(current.GetBlockTime());
+    if (m_recent_times.size() > 11) m_recent_times.pop_front();
+    if (new_aux_seed) m_new_aux_seeds.emplace_back(height, *new_aux_seed);
     return true;
 }
 

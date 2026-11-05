@@ -67,6 +67,9 @@ struct HeadersSyncParams {
     //! Minimum number of validated headers to accumulate in the redownload
     //! buffer before feeding them into the permanent block index.
     size_t redownload_buffer_size{0};
+    //! PQCH: during presync, check the RandomX proof of work of one header in this many, chosen at
+    //! random (each check costs ~30 ms), plus the header that reaches the minimum chain work.
+    uint32_t pow_sample_period{64};
 };
 
 /**

@@ -9,12 +9,16 @@
 #include <chain.h>
 #include <consensus/params.h>
 #include <net.h>
+#include <pow.h>
 #include <primitives/block.h>
+#include <random.h>
 #include <uint256.h>
 #include <util/bitdeque.h>
 #include <util/hasher.h>
 
 #include <deque>
+#include <map>
+#include <optional>
 #include <stdexcept>
 #include <vector>
 
@@ -290,6 +294,23 @@ private:
 
     /** Current state of our headers sync. */
     State m_download_state{State::PRESYNC};
+
+    // PQCH: presync checks for RandomX, ASERT and merged mining (ValidateAndProcessSingleHeader).
+    /** Checks one presync header: timestamps, exact ASERT target, merged mining proof and Monero
+     *  key rule, and (sampled) the RandomX proof of work. */
+    bool CheckPresyncHeader(const CBlockHeader& current, int64_t height);
+    /** RandomX key for a header at `height` of the peer's chain, or nullopt if unknown. */
+    std::optional<uint256> SeedHashFor(int64_t height) const;
+    /** ASERT anchor of the chain (from m_chain_start). */
+    ASERTAnchor m_asert_anchor;
+    /** Timestamps of the last 11 headers (median time past). */
+    std::deque<int64_t> m_recent_times;
+    /** Hashes of the peer's headers above m_chain_start at RandomX key heights. */
+    std::map<int64_t, uint256> m_seed_hashes;
+    /** Monero keys introduced by the peer's headers above m_chain_start, with their height. */
+    std::vector<std::pair<int64_t, uint256>> m_new_aux_seeds;
+    /** Chooses the headers whose proof of work is checked; unpredictable to the peer. */
+    FastRandomContext m_rng;
 };
 
 #endif // BITCOIN_HEADERSSYNC_H
