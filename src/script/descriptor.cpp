@@ -1589,7 +1589,11 @@ class P2MRDescriptor final : public DescriptorImpl
     }
     p2mr::Path RecoveryPath() const
     {
+        // The recovery key sits next to the addresses: prefix/2147483647h. For a fixed-index
+        // descriptor the last step is the address index, so p2mr(S/0h/5h) is the same address as
+        // index 5 of p2mr(S/0h/*h).
         p2mr::Path path{m_path};
+        if (!m_range && !path.empty()) path.pop_back();
         path.push_back(p2mr::RECOVERY_KEY_INDEX | p2mr::HARDENED);
         return path;
     }
@@ -2678,6 +2682,7 @@ std::vector<std::unique_ptr<DescriptorImpl>> ParseScript(uint32_t& key_exp_index
             const p2mr::PQSeed seed{*bytes};
             seed_id = seed.Id();
             out.pq_seeds.emplace(seed_id, seed);
+            memory_cleanse(const_cast<unsigned char*>(bytes->data()), bytes->size());
         } else {
             seed_id = uint256{std::span<const unsigned char>{*bytes}};
         }
@@ -2712,6 +2717,10 @@ std::vector<std::unique_ptr<DescriptorImpl>> ParseScript(uint32_t& key_exp_index
                 }
                 path.push_back(*n | p2mr::HARDENED);
             }
+        }
+        if (!range && !path.empty() && path.back() == (p2mr::RECOVERY_KEY_INDEX | p2mr::HARDENED)) {
+            error = "p2mr(): 2147483647h is the recovery key's position, not an address";
+            return {};
         }
         ret.emplace_back(std::make_unique<P2MRDescriptor>(seed_id, std::move(path), range));
         return ret;

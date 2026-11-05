@@ -134,6 +134,19 @@ Uma revisão feita por quem não escreveu o código encontrou sete erros, todos 
 A estimativa de taxas também foi corrigida: contava a contagem de elementos duas vezes e não
 contava o byte de sighash. Agora assume sempre o caso maior.
 
+## Segunda revisão independente (semente pós-quântica)
+
+Esta revisão não encontrou erros graves. A semente nunca fica em claro no disco numa carteira
+cifrada, nenhum RPC indevido a mostra e não fica guardada nenhuma chave de curva elíptica que leve
+até ela. Foram corrigidos:
+
+- `p2mr(S/…/5h)`, de índice fixo, dava um endereço diferente do índice 5 de `p2mr(S/…/*h)`. Passou
+  a dar o mesmo.
+- `getdescriptorinfo` dizia `hasprivatekeys: false` para `pqprv(…)`.
+- Cópias temporárias da semente não eram apagadas.
+- A migração de uma carteira antiga do Bitcoin derivava a semente de uma chave cuja chave pública
+  ficava no ficheiro antigo. Agora usa uma semente nova.
+
 ## Ficheiro da carteira e computador quântico
 
 A primeira versão derivava as chaves de uma cadeia BIP32. O ficheiro da carteira guardava então
@@ -159,6 +172,14 @@ quânticos, mas depende de uma frase-passe forte.
 - Rever os alvos de fuzzing que assinam ou inferem descritores, porque agora leem os parâmetros da
   rede. O `psbt` já foi corrigido.
 - A migração de carteiras antigas do Bitcoin para descritores não é suportada nas redes PQCH.
+- **Carteira cifrada e bloqueada:** não consegue gerar endereços novos, porque sem a semente nada
+  se deriva. Uma reanálise longa com a carteira bloqueada para no limite de endereços já gerados.
+  As moedas mais à frente só aparecem depois de desbloquear e reanalisar; não se perdem.
+- **`importdescriptors` sem transação na base de dados:** se a importação falhar a meio, pode ficar
+  um registo de semente em claro sem descritor. Correr a importação numa transação.
+- **Mensagens de erro do `importdescriptors`:** repetem o descritor e, com ele, a semente. O
+  Bitcoin faz o mesmo com a xprv.
+- **Carteiras de teste da primeira versão** (`p2mr(xprv…)`) já não carregam.
 - Carteiras de hardware com ML-DSA e SLH-DSA. Não são compatíveis com as carteiras BIP32 atuais.
 - Palavras de recuperação BIP39 (24 palavras, secção 21.5) e a cópia de segurança obrigatória no
   primeiro arranque (secção 20). Ficam para a aplicação. A semente pós-quântica pode sair das 24

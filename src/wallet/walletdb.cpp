@@ -249,8 +249,9 @@ bool WalletBatch::WriteCryptedDescriptorKey(const uint256& desc_id, const CPubKe
 bool WalletBatch::WriteDescriptorPQSeed(const uint256& desc_id, const p2mr::PQSeed& seed)
 {
     const uint256 id{seed.Id()};
-    const std::vector<unsigned char> bytes{seed.bytes.begin(), seed.bytes.end()};
+    std::vector<unsigned char> bytes{seed.bytes.begin(), seed.bytes.end()};
     const bool ok{WriteIC(std::make_pair(DBKeys::WALLETDESCRIPTORPQSEED, std::make_pair(desc_id, id)), bytes, false)};
+    memory_cleanse(bytes.data(), bytes.size());
     return ok;
 }
 

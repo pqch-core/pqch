@@ -204,6 +204,17 @@ BOOST_AUTO_TEST_CASE(p2mr_descriptor_expand_and_sign)
     BOOST_REQUIRE(p2mr::DeriveAddressKeys(seed, PATH1, RECOVERY, lib.keys));
     BOOST_CHECK(e1.scripts[0] == lib.ScriptPubKey());
 
+    // A fixed-index descriptor is the same address as that index of the ranged one.
+    {
+        FlatSigningProvider k2;
+        auto fixed{Parse("p2mr(pqprv(" + HexStr(seed.bytes) + ")/360h/0h/0h/0h/1h)", k2, error, false)};
+        BOOST_REQUIRE(fixed.size() == 1);
+        Expanded f;
+        BOOST_REQUIRE(fixed[0]->Expand(0, k2, f.scripts, f.out));
+        BOOST_CHECK(f.scripts == e1.scripts);
+        BOOST_CHECK(Parse("p2mr(pqprv(" + HexStr(seed.bytes) + ")/360h/2147483647h)", k2, error, false).empty());
+    }
+
     // Signing: the solving data from the cache plus the seed (ExpandPrivate).
     FlatSigningProvider signer{from_cache.out};
     desc.ExpandPrivate(0, keys, signer);

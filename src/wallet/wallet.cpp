@@ -4079,8 +4079,9 @@ util::Result<void> CWallet::ApplyMigrationData(WalletBatch& local_wallet_batch, 
     // Setup new descriptors (only if we are migrating any key material)
     SetWalletFlagWithDB(local_wallet_batch, WALLET_FLAG_DESCRIPTORS | WALLET_FLAG_LAST_HARDENED_XPUB_CACHED);
     if (has_spendable_material && !IsWalletFlagSet(WALLET_FLAG_DISABLE_PRIVATE_KEYS)) {
-        // Use the existing master key if we have it
-        if (data.master_key.key.IsValid()) {
+        // Use the existing master key if we have it. PQCH: not on PQCH chains, where the new
+        // post-quantum seed must not come from a key whose public key the legacy wallet stored.
+        if (data.master_key.key.IsValid() && !IsPQWalletChain()) {
             SetupDescriptorScriptPubKeyMans(local_wallet_batch, data.master_key);
         } else {
             // Setup with a new seed if we don't.

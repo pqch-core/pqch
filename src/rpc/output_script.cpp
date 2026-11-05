@@ -224,7 +224,7 @@ static RPCMethod getdescriptorinfo()
             result.pushKV("checksum", GetDescriptorChecksum(request.params[0].get_str()));
             result.pushKV("isrange", descs.at(0)->IsRange());
             result.pushKV("issolvable", descs.at(0)->IsSolvable());
-            result.pushKV("hasprivatekeys", provider.keys.size() > 0);
+            result.pushKV("hasprivatekeys", provider.keys.size() > 0 || !provider.pq_seeds.empty()); // PQCH: post-quantum seeds
             return result;
         },
     };
