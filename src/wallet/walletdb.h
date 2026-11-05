@@ -259,6 +259,9 @@ public:
     bool WriteDescriptorParentCache(const CExtPubKey& xpub, const uint256& desc_id, uint32_t key_exp_index);
     bool WriteDescriptorLastHardenedCache(const CExtPubKey& xpub, const uint256& desc_id, uint32_t key_exp_index);
     bool WriteDescriptorCacheItems(const uint256& desc_id, const DescriptorCache& cache);
+    //! PQCH: post-quantum seed of a descriptor, plain or encrypted (the encrypted record replaces the plain one)
+    bool WriteDescriptorPQSeed(const uint256& desc_id, const p2mr::PQSeed& seed);
+    bool WriteCryptedDescriptorPQSeed(const uint256& desc_id, const uint256& seed_id, const std::vector<unsigned char>& secret);
 
     bool WriteLockedUTXO(const COutPoint& output);
     bool EraseLockedUTXO(const COutPoint& output);

@@ -24,7 +24,6 @@
 #include <script/solver.h>
 #include <script/verify_flags.h>
 #include <serialize.h>
-#include <support/cleanse.h>
 #include <uint256.h>
 #include <util/check.h>
 #include <util/translation.h>
@@ -684,29 +683,25 @@ static bool SignP2MR(const SigningProvider& provider, const BaseSignatureCreator
     const uint256 leaf_hash{spend.LeafHash(recovery)};
     const CScript leaf{spend.Leaf(recovery)};
     std::vector<valtype> stack;
+    p2mr::PQSeed seed;
+    const bool have_seed{provider.GetPQSeed(spend.seed_id, seed)};
     if (!recovery) {
         // Leaf A: <x-only> OP_CHECKSIGVERIFY <ML-DSA> OP_CHECKSIGMLDSA. Witness: ML-DSA sig, Schnorr sig.
-        CKey owner;
         p2mr::LeafAKeys keys;
-        const bool have{provider.GetKey(spend.owner.GetID(), owner) && p2mr::DeriveLeafAKeys(owner, keys)};
+        const bool have{have_seed && p2mr::DeriveLeafAKeys(seed, spend.path, keys)};
         if (have && (XOnlyPubKey{keys.schnorr.GetPubKey()} != spend.keys.schnorr || keys.mldsa.pubkey != spend.keys.mldsa)) return false;
         std::vector<unsigned char> schnorr_sig, pq_sig;
-        const bool ok{creator.CreateP2MRSchnorrSig(have ? &keys.schnorr : nullptr, schnorr_sig, leaf_hash) &&
-                      creator.CreatePQSig(have ? &keys.mldsa : nullptr, PQAlgorithm::ML_DSA_44, pq_sig, leaf_hash)};
-        memory_cleanse(keys.mldsa.seckey.data(), keys.mldsa.seckey.size());
-        if (!ok) return false;
+        if (!creator.CreateP2MRSchnorrSig(have ? &keys.schnorr : nullptr, schnorr_sig, leaf_hash) ||
+            !creator.CreatePQSig(have ? &keys.mldsa : nullptr, PQAlgorithm::ML_DSA_44, pq_sig, leaf_hash)) return false;
         stack.push_back(std::move(pq_sig));
         stack.push_back(std::move(schnorr_sig));
     } else {
         // Leaf B: <salt> OP_DROP <SLH-DSA> OP_CHECKSIGSLHDSA. Witness: SLH-DSA sig.
-        CKey owner;
         pqc::KeyPair key;
-        const bool have{provider.GetKey(spend.keys.recovery_owner.GetID(), owner) && p2mr::DeriveRecoveryKey(owner, key)};
+        const bool have{have_seed && p2mr::DeriveRecoveryKey(seed, spend.recovery_path, key)};
         if (have && key.pubkey != spend.keys.slhdsa) return false;
         std::vector<unsigned char> pq_sig;
-        const bool ok{creator.CreatePQSig(have ? &key : nullptr, PQAlgorithm::SLH_DSA_SHA2_128S, pq_sig, leaf_hash)};
-        memory_cleanse(key.seckey.data(), key.seckey.size());
-        if (!ok) return false;
+        if (!creator.CreatePQSig(have ? &key : nullptr, PQAlgorithm::SLH_DSA_SHA2_128S, pq_sig, leaf_hash)) return false;
         stack.push_back(std::move(pq_sig));
     }
     stack.emplace_back(leaf.begin(), leaf.end());

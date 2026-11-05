@@ -58,6 +58,11 @@ bool HidingSigningProvider::GetP2MRSpendData(const uint256& root, p2mr::SpendDat
 {
     return m_provider->GetP2MRSpendData(root, data);
 }
+bool HidingSigningProvider::GetPQSeed(const uint256& id, p2mr::PQSeed& seed) const
+{
+    if (m_hide_secret) return false;
+    return m_provider->GetPQSeed(id, seed);
+}
 bool HidingSigningProvider::GetTaprootBuilder(const XOnlyPubKey& output_key, TaprootBuilder& builder) const
 {
     return m_provider->GetTaprootBuilder(output_key, builder);
@@ -116,6 +121,10 @@ bool FlatSigningProvider::GetP2MRSpendData(const uint256& root, p2mr::SpendData&
 {
     return LookupHelper(p2mr_spenddata, root, data);
 }
+bool FlatSigningProvider::GetPQSeed(const uint256& id, p2mr::PQSeed& seed) const
+{
+    return LookupHelper(pq_seeds, id, seed);
+}
 bool FlatSigningProvider::GetTaprootBuilder(const XOnlyPubKey& output_key, TaprootBuilder& builder) const
 {
     return LookupHelper(tr_trees, output_key, builder);
@@ -164,8 +173,7 @@ FlatSigningProvider& FlatSigningProvider::Merge(FlatSigningProvider&& b)
     tr_trees.merge(b.tr_trees);
     aggregate_pubkeys.merge(b.aggregate_pubkeys);
     p2mr_spenddata.merge(b.p2mr_spenddata);
-    // The latest expansion wins: P2MRDescriptor::MakeScripts reads the keys it has just derived.
-    for (auto& [child, keys] : b.p2mr_keys) p2mr_keys.insert_or_assign(child, std::move(keys));
+    pq_seeds.merge(b.pq_seeds);
     // We shouldn't be merging 2 different sessions, just overwrite with b's sessions.
     if (!musig2_secnonces) musig2_secnonces = b.musig2_secnonces;
     return *this;
@@ -362,6 +370,14 @@ bool MultiSigningProvider::GetP2MRSpendData(const uint256& root, p2mr::SpendData
 {
     for (const auto& provider: m_providers) {
         if (provider->GetP2MRSpendData(root, data)) return true;
+    }
+    return false;
+}
+
+bool MultiSigningProvider::GetPQSeed(const uint256& id, p2mr::PQSeed& seed) const
+{
+    for (const auto& provider: m_providers) {
+        if (provider->GetPQSeed(id, seed)) return true;
     }
     return false;
 }

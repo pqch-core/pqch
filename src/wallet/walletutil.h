@@ -6,6 +6,7 @@
 #define BITCOIN_WALLET_WALLETUTIL_H
 
 #include <script/descriptor.h>
+#include <script/p2mr.h>
 #include <util/fs.h>
 
 #include <vector>
@@ -156,6 +157,9 @@ WalletDescriptor GenerateWalletDescriptor(const CExtPubKey& master_key, const Ou
  * nobody can spend.
  */
 bool IsPQWalletChain();
+
+/** PQCH: the p2mr() descriptor (receive or change) of a wallet's post-quantum seed. */
+WalletDescriptor GenerateP2MRWalletDescriptor(const p2mr::PQSeed& seed, bool internal);
 } // namespace wallet
 
 #endif // BITCOIN_WALLET_WALLETUTIL_H

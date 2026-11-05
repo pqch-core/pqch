@@ -179,6 +179,8 @@ public:
     virtual bool GetTaprootBuilder(const XOnlyPubKey& output_key, TaprootBuilder& builder) const { return false; }
     /** PQCH: spending data of a standard P2MR output, by its Merkle root (the witness program). */
     virtual bool GetP2MRSpendData(const uint256& root, p2mr::SpendData& data) const { return false; }
+    /** PQCH: a post-quantum wallet seed by its id (private, like GetKey). */
+    virtual bool GetPQSeed(const uint256& id, p2mr::PQSeed& seed) const { return false; }
     virtual std::vector<CPubKey> GetMuSig2ParticipantPubkeys(const CPubKey& pubkey) const { return {}; }
     virtual std::map<CPubKey, std::vector<CPubKey>> GetAllMuSig2ParticipantPubkeys() const {return {}; }
     virtual void SetMuSig2SecNonce(const uint256& id, MuSig2SecNonce&& nonce) const {}
@@ -228,6 +230,7 @@ public:
     bool GetTaprootSpendData(const XOnlyPubKey& output_key, TaprootSpendData& spenddata) const override;
     bool GetTaprootBuilder(const XOnlyPubKey& output_key, TaprootBuilder& builder) const override;
     bool GetP2MRSpendData(const uint256& root, p2mr::SpendData& data) const override;
+    bool GetPQSeed(const uint256& id, p2mr::PQSeed& seed) const override;
     std::vector<CPubKey> GetMuSig2ParticipantPubkeys(const CPubKey& pubkey) const override;
     std::map<CPubKey, std::vector<CPubKey>> GetAllMuSig2ParticipantPubkeys() const override;
     void SetMuSig2SecNonce(const uint256& id, MuSig2SecNonce&& nonce) const override;
@@ -244,7 +247,7 @@ struct FlatSigningProvider final : public SigningProvider
     std::map<XOnlyPubKey, TaprootBuilder> tr_trees; /** Map from output key to Taproot tree (which can then make the TaprootSpendData */
     std::map<CPubKey, std::vector<CPubKey>> aggregate_pubkeys; /** MuSig2 aggregate pubkeys */
     std::map<uint256, p2mr::SpendData> p2mr_spenddata; /** PQCH: standard P2MR outputs by Merkle root */
-    std::map<CPubKey, p2mr::AddressKeys> p2mr_keys;    /** PQCH: P2MR address keys by BIP32 child key (descriptor expansion) */
+    std::map<uint256, p2mr::PQSeed> pq_seeds;          /** PQCH: post-quantum wallet seeds by id (private) */
     std::map<uint256, MuSig2SecNonce>* musig2_secnonces{nullptr};
 
     bool GetCScript(const CScriptID& scriptid, CScript& script) const override;
@@ -255,6 +258,7 @@ struct FlatSigningProvider final : public SigningProvider
     bool GetTaprootSpendData(const XOnlyPubKey& output_key, TaprootSpendData& spenddata) const override;
     bool GetTaprootBuilder(const XOnlyPubKey& output_key, TaprootBuilder& builder) const override;
     bool GetP2MRSpendData(const uint256& root, p2mr::SpendData& data) const override;
+    bool GetPQSeed(const uint256& id, p2mr::PQSeed& seed) const override;
     std::vector<CPubKey> GetMuSig2ParticipantPubkeys(const CPubKey& pubkey) const override;
     std::map<CPubKey, std::vector<CPubKey>> GetAllMuSig2ParticipantPubkeys() const override;
     void SetMuSig2SecNonce(const uint256& id, MuSig2SecNonce&& nonce) const override;
@@ -354,6 +358,7 @@ public:
     bool GetTaprootSpendData(const XOnlyPubKey& output_key, TaprootSpendData& spenddata) const override;
     bool GetTaprootBuilder(const XOnlyPubKey& output_key, TaprootBuilder& builder) const override;
     bool GetP2MRSpendData(const uint256& root, p2mr::SpendData& data) const override;
+    bool GetPQSeed(const uint256& id, p2mr::PQSeed& seed) const override;
 };
 
 #endif // BITCOIN_SCRIPT_SIGNINGPROVIDER_H

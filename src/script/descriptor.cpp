@@ -252,9 +252,6 @@ public:
     /** Whether this PubkeyProvider can always provide a public key without cache or private key arguments */
     virtual bool CanSelfExpand() const = 0;
 
-    /** PQCH: whether every derivation step is hardened (or there is none), as p2mr() requires */
-    virtual bool IsHardenedOnly() const { return false; }
-
 protected:
     static bool DetermineApostropheUse(StringType type, bool normalized, bool public_apostrophe)
     {
@@ -352,7 +349,6 @@ public:
         return std::make_unique<OriginPubkeyProvider>(m_expr_index, m_origin, m_provider->Clone(), m_apostrophe);
     }
     bool CanSelfExpand() const override { return m_provider->CanSelfExpand(); }
-    bool IsHardenedOnly() const override { return m_provider->IsHardenedOnly(); }
 };
 
 /** An object representing a parsed constant public key in a descriptor. */
@@ -418,7 +414,6 @@ public:
         return std::make_unique<ConstPubkeyProvider>(m_expr_index, m_pubkey, m_xonly);
     }
     bool CanSelfExpand() const final { return true; }
-    bool IsHardenedOnly() const override { return !m_xonly; }
 };
 
 enum class DeriveType {
@@ -639,11 +634,6 @@ public:
         return std::make_unique<BIP32PubkeyProvider>(m_expr_index, m_root_extkey, m_path, m_derive, m_apostrophe);
     }
     bool CanSelfExpand() const override { return !IsHardened(); }
-    bool IsHardenedOnly() const override
-    {
-        if (m_derive == DeriveType::UNHARDENED_RANGED) return false;
-        return std::all_of(m_path.begin(), m_path.end(), [](uint32_t step) { return (step >> 31) != 0; });
-    }
 };
 
 /** PubkeyProvider for a musig() expression */
@@ -935,7 +925,7 @@ public:
     }
 
     // NOLINTNEXTLINE(misc-no-recursion)
-    bool IsRange() const final
+    bool IsRange() const override
     {
         for (const auto& pubkey : m_pubkey_args) {
             if (pubkey->IsRange()) return true;
@@ -1038,6 +1028,11 @@ public:
     // NOLINTNEXTLINE(misc-no-recursion)
     bool ExpandHelper(int pos, const SigningProvider& arg, const DescriptorCache* read_cache, std::vector<CScript>& output_scripts, FlatSigningProvider& out, DescriptorCache* write_cache) const
     {
+        if (auto scripts{ExpandScriptsAt(pos, arg, read_cache, write_cache, out)}) {
+            if (scripts->empty()) return false;
+            output_scripts = std::move(*scripts);
+            return true;
+        }
         FlatSigningProvider subprovider;
         std::vector<CPubKey> pubkeys;
         pubkeys.reserve(m_pubkey_args.size());
@@ -1055,16 +1050,17 @@ public:
             assert(outscripts.size() == 1);
             subscripts.emplace_back(std::move(outscripts[0]));
         }
-        // PQCH: descriptors whose scripts need more than the public keys (p2mr()).
-        if (!ExpandExtra(pos, arg, pubkeys, read_cache, write_cache, subprovider)) return false;
         out.Merge(std::move(subprovider));
 
         output_scripts = MakeScripts(pubkeys, std::span{subscripts}, out);
         return true;
     }
 
-    /** PQCH: extra expansion step, run before MakeScripts; its output goes into `out`. */
-    virtual bool ExpandExtra(int pos, const SigningProvider& arg, const std::vector<CPubKey>& pubkeys, const DescriptorCache* read_cache, DescriptorCache* write_cache, FlatSigningProvider& out) const { return true; }
+    /**
+     * PQCH: expansion of descriptors whose scripts do not come from public keys (p2mr()). Returns
+     * nullopt for the usual path, or the scripts (empty: failure).
+     */
+    virtual std::optional<std::vector<CScript>> ExpandScriptsAt(int pos, const SigningProvider& arg, const DescriptorCache* read_cache, DescriptorCache* write_cache, FlatSigningProvider& out) const { return std::nullopt; }
     /** PQCH: extra private keys for ExpandPrivate. */
     virtual void ExpandPrivateExtra(int pos, const SigningProvider& provider, FlatSigningProvider& out) const {}
 
@@ -1574,47 +1570,84 @@ public:
     }
 };
 
-/** PQCH: a parsed p2mr(KEY) descriptor, the standard post-quantum wallet output (script/p2mr.h). */
+/**
+ * PQCH: a parsed p2mr(pqseed(ID)/PATH) descriptor, the standard post-quantum wallet output
+ * (script/p2mr.h). ID is the seed's id; with the seed itself the private form is
+ * p2mr(pqprv(SEED)/PATH). Every PATH step is hardened; the last may be *h.
+ */
 class P2MRDescriptor final : public DescriptorImpl
 {
-protected:
-    bool ExpandExtra(int pos, const SigningProvider& arg, const std::vector<CPubKey>& pubkeys, const DescriptorCache* read_cache, DescriptorCache* write_cache, FlatSigningProvider& out) const override
+    const uint256 m_seed_id;
+    const p2mr::Path m_path; //!< prefix (hardened steps)
+    const bool m_range;
+
+    p2mr::Path AddressPath(int pos) const
     {
-        // The recovery key's position is never an address.
-        if (m_pubkey_args.at(0)->IsRange() && static_cast<uint32_t>(pos) == p2mr::RECOVERY_KEY_INDEX) return false;
-        const CPubKey& child{pubkeys.at(0)};
-        p2mr::AddressKeys keys;
-        if (!read_cache || !read_cache->GetCachedP2MRKeys(child, keys)) {
-            // The post-quantum keys need the private key: there is no public derivation.
-            FlatSigningProvider priv, recovery;
-            m_pubkey_args.at(0)->GetPrivKey(pos, arg, priv);
-            m_pubkey_args.at(0)->GetPrivKey(p2mr::RECOVERY_KEY_INDEX, arg, recovery);
-            CKey key;
-            if (!priv.GetKey(child.GetID(), key) || recovery.keys.size() != 1) return false;
-            if (!p2mr::DeriveAddressKeys(key, recovery.keys.begin()->second, keys)) return false;
+        p2mr::Path path{m_path};
+        if (m_range) path.push_back(static_cast<uint32_t>(pos) | p2mr::HARDENED);
+        return path;
+    }
+    p2mr::Path RecoveryPath() const
+    {
+        p2mr::Path path{m_path};
+        path.push_back(p2mr::RECOVERY_KEY_INDEX | p2mr::HARDENED);
+        return path;
+    }
+
+protected:
+    std::optional<std::vector<CScript>> ExpandScriptsAt(int pos, const SigningProvider& arg, const DescriptorCache* read_cache, DescriptorCache* write_cache, FlatSigningProvider& out) const override
+    {
+        if (pos < 0 || (m_range && static_cast<uint32_t>(pos) >= p2mr::RECOVERY_KEY_INDEX)) return std::vector<CScript>{};
+        const uint32_t index{m_range ? static_cast<uint32_t>(pos) : 0};
+        p2mr::SpendData spend{.seed_id = m_seed_id, .path = AddressPath(pos), .recovery_path = RecoveryPath()};
+        if (!read_cache || !read_cache->GetCachedP2MRKeys(index, spend.keys)) {
+            // The keys need the seed: there is no public derivation.
+            p2mr::PQSeed seed;
+            if (!arg.GetPQSeed(m_seed_id, seed)) return std::vector<CScript>{};
+            if (!p2mr::DeriveAddressKeys(seed, spend.path, spend.recovery_path, spend.keys)) return std::vector<CScript>{};
         }
-        if (write_cache) write_cache->CacheP2MRKeys(child, keys);
-        out.p2mr_keys[child] = keys;
+        if (write_cache) write_cache->CacheP2MRKeys(index, spend.keys);
+        CScript spk{spend.ScriptPubKey()};
+        out.p2mr_spenddata[spend.Root()] = std::move(spend);
+        return Vector(std::move(spk));
+    }
+
+    void ExpandPrivateExtra(int, const SigningProvider& provider, FlatSigningProvider& out) const override
+    {
+        p2mr::PQSeed seed;
+        if (provider.GetPQSeed(m_seed_id, seed)) out.pq_seeds.emplace(m_seed_id, seed);
+    }
+
+    std::vector<CScript> MakeScripts(const std::vector<CPubKey>&, std::span<const CScript>, FlatSigningProvider&) const override { return {}; }
+
+    bool ToStringHelper(const SigningProvider* arg, std::string& out, const StringType type, const DescriptorCache*) const override
+    {
+        std::string key;
+        if (type == StringType::PRIVATE) {
+            p2mr::PQSeed seed;
+            if (!arg || !arg->GetPQSeed(m_seed_id, seed)) return false;
+            key = "pqprv(" + HexStr(seed.bytes) + ")";
+        } else {
+            key = "pqseed(" + HexStr(m_seed_id) + ")";
+        }
+        for (uint32_t step : m_path) key += strprintf("/%uh", step & ~p2mr::HARDENED);
+        if (m_range) key += "/*h";
+        out = "p2mr(" + key + ")";
         return true;
     }
 
-    void ExpandPrivateExtra(int pos, const SigningProvider& provider, FlatSigningProvider& out) const override
-    {
-        // The recovery leaf is signed with the key at RECOVERY_KEY_INDEX.
-        m_pubkey_args.at(0)->GetPrivKey(p2mr::RECOVERY_KEY_INDEX, provider, out);
-    }
-
-    std::vector<CScript> MakeScripts(const std::vector<CPubKey>& keys, std::span<const CScript>, FlatSigningProvider& out) const override
-    {
-        const auto it{out.p2mr_keys.find(keys.at(0))};
-        if (it == out.p2mr_keys.end()) return {};
-        const p2mr::SpendData spend{p2mr::MakeSpendData(it->second, keys[0])};
-        out.p2mr_spenddata[spend.Root()] = spend;
-        return Vector(spend.ScriptPubKey());
-    }
-
 public:
-    P2MRDescriptor(std::unique_ptr<PubkeyProvider> prov) : DescriptorImpl(Vector(std::move(prov)), "p2mr") {}
+    P2MRDescriptor(const uint256& seed_id, p2mr::Path path, bool range)
+        : DescriptorImpl({}, "p2mr"), m_seed_id(seed_id), m_path(std::move(path)), m_range(range) {}
+
+    bool IsRange() const override { return m_range; }
+    bool IsSolvable() const override { return true; }
+    bool CanSelfExpand() const override { return false; }
+    bool HavePrivateKeys(const SigningProvider& arg) const override
+    {
+        p2mr::PQSeed seed;
+        return arg.GetPQSeed(m_seed_id, seed);
+    }
     std::optional<OutputType> GetOutputType() const override { return OutputType::BECH32M; }
     bool IsSingleType() const final { return true; }
 
@@ -1628,7 +1661,7 @@ public:
 
     std::unique_ptr<DescriptorImpl> Clone() const override
     {
-        return std::make_unique<P2MRDescriptor>(m_pubkey_args.at(0)->Clone());
+        return std::make_unique<P2MRDescriptor>(m_seed_id, m_path, m_range);
     }
 };
 
@@ -2626,19 +2659,61 @@ std::vector<std::unique_ptr<DescriptorImpl>> ParseScript(uint32_t& key_exp_index
         return {};
     }
     if (ctx == ParseScriptContext::TOP && Func("p2mr", expr)) {
-        // PQCH: p2mr(KEY), the standard post-quantum wallet output (script/p2mr.h).
-        auto pubkeys = ParsePubkey(key_exp_index, expr, ParseScriptContext::P2WPKH, out, error);
-        if (pubkeys.empty()) {
-            error = strprintf("p2mr(): %s", error);
+        // PQCH: p2mr(pqseed(ID)/PATH) or p2mr(pqprv(SEED)/PATH) (script/p2mr.h).
+        const std::string str(expr.begin(), expr.end());
+        const auto close{str.find(')')};
+        const bool priv{str.starts_with("pqprv(")};
+        if ((!priv && !str.starts_with("pqseed(")) || close == std::string::npos) {
+            error = "p2mr(): expected pqseed(ID) or pqprv(SEED) (post-quantum seed, not an elliptic curve key)";
             return {};
         }
-        for (auto& pubkey : pubkeys) {
-            if (!pubkey->IsHardenedOnly()) {
-                error = "p2mr(): post-quantum keys cannot be derived from an xpub, so every derivation step must be hardened (including *h)";
+        const std::string hex{str.substr(priv ? 6 : 7, close - (priv ? 6 : 7))};
+        const auto bytes{TryParseHex<unsigned char>(hex)};
+        if (!bytes || bytes->size() != 32) {
+            error = "p2mr(): the seed and its id are 32 bytes in hex";
+            return {};
+        }
+        uint256 seed_id;
+        if (priv) {
+            const p2mr::PQSeed seed{*bytes};
+            seed_id = seed.Id();
+            out.pq_seeds.emplace(seed_id, seed);
+        } else {
+            seed_id = uint256{std::span<const unsigned char>{*bytes}};
+        }
+        p2mr::Path path;
+        bool range{false};
+        const std::string rest{str.substr(close + 1)};
+        if (!rest.empty()) {
+            if (rest[0] != '/') {
+                error = "p2mr(): expected a path after the seed";
                 return {};
             }
-            ret.emplace_back(std::make_unique<P2MRDescriptor>(std::move(pubkey)));
+            const std::vector<std::string> steps{util::SplitString(rest.substr(1), '/')};
+            for (size_t i = 0; i < steps.size(); ++i) {
+                std::string step{steps[i]};
+                if (step.size() < 2 || (step.back() != 'h' && step.back() != '\'')) {
+                    error = "p2mr(): every derivation step must be hardened (h)";
+                    return {};
+                }
+                step.pop_back();
+                if (step == "*") {
+                    if (i + 1 != steps.size()) {
+                        error = "p2mr(): * can only be the last step";
+                        return {};
+                    }
+                    range = true;
+                    break;
+                }
+                const auto n{ToIntegral<uint32_t>(step)};
+                if (!n || *n >= p2mr::HARDENED) {
+                    error = strprintf("p2mr(): bad derivation step %s", steps[i]);
+                    return {};
+                }
+                path.push_back(*n | p2mr::HARDENED);
+            }
         }
+        ret.emplace_back(std::make_unique<P2MRDescriptor>(seed_id, std::move(path), range));
         return ret;
     } else if (Func("p2mr", expr)) {
         error = "Can only have p2mr at top level";
@@ -3240,28 +3315,28 @@ DescriptorCache DescriptorCache::MergeAndDiff(const DescriptorCache& other)
         CacheLastHardenedExtPubKey(lh_xpub_pair.first, lh_xpub_pair.second);
         diff.CacheLastHardenedExtPubKey(lh_xpub_pair.first, lh_xpub_pair.second);
     }
-    for (const auto& [child, keys] : other.GetCachedP2MRKeysAll()) {
+    for (const auto& [index, keys] : other.GetCachedP2MRKeysAll()) {
         p2mr::AddressKeys cached;
-        if (GetCachedP2MRKeys(child, cached)) {
+        if (GetCachedP2MRKeys(index, cached)) {
             if (!(cached == keys)) {
                 throw std::runtime_error(std::string(__func__) + ": New cached P2MR keys do not match already cached P2MR keys");
             }
             continue;
         }
-        CacheP2MRKeys(child, keys);
-        diff.CacheP2MRKeys(child, keys);
+        CacheP2MRKeys(index, keys);
+        diff.CacheP2MRKeys(index, keys);
     }
     return diff;
 }
 
-void DescriptorCache::CacheP2MRKeys(const CPubKey& child, const p2mr::AddressKeys& keys)
+void DescriptorCache::CacheP2MRKeys(uint32_t index, const p2mr::AddressKeys& keys)
 {
-    m_p2mr_keys[child] = keys;
+    m_p2mr_keys[index] = keys;
 }
 
-bool DescriptorCache::GetCachedP2MRKeys(const CPubKey& child, p2mr::AddressKeys& keys) const
+bool DescriptorCache::GetCachedP2MRKeys(uint32_t index, p2mr::AddressKeys& keys) const
 {
-    const auto it{m_p2mr_keys.find(child)};
+    const auto it{m_p2mr_keys.find(index)};
     if (it == m_p2mr_keys.end()) return false;
     keys = it->second;
     return true;

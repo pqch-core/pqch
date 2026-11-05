@@ -18,21 +18,19 @@
 
 namespace {
 
-CExtKey MasterKey(uint8_t tag)
+using p2mr::HARDENED;
+
+p2mr::PQSeed Seed(uint8_t tag)
 {
-    std::vector<std::byte> seed(32, std::byte{tag});
-    CExtKey master;
-    master.SetSeed(seed);
-    return master;
+    const std::vector<unsigned char> b(p2mr::SEED_SIZE, tag);
+    return p2mr::PQSeed{b};
 }
 
-CKey Key(uint8_t tag)
-{
-    std::vector<unsigned char> b(32, tag);
-    CKey k;
-    k.Set(b.begin(), b.end(), true);
-    return k;
-}
+const p2mr::Path PATH0{360 | HARDENED, 0 | HARDENED, 0 | HARDENED, 0 | HARDENED, 0 | HARDENED};
+const p2mr::Path PATH1{360 | HARDENED, 0 | HARDENED, 0 | HARDENED, 0 | HARDENED, 1 | HARDENED};
+const p2mr::Path RECOVERY{360 | HARDENED, 0 | HARDENED, 0 | HARDENED, 0 | HARDENED, p2mr::RECOVERY_KEY_INDEX | HARDENED};
+
+std::string PrivDesc(const p2mr::PQSeed& seed) { return "p2mr(pqprv(" + HexStr(seed.bytes) + ")/360h/0h/0h/0h/*h)"; }
 
 struct Expanded {
     std::vector<CScript> scripts;
@@ -70,82 +68,112 @@ BOOST_FIXTURE_TEST_SUITE(pqch_p2mr_wallet_tests, BasicTestingSetup)
 
 BOOST_AUTO_TEST_CASE(p2mr_key_derivation)
 {
-    const CKey child{Key(1)}, recovery{Key(2)};
+    const p2mr::PQSeed seed{Seed(1)};
     p2mr::AddressKeys a, b;
-    BOOST_REQUIRE(p2mr::DeriveAddressKeys(child, recovery, a));
-    BOOST_REQUIRE(p2mr::DeriveAddressKeys(child, recovery, b));
+    BOOST_REQUIRE(p2mr::DeriveAddressKeys(seed, PATH0, RECOVERY, a));
+    BOOST_REQUIRE(p2mr::DeriveAddressKeys(seed, PATH0, RECOVERY, b));
     BOOST_CHECK(a == b); // deterministic: the seed recovers every key
     BOOST_CHECK(a.IsValid());
-    BOOST_CHECK(a.recovery_owner == recovery.GetPubKey());
 
-    // The Schnorr key is not the BIP32 child key: revealing it (and a quantum attacker recovering
-    // its private key) says nothing about the child key, from which the ML-DSA seed comes.
-    BOOST_CHECK(a.schnorr != XOnlyPubKey{child.GetPubKey()});
     p2mr::LeafAKeys leaf_a;
-    BOOST_REQUIRE(p2mr::DeriveLeafAKeys(child, leaf_a));
+    BOOST_REQUIRE(p2mr::DeriveLeafAKeys(seed, PATH0, leaf_a));
     BOOST_CHECK(XOnlyPubKey{leaf_a.schnorr.GetPubKey()} == a.schnorr);
     BOOST_CHECK(leaf_a.mldsa.pubkey == a.mldsa);
 
     // Another address: other keys and salt, same recovery key.
     p2mr::AddressKeys c;
-    BOOST_REQUIRE(p2mr::DeriveAddressKeys(Key(3), recovery, c));
+    BOOST_REQUIRE(p2mr::DeriveAddressKeys(seed, PATH1, RECOVERY, c));
+    BOOST_CHECK(c.schnorr != a.schnorr);
     BOOST_CHECK(c.mldsa != a.mldsa);
     BOOST_CHECK(c.salt != a.salt);
     BOOST_CHECK(c.slhdsa == a.slhdsa);
-    const p2mr::SpendData sa{p2mr::MakeSpendData(a, child.GetPubKey())}, sc{p2mr::MakeSpendData(c, Key(3).GetPubKey())};
+    const p2mr::SpendData sa{.keys = a}, sc{.keys = c};
     // The recovery leaf hash (revealed when leaf A is spent) differs between addresses.
     BOOST_CHECK(sa.LeafHash(true) != sc.LeafHash(true));
     BOOST_CHECK(sa.Root() != sc.Root());
+    // Another seed, other keys.
+    p2mr::AddressKeys d;
+    BOOST_REQUIRE(p2mr::DeriveAddressKeys(Seed(2), PATH0, RECOVERY, d));
+    BOOST_CHECK(d.mldsa != a.mldsa && d.slhdsa != a.slhdsa);
 
     // The memoised recovery public key equals a fresh derivation.
     pqc::KeyPair slh;
-    BOOST_REQUIRE(p2mr::DeriveRecoveryKey(recovery, slh));
+    BOOST_REQUIRE(p2mr::DeriveRecoveryKey(seed, RECOVERY, slh));
     BOOST_CHECK(slh.pubkey == a.slhdsa);
+
+    // Seed id: a tagged hash, never the seed.
+    BOOST_CHECK(seed.Id() != uint256{std::span<const unsigned char>{seed.bytes}});
+    BOOST_CHECK(seed.Id() != Seed(2).Id());
+    // A new wallet's seed comes from its random master key material, deterministically.
+    CExtKey master;
+    master.SetSeed(std::vector<std::byte>(32, std::byte{5}));
+    BOOST_CHECK(p2mr::SeedFromMasterKey(master).bytes == p2mr::SeedFromMasterKey(master).bytes);
 
     // Witness sizes of the two paths.
     BOOST_CHECK_EQUAL(p2mr::HybridWitnessSize(false), 3876);
     BOOST_CHECK_EQUAL(p2mr::RecoveryWitnessSize(false), 7947);
 
-    // Fixed vector, so a change to the derivation is noticed (it would lose users' funds).
-    BOOST_CHECK_EQUAL(HexStr(a.schnorr), "8b4411e850961a8423112cfe823ac13908f9039f44f6fcbfe782a1007b044ca2");
-    BOOST_CHECK_EQUAL(HexStr(a.salt), "e10176172f17d34dbe037e3763bdfff3");
-    BOOST_CHECK_EQUAL(sa.Root().GetHex(), "79763a43ead4db13c50f8fe0b0bc6f706bc9db26bc41e01d115f1ff2a6003968");
+    // Fixed vector, so a change to the derivation is noticed (it would lose users' funds). The id,
+    // Schnorr key and salt were checked against an independent Python implementation (CARTEIRA.md).
+    BOOST_TEST_MESSAGE("P2MR v2 vector: id " << HexStr(seed.Id()) << " schnorr " << HexStr(a.schnorr) << " salt " << HexStr(a.salt) << " root " << sa.Root().GetHex());
+    BOOST_CHECK_EQUAL(HexStr(seed.Id()), "2637734506e0947725c149ec43ee8251eed354afb36130e824b2fa6e7121180e");
+    BOOST_CHECK_EQUAL(HexStr(a.schnorr), "bcf67cf39ef75c31a813008dd8834a798f68464a9185ab27c35344d9209a9d8f");
+    BOOST_CHECK_EQUAL(HexStr(a.salt), "4bb7196e788b8026f67e4bc5c1b6afb7");
+    BOOST_CHECK_EQUAL(sa.Root().GetHex(), "213f422e9312793b15c051f98aa8501a313bb6fe5ab52881a95006bcf043ec52");
 }
 
 BOOST_AUTO_TEST_CASE(p2mr_descriptor_parse)
 {
-    const CExtKey master{MasterKey(7)};
-    const std::string xprv{EncodeExtKey(master)}, xpub{EncodeExtPubKey(master.Neuter())};
+    const p2mr::PQSeed seed{Seed(7)};
     FlatSigningProvider keys;
     std::string error;
 
-    auto ok{Parse("p2mr(" + xprv + "/360h/0h/0h/0h/*h)", keys, error, /*require_checksum=*/false)};
-    BOOST_REQUIRE_MESSAGE(ok.size() == 1, error);
-    BOOST_CHECK(ok[0]->IsRange());
-    BOOST_CHECK(ok[0]->GetOutputType() == OutputType::BECH32M);
-    BOOST_CHECK(ok[0]->ToString().starts_with("p2mr(" + xpub + "/360h/0h/0h/0h/*h)#"));
-    BOOST_CHECK_EQUAL(*ok[0]->MaxSatisfactionWeight(false), p2mr::HybridWitnessSize(true) - 1); // without the element count
+    auto priv{Parse(PrivDesc(seed), keys, error, /*require_checksum=*/false)};
+    BOOST_REQUIRE_MESSAGE(priv.size() == 1, error);
+    BOOST_CHECK(priv[0]->IsRange());
+    BOOST_CHECK(priv[0]->GetOutputType() == OutputType::BECH32M);
+    BOOST_CHECK(keys.pq_seeds.contains(seed.Id()));
+    // The public form shows only the seed's id; the private form gives the seed back.
+    const std::string pub{"p2mr(pqseed(" + HexStr(seed.Id()) + ")/360h/0h/0h/0h/*h)"};
+    BOOST_CHECK(priv[0]->ToString().starts_with(pub + "#"));
+    std::string priv_str;
+    BOOST_REQUIRE(priv[0]->ToPrivateString(keys, priv_str));
+    BOOST_CHECK(priv_str.starts_with(PrivDesc(seed) + "#"));
+    BOOST_CHECK(!priv[0]->ToPrivateString(DUMMY_SIGNING_PROVIDER, priv_str));
+    BOOST_CHECK(priv[0]->HavePrivateKeys(keys));
+    // The public string parses to the same descriptor, without the seed.
+    FlatSigningProvider none;
+    auto pubd{Parse(pub, none, error, false)};
+    BOOST_REQUIRE(pubd.size() == 1);
+    BOOST_CHECK_EQUAL(pubd[0]->ToString(), priv[0]->ToString());
+    BOOST_CHECK(none.pq_seeds.empty());
+    BOOST_CHECK_EQUAL(*priv[0]->MaxSatisfactionWeight(false), p2mr::HybridWitnessSize(true) - 1); // without the element count
 
-    // Unhardened steps cannot work (no public derivation of post-quantum keys).
-    for (const std::string& bad : {"p2mr(" + xpub + "/0/*)", "p2mr(" + xprv + "/360h/*)", "p2mr(" + xprv + "/0h/1/*h)"}) {
+    // Bad forms: elliptic curve keys, unhardened steps, * not last, wrong sizes, not top level.
+    CExtKey master;
+    master.SetSeed(std::vector<std::byte>(32, std::byte{5}));
+    for (const std::string& bad : {
+             "p2mr(" + EncodeExtKey(master) + "/360h/*h)",
+             "p2mr(pqseed(" + HexStr(seed.Id()) + ")/360/*h)",
+             "p2mr(pqseed(" + HexStr(seed.Id()) + ")/360h/*)",
+             "p2mr(pqseed(" + HexStr(seed.Id()) + ")/*h/0h)",
+             std::string{"p2mr(pqseed(00)/0h)"},
+             "sh(p2mr(pqseed(" + HexStr(seed.Id()) + ")/0h))"}) {
         FlatSigningProvider k;
         BOOST_CHECK_MESSAGE(Parse(bad, k, error, false).empty(), bad);
-        BOOST_CHECK(error.find("hardened") != std::string::npos);
     }
-    // Only at the top level.
-    BOOST_CHECK(Parse("sh(p2mr(" + xprv + "/0h))", keys, error, false).empty());
 }
 
 BOOST_AUTO_TEST_CASE(p2mr_descriptor_expand_and_sign)
 {
-    const CExtKey master{MasterKey(9)};
+    const p2mr::PQSeed seed{Seed(9)};
     FlatSigningProvider keys;
     std::string error;
-    auto descs{Parse("p2mr(" + EncodeExtKey(master) + "/360h/0h/0h/0h/*h)", keys, error, false)};
+    auto descs{Parse(PrivDesc(seed), keys, error, false)};
     BOOST_REQUIRE_MESSAGE(descs.size() == 1, error);
     const Descriptor& desc{*descs[0]};
 
-    // Expansion with the private key, then from the cache alone (what the wallet does).
+    // Expansion with the seed, then from the cache alone (what the wallet does).
     Expanded e0;
     BOOST_REQUIRE(desc.Expand(0, keys, e0.scripts, e0.out, &e0.cache));
     BOOST_REQUIRE_EQUAL(e0.scripts.size(), 1U);
@@ -155,39 +183,32 @@ BOOST_AUTO_TEST_CASE(p2mr_descriptor_expand_and_sign)
     BOOST_CHECK_EQUAL(version, 1);
     BOOST_CHECK_EQUAL(program.size(), 32U);
     BOOST_CHECK_EQUAL(e0.cache.GetCachedP2MRKeysAll().size(), 1U);
+    // No elliptic curve key of the derivation anywhere in the cache or the solving data.
+    BOOST_CHECK(e0.cache.GetCachedDerivedExtPubKeys().empty() && e0.cache.GetCachedParentExtPubKeys().empty());
+    BOOST_CHECK(e0.out.pubkeys.empty() && e0.out.keys.empty() && e0.out.pq_seeds.empty());
 
     Expanded from_cache;
     BOOST_REQUIRE(desc.ExpandFromCache(0, e0.cache, from_cache.scripts, from_cache.out));
     BOOST_CHECK(from_cache.scripts == e0.scripts);
-    // Without the private key and without the cache, nothing can be derived.
+    // Without the seed and without the cache, nothing can be derived.
     Expanded nothing;
     BOOST_CHECK(!desc.Expand(0, DUMMY_SIGNING_PROVIDER, nothing.scripts, nothing.out));
     // The recovery key's position is not an address.
     Expanded reserved;
     BOOST_CHECK(!desc.Expand(p2mr::RECOVERY_KEY_INDEX, keys, reserved.scripts, reserved.out));
-    // A provider shared between two descriptors whose keys coincide (same child key, other
-    // recovery key) still gives each descriptor its own output.
-    {
-        auto fixed{Parse("p2mr(" + EncodeExtKey(master) + "/360h/0h/0h/0h/5h)", keys, error, false)};
-        BOOST_REQUIRE(fixed.size() == 1);
-        Expanded alone, ranged5;
-        BOOST_REQUIRE(fixed[0]->Expand(0, keys, alone.scripts, alone.out));
-        FlatSigningProvider shared;
-        std::vector<CScript> s1, s2;
-        BOOST_REQUIRE(desc.Expand(5, keys, s1, shared));
-        BOOST_REQUIRE(fixed[0]->Expand(0, keys, s2, shared));
-        BOOST_CHECK(s2 == alone.scripts);
-        BOOST_CHECK(s1 != s2);
-    }
-    // Other indexes give other outputs.
+    // Other indexes give other outputs; same as the library derivation.
     Expanded e1;
     BOOST_REQUIRE(desc.Expand(1, keys, e1.scripts, e1.out, &e1.cache));
     BOOST_CHECK(e1.scripts != e0.scripts);
+    p2mr::SpendData lib{.path = PATH1, .recovery_path = RECOVERY};
+    BOOST_REQUIRE(p2mr::DeriveAddressKeys(seed, PATH1, RECOVERY, lib.keys));
+    BOOST_CHECK(e1.scripts[0] == lib.ScriptPubKey());
 
-    // Signing: the solving data from the cache plus the private keys (ExpandPrivate).
+    // Signing: the solving data from the cache plus the seed (ExpandPrivate).
     FlatSigningProvider signer{from_cache.out};
     desc.ExpandPrivate(0, keys, signer);
-    BOOST_CHECK_EQUAL(signer.keys.size(), 2U); // the address key and the recovery key
+    BOOST_CHECK_EQUAL(signer.pq_seeds.size(), 1U);
+    BOOST_CHECK(signer.keys.empty());
 
     for (const bool recovery : {false, true}) {
         CTxOut prev;
@@ -220,7 +241,7 @@ BOOST_AUTO_TEST_CASE(p2mr_descriptor_expand_and_sign)
         BOOST_CHECK_EQUAL(int64_t(GetSerializeSize(tx.vin[0].scriptWitness.stack)), p2mr::HybridWitnessSize(true));
     }
 
-    // Without private keys the solving data still gives the size (fee estimation), not a signature.
+    // Without the seed the solving data still gives the size (fee estimation), not a signature.
     {
         CTxOut prev;
         CMutableTransaction tx{Spend(e0.scripts[0], prev)};
@@ -231,13 +252,10 @@ BOOST_AUTO_TEST_CASE(p2mr_descriptor_expand_and_sign)
         BOOST_CHECK_EQUAL(int64_t(GetSerializeSize(dummy.scriptWitness.stack)), p2mr::HybridWitnessSize(false));
     }
 
-    // Another descriptor's keys cannot sign this output.
+    // Another seed cannot sign this output.
     {
-        FlatSigningProvider other_keys;
-        auto other{Parse("p2mr(" + EncodeExtKey(MasterKey(10)) + "/360h/0h/0h/0h/*h)", other_keys, error, false)};
         FlatSigningProvider wrong{from_cache.out};
-        other[0]->ExpandPrivate(0, other_keys, wrong);
-        wrong.keys.erase(wrong.keys.begin(), wrong.keys.end());
+        wrong.pq_seeds.emplace(seed.Id(), Seed(10)); // the wrong seed under this id
         CTxOut prev;
         CMutableTransaction tx{Spend(e0.scripts[0], prev)};
         SignatureData sigdata;

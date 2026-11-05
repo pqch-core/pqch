@@ -227,7 +227,7 @@ static UniValue ProcessDescriptorImport(CWallet& wallet, const UniValue& data, c
         }
 
         // If the wallet disabled private keys, abort if private keys exist
-        if (wallet.IsWalletFlagSet(WALLET_FLAG_DISABLE_PRIVATE_KEYS) && !keys.keys.empty()) {
+        if (wallet.IsWalletFlagSet(WALLET_FLAG_DISABLE_PRIVATE_KEYS) && (!keys.keys.empty() || !keys.pq_seeds.empty())) {
             throw JSONRPCError(RPC_WALLET_ERROR, "Cannot import private keys to a wallet with private keys disabled");
         }
 
@@ -251,7 +251,7 @@ static UniValue ProcessDescriptorImport(CWallet& wallet, const UniValue& data, c
 
             // If private keys are enabled, check some things.
             if (!wallet.IsWalletFlagSet(WALLET_FLAG_DISABLE_PRIVATE_KEYS)) {
-                if (keys.keys.empty()) {
+                if (keys.keys.empty() && keys.pq_seeds.empty()) { // PQCH: a post-quantum seed is a private key
                     throw JSONRPCError(RPC_WALLET_ERROR, "Cannot import descriptor without private keys to a wallet with private keys enabled");
                 }
                 if (!parsed_desc->HavePrivateKeys(keys)) {

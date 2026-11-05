@@ -867,15 +867,23 @@ std::unique_ptr<DescriptorScriptPubKeyMan> DescriptorScriptPubKeyMan::LoadFromSt
 
 std::unique_ptr<DescriptorScriptPubKeyMan> DescriptorScriptPubKeyMan::GenerateNewSingleSig(WalletStorage& storage, WalletBatch& batch, int64_t keypool_size, const CExtKey& master_key, OutputType addr_type, bool internal)
 {
-    WalletDescriptor desc = GenerateWalletDescriptor(master_key.Neuter(), addr_type, internal);
+    // PQCH: on PQCH chains the wallet's addresses come from a post-quantum seed, and no elliptic
+    // curve key of the derivation is stored (script/p2mr.h).
+    const bool pq{IsPQWalletChain() && addr_type == OutputType::BECH32M};
+    const p2mr::PQSeed pq_seed{pq ? p2mr::SeedFromMasterKey(master_key) : p2mr::PQSeed{}};
+    WalletDescriptor desc = pq ? GenerateP2MRWalletDescriptor(pq_seed, internal) : GenerateWalletDescriptor(master_key.Neuter(), addr_type, internal);
 
     auto spkm = std::unique_ptr<DescriptorScriptPubKeyMan>(new DescriptorScriptPubKeyMan(storage, desc, keypool_size));
 
     LOCK(spkm->cs_desc_man);
     Assert(spkm->m_storage.IsWalletFlagSet(WALLET_FLAG_DESCRIPTORS));
 
-    // Store the master private key, and descriptor
-    if (!spkm->AddDescriptorKeyWithDB(batch, master_key.key, master_key.key.GetPubKey())) {
+    // Store the master private key (PQCH: or the post-quantum seed), and descriptor
+    if (pq) {
+        if (!spkm->AddPQSeedWithDB(batch, pq_seed)) {
+            throw std::runtime_error(std::string(__func__) + ": writing descriptor post-quantum seed failed");
+        }
+    } else if (!spkm->AddDescriptorKeyWithDB(batch, master_key.key, master_key.key.GetPubKey())) {
         throw std::runtime_error(std::string(__func__) + ": writing descriptor master private key failed");
     }
     if (!batch.WriteDescriptor(spkm->GetID(), spkm->m_wallet_descriptor)) {
@@ -978,12 +986,22 @@ bool DescriptorScriptPubKeyMan::IsMine(const CScript& script) const
 bool DescriptorScriptPubKeyMan::CheckDecryptionKey(const CKeyingMaterial& master_key)
 {
     LOCK(cs_desc_man);
-    if (!m_map_keys.empty()) {
+    if (!m_map_keys.empty() || !m_pq_seeds.empty()) {
         return false;
     }
 
-    bool keyPass = m_map_crypted_keys.empty(); // Always pass when there are no encrypted keys
+    bool keyPass = m_map_crypted_keys.empty() && m_crypted_pq_seeds.empty(); // Always pass when there are no encrypted keys
     bool keyFail = false;
+    // PQCH: post-quantum seeds (few, always all checked)
+    for (const auto& [id, crypted] : m_crypted_pq_seeds) {
+        CKeyingMaterial plain;
+        if (!DecryptSecret(master_key, crypted, id, plain) || plain.size() != p2mr::SEED_SIZE ||
+            p2mr::PQSeed{std::span<const unsigned char>{UCharCast(plain.data()), plain.size()}}.Id() != id) {
+            keyFail = true;
+            break;
+        }
+        keyPass = true;
+    }
     for (const auto& mi : m_map_crypted_keys) {
         const CPubKey &pubkey = mi.second.first;
         const std::vector<unsigned char> &crypted_secret = mi.second.second;
@@ -1010,9 +1028,19 @@ bool DescriptorScriptPubKeyMan::CheckDecryptionKey(const CKeyingMaterial& master
 bool DescriptorScriptPubKeyMan::Encrypt(const CKeyingMaterial& master_key, WalletBatch* batch)
 {
     LOCK(cs_desc_man);
-    if (!m_map_crypted_keys.empty()) {
+    if (!m_map_crypted_keys.empty() || !m_crypted_pq_seeds.empty()) {
         return false;
     }
+
+    // PQCH: post-quantum seeds, with their id as the IV (as keys use their public key's hash)
+    for (const auto& [id, seed] : m_pq_seeds) {
+        CKeyingMaterial secret{seed.bytes.begin(), seed.bytes.end()};
+        std::vector<unsigned char> crypted;
+        if (!EncryptSecret(master_key, secret, id, crypted)) return false;
+        m_crypted_pq_seeds[id] = crypted;
+        batch->WriteCryptedDescriptorPQSeed(GetID(), id, crypted);
+    }
+    m_pq_seeds.clear();
 
     for (const KeyMap::value_type& key_in : m_map_keys)
     {
@@ -1065,6 +1093,33 @@ std::map<CKeyID, CKey> DescriptorScriptPubKeyMan::GetKeys() const
         return keys;
     }
     return m_map_keys;
+}
+
+PQSeedMap DescriptorScriptPubKeyMan::GetPQSeeds() const
+{
+    AssertLockHeld(cs_desc_man);
+    if (m_storage.HasEncryptionKeys() && !m_storage.IsLocked()) {
+        PQSeedMap seeds;
+        for (const auto& [id, crypted] : m_crypted_pq_seeds) {
+            CKeyingMaterial plain;
+            const bool ok{m_storage.WithEncryptionKey([&](const CKeyingMaterial& encryption_key) {
+                return DecryptSecret(encryption_key, crypted, id, plain);
+            })};
+            if (!ok || plain.size() != p2mr::SEED_SIZE) continue;
+            p2mr::PQSeed seed{std::span<const unsigned char>{UCharCast(plain.data()), plain.size()}};
+            if (seed.Id() == id) seeds.emplace(id, seed);
+        }
+        return seeds;
+    }
+    return m_pq_seeds;
+}
+
+void DescriptorScriptPubKeyMan::LoadPQSeeds(const PQSeedMap& seeds, const CryptedPQSeedMap& cseeds)
+{
+    LOCK(cs_desc_man);
+    if (!seeds.empty() && !cseeds.empty()) throw std::runtime_error("Wallet contains both unencrypted and encrypted post-quantum seeds");
+    m_pq_seeds = seeds;
+    m_crypted_pq_seeds = cseeds;
 }
 
 bool DescriptorScriptPubKeyMan::HasPrivKey(const CKeyID& keyid) const
@@ -1127,6 +1182,7 @@ bool DescriptorScriptPubKeyMan::TopUpWithDB(WalletBatch& batch, unsigned int siz
 
     FlatSigningProvider provider;
     provider.keys = GetKeys();
+    provider.pq_seeds = GetPQSeeds(); // PQCH
 
     uint256 id = GetID();
     for (int32_t i = m_max_cached_index + 1; i < new_range_end; ++i) {
@@ -1228,6 +1284,29 @@ bool DescriptorScriptPubKeyMan::AddDescriptorKeyWithDB(WalletBatch& batch, const
     }
 }
 
+bool DescriptorScriptPubKeyMan::AddPQSeedWithDB(WalletBatch& batch, const p2mr::PQSeed& seed)
+{
+    AssertLockHeld(cs_desc_man);
+    assert(!m_storage.IsWalletFlagSet(WALLET_FLAG_DISABLE_PRIVATE_KEYS));
+    const uint256 id{seed.Id()};
+    if (m_pq_seeds.contains(id) || m_crypted_pq_seeds.contains(id)) return true;
+
+    if (m_storage.HasEncryptionKeys()) {
+        if (m_storage.IsLocked()) return false;
+        std::vector<unsigned char> crypted;
+        CKeyingMaterial secret{seed.bytes.begin(), seed.bytes.end()};
+        if (!m_storage.WithEncryptionKey([&](const CKeyingMaterial& encryption_key) {
+                return EncryptSecret(encryption_key, secret, id, crypted);
+            })) {
+            return false;
+        }
+        m_crypted_pq_seeds[id] = crypted;
+        return batch.WriteCryptedDescriptorPQSeed(GetID(), id, crypted);
+    }
+    m_pq_seeds.emplace(id, seed);
+    return batch.WriteDescriptorPQSeed(GetID(), seed);
+}
+
 bool DescriptorScriptPubKeyMan::IsHDEnabled() const
 {
     LOCK(cs_desc_man);
@@ -1247,13 +1326,13 @@ bool DescriptorScriptPubKeyMan::CanGetAddresses(bool internal) const
 bool DescriptorScriptPubKeyMan::HavePrivateKeys() const
 {
     LOCK(cs_desc_man);
-    return m_map_keys.size() > 0 || m_map_crypted_keys.size() > 0;
+    return m_map_keys.size() > 0 || m_map_crypted_keys.size() > 0 || !m_pq_seeds.empty() || !m_crypted_pq_seeds.empty();
 }
 
 bool DescriptorScriptPubKeyMan::HaveCryptedKeys() const
 {
     LOCK(cs_desc_man);
-    return !m_map_crypted_keys.empty();
+    return !m_map_crypted_keys.empty() || !m_crypted_pq_seeds.empty();
 }
 
 unsigned int DescriptorScriptPubKeyMan::GetKeyPoolSize() const
@@ -1323,6 +1402,7 @@ std::unique_ptr<FlatSigningProvider> DescriptorScriptPubKeyMan::GetSigningProvid
     if (HavePrivateKeys() && include_private) {
         FlatSigningProvider master_provider;
         master_provider.keys = GetKeys();
+        master_provider.pq_seeds = GetPQSeeds(); // PQCH
         m_wallet_descriptor.descriptor->ExpandPrivate(index, master_provider, *out_keys);
 
         // Always include musig_secnonces as this descriptor may have a participant private key
@@ -1574,6 +1654,7 @@ bool DescriptorScriptPubKeyMan::GetDescriptorString(std::string& out, const bool
 
     FlatSigningProvider provider;
     provider.keys = GetKeys();
+    provider.pq_seeds = GetPQSeeds(); // PQCH
 
     if (priv) {
         // For the private version, always return the master key to avoid
@@ -1600,6 +1681,7 @@ void DescriptorScriptPubKeyMan::UpgradeDescriptorCache()
     // Expand the descriptor
     FlatSigningProvider provider;
     provider.keys = GetKeys();
+    provider.pq_seeds = GetPQSeeds(); // PQCH
     FlatSigningProvider out_keys;
     std::vector<CScript> scripts_temp;
     DescriptorCache temp_cache;
@@ -1641,6 +1723,13 @@ void DescriptorScriptPubKeyMan::UpdateWithSigningProvider(WalletBatch& batch, co
         const CKey& key = entry.second;
         if (!AddDescriptorKeyWithDB(batch, key, key.GetPubKey())) {
             throw std::runtime_error(std::string(__func__) + ": writing descriptor private key failed");
+        }
+    }
+
+    // PQCH: and the post-quantum seeds
+    for (const auto& [id, seed] : signing_provider.pq_seeds) {
+        if (!AddPQSeedWithDB(batch, seed)) {
+            throw std::runtime_error(std::string(__func__) + ": writing descriptor post-quantum seed failed");
         }
     }
 

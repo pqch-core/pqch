@@ -7,6 +7,8 @@
 #include <chainparams.h>
 #include <common/args.h>
 #include <key_io.h>
+#include <util/check.h>
+#include <util/strencodings.h>
 #include <util/log.h>
 
 namespace wallet {
@@ -30,6 +32,19 @@ fs::path GetWalletDir()
     }
 
     return path;
+}
+
+WalletDescriptor GenerateP2MRWalletDescriptor(const p2mr::PQSeed& seed, bool internal)
+{
+    // m/360h/coin_typeh/0h/{0h receive, 1h change}/*h (whitepaper, section 21.5); every step
+    // hardened. Mainnet uses coin type 0h until a SLIP-0044 number is registered.
+    const std::string desc_str{strprintf("p2mr(pqseed(%s)/360h/%sh/0h/%sh/*h)", HexStr(seed.Id()),
+                                         Params().IsTestChain() ? "1" : "0", internal ? "1" : "0")};
+    FlatSigningProvider keys;
+    std::string error;
+    std::vector<std::unique_ptr<Descriptor>> desc = Parse(desc_str, keys, error, false);
+    Assert(desc.size() == 1);
+    return WalletDescriptor(std::move(desc.at(0)), GetTime(), 0, 0, 0);
 }
 
 bool IsPQWalletChain()
@@ -61,14 +76,7 @@ WalletDescriptor GenerateWalletDescriptor(const CExtPubKey& master_key, const Ou
         break;
     }
     case OutputType::BECH32M: {
-        if (IsPQWalletChain()) {
-            // PQCH: p2mr() with hardened derivation only (whitepaper, section 21.5):
-            // m/360h/coin_typeh/0h/{0h,1h}/*h.
-            desc_prefix = "p2mr(" + xpub + "/360h";
-            desc_suffix = "h/*h)";
-        } else {
-            desc_prefix = "tr(" + xpub + "/86h";
-        }
+        desc_prefix = "tr(" + xpub + "/86h";
         break;
     }
     case OutputType::UNKNOWN: {

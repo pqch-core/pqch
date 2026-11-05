@@ -13,6 +13,7 @@
 #include <node/types.h>
 #include <psbt.h>
 #include <script/descriptor.h>
+#include <script/p2mr.h>
 #include <script/script.h>
 #include <script/signingprovider.h>
 #include <util/btcsignals.h>
@@ -167,6 +168,9 @@ inline const std::unordered_set<OutputType> LEGACY_OUTPUT_TYPES {
 
 using KeyMap = std::map<CKeyID, CKey>;
 using CryptedKeyMap = std::map<CKeyID, std::pair<CPubKey, std::vector<unsigned char>>>;
+//! PQCH: post-quantum wallet seeds (script/p2mr.h) by id, plain or encrypted
+using PQSeedMap = std::map<uint256, p2mr::PQSeed>;
+using CryptedPQSeedMap = std::map<uint256, std::vector<unsigned char>>;
 
 // Manages the minimum data needed to load and migrate a legacy wallet.
 class LegacyDataSPKM : public ScriptPubKeyMan, public FillableSigningProvider
@@ -281,6 +285,8 @@ private:
 
     KeyMap m_map_keys GUARDED_BY(cs_desc_man);
     CryptedKeyMap m_map_crypted_keys GUARDED_BY(cs_desc_man);
+    PQSeedMap m_pq_seeds GUARDED_BY(cs_desc_man);                //!< PQCH
+    CryptedPQSeedMap m_crypted_pq_seeds GUARDED_BY(cs_desc_man); //!< PQCH
 
     //! keeps track of whether Unlock has run a thorough check before
     bool m_decryption_thoroughly_checked = false;
@@ -304,8 +310,12 @@ private:
     const uint256 m_id;
 
     bool AddDescriptorKeyWithDB(WalletBatch& batch, const CKey& key, const CPubKey &pubkey) EXCLUSIVE_LOCKS_REQUIRED(cs_desc_man);
+    //! PQCH: store a post-quantum seed (encrypted if the wallet is)
+    bool AddPQSeedWithDB(WalletBatch& batch, const p2mr::PQSeed& seed) EXCLUSIVE_LOCKS_REQUIRED(cs_desc_man);
 
     KeyMap GetKeys() const EXCLUSIVE_LOCKS_REQUIRED(cs_desc_man);
+    //! PQCH: the post-quantum seeds, decrypted if the wallet is encrypted and unlocked
+    PQSeedMap GetPQSeeds() const EXCLUSIVE_LOCKS_REQUIRED(cs_desc_man);
 
     // Cached FlatSigningProviders to avoid regenerating them each time they are needed.
     mutable std::map<int32_t, FlatSigningProvider> m_map_signing_providers;
@@ -340,6 +350,8 @@ protected:
 
 public:
     static std::unique_ptr<DescriptorScriptPubKeyMan> LoadFromStorage(WalletStorage& storage, const uint256& id, WalletDescriptor& descriptor, int64_t keypool_size, const KeyMap& keys, const CryptedKeyMap& ckeys);
+    //! PQCH: post-quantum seeds read from the database (during loading)
+    void LoadPQSeeds(const PQSeedMap& seeds, const CryptedPQSeedMap& cseeds);
     static std::unique_ptr<DescriptorScriptPubKeyMan> CreateFromImport(WalletStorage& storage, WalletDescriptor& descriptor, int64_t keypool_size, const FlatSigningProvider& provider);
     static std::unique_ptr<DescriptorScriptPubKeyMan> CreateFromMigration(WalletStorage& storage, WalletBatch& batch, WalletDescriptor& descriptor, int64_t keypool_size, const FlatSigningProvider& provider);
     static std::unique_ptr<DescriptorScriptPubKeyMan> GenerateNewSingleSig(WalletStorage& storage, WalletBatch& batch, int64_t keypool_size, const CExtKey& master_key, OutputType addr_type, bool internal);

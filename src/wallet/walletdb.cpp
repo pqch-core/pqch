@@ -7,6 +7,8 @@
 
 #include <wallet/walletdb.h>
 
+#include <support/cleanse.h>
+
 #include <common/system.h>
 #include <key_io.h>
 #include <primitives/transaction_identifier.h>
@@ -58,6 +60,8 @@ const std::string WALLETDESCRIPTOR{"walletdescriptor"};
 const std::string WALLETDESCRIPTORCACHE{"walletdescriptorcache"};
 const std::string WALLETDESCRIPTORLHCACHE{"walletdescriptorlhcache"};
 const std::string WALLETDESCRIPTORP2MRCACHE{"walletdescriptorp2mrcache"}; // PQCH
+const std::string WALLETDESCRIPTORPQSEED{"walletdescriptorpqseed"};       // PQCH
+const std::string WALLETDESCRIPTORCPQSEED{"walletdescriptorcpqseed"};     // PQCH
 const std::string WALLETDESCRIPTORCKEY{"walletdescriptorckey"};
 const std::string WALLETDESCRIPTORKEY{"walletdescriptorkey"};
 const std::string WATCHMETA{"watchmeta"};
@@ -242,6 +246,23 @@ bool WalletBatch::WriteCryptedDescriptorKey(const uint256& desc_id, const CPubKe
     return true;
 }
 
+bool WalletBatch::WriteDescriptorPQSeed(const uint256& desc_id, const p2mr::PQSeed& seed)
+{
+    const uint256 id{seed.Id()};
+    const std::vector<unsigned char> bytes{seed.bytes.begin(), seed.bytes.end()};
+    const bool ok{WriteIC(std::make_pair(DBKeys::WALLETDESCRIPTORPQSEED, std::make_pair(desc_id, id)), bytes, false)};
+    return ok;
+}
+
+bool WalletBatch::WriteCryptedDescriptorPQSeed(const uint256& desc_id, const uint256& seed_id, const std::vector<unsigned char>& secret)
+{
+    if (!WriteIC(std::make_pair(DBKeys::WALLETDESCRIPTORCPQSEED, std::make_pair(desc_id, seed_id)), secret, false)) {
+        return false;
+    }
+    EraseIC(std::make_pair(DBKeys::WALLETDESCRIPTORPQSEED, std::make_pair(desc_id, seed_id)));
+    return true;
+}
+
 bool WalletBatch::WriteDescriptor(const uint256& desc_id, const WalletDescriptor& descriptor)
 {
     return WriteIC(make_pair(DBKeys::WALLETDESCRIPTOR, desc_id), descriptor);
@@ -288,8 +309,8 @@ bool WalletBatch::WriteDescriptorCacheItems(const uint256& desc_id, const Descri
         }
     }
     // PQCH: P2MR address keys (they cannot be derived again without the private keys).
-    for (const auto& [child, keys] : cache.GetCachedP2MRKeysAll()) {
-        if (!WriteIC(std::make_pair(std::make_pair(DBKeys::WALLETDESCRIPTORP2MRCACHE, desc_id), child), keys)) {
+    for (const auto& [index, keys] : cache.GetCachedP2MRKeysAll()) {
+        if (!WriteIC(std::make_pair(std::make_pair(DBKeys::WALLETDESCRIPTORP2MRCACHE, desc_id), index), keys)) {
             return false;
         }
     }
@@ -848,17 +869,17 @@ static DBErrors LoadDescriptorWalletRecords(CWallet* pwallet, DatabaseBatch& bat
         LoadResult p2mr_cache_res = LoadRecords(pwallet, batch, DBKeys::WALLETDESCRIPTORP2MRCACHE, prefix,
             [&id, &cache] (CWallet* pwallet, DataStream& key, DataStream& value, std::string& err) {
             uint256 desc_id;
-            CPubKey child;
+            uint32_t index;
             key >> desc_id;
             assert(desc_id == id);
-            key >> child;
+            key >> index;
             p2mr::AddressKeys keys;
             value >> keys;
             if (!keys.IsValid()) {
                 err = "Invalid P2MR key cache entry";
                 return DBErrors::CORRUPT;
             }
-            cache.CacheP2MRKeys(child, keys);
+            cache.CacheP2MRKeys(index, keys);
             return DBErrors::LOAD_OK;
         });
         result = std::max(result, p2mr_cache_res.m_result);
@@ -932,8 +953,46 @@ static DBErrors LoadDescriptorWalletRecords(CWallet* pwallet, DatabaseBatch& bat
         result = std::max(result, ckey_res.m_result);
         num_ckeys = ckey_res.m_records;
 
+        // PQCH: post-quantum seeds, plain and encrypted
+        PQSeedMap pq_seeds;
+        prefix = PrefixStream(DBKeys::WALLETDESCRIPTORPQSEED, id);
+        LoadResult pq_res = LoadRecords(pwallet, batch, DBKeys::WALLETDESCRIPTORPQSEED, prefix,
+            [&id, &pq_seeds] (CWallet* pwallet, DataStream& key, DataStream& value, std::string& err) {
+            uint256 desc_id, seed_id;
+            key >> desc_id >> seed_id;
+            assert(desc_id == id);
+            std::vector<unsigned char> bytes;
+            value >> bytes;
+            if (bytes.size() != p2mr::SEED_SIZE) {
+                err = "Error reading wallet database: post-quantum seed corrupt";
+                return DBErrors::CORRUPT;
+            }
+            p2mr::PQSeed seed{bytes};
+            memory_cleanse(bytes.data(), bytes.size());
+            if (seed.Id() != seed_id) {
+                err = "Error reading wallet database: post-quantum seed does not match its id";
+                return DBErrors::CORRUPT;
+            }
+            pq_seeds.emplace(seed_id, seed);
+            return DBErrors::LOAD_OK;
+        });
+        result = std::max(result, pq_res.m_result);
+        CryptedPQSeedMap pq_cseeds;
+        prefix = PrefixStream(DBKeys::WALLETDESCRIPTORCPQSEED, id);
+        LoadResult cpq_res = LoadRecords(pwallet, batch, DBKeys::WALLETDESCRIPTORCPQSEED, prefix,
+            [&id, &pq_cseeds] (CWallet* pwallet, DataStream& key, DataStream& value, std::string& err) {
+            uint256 desc_id, seed_id;
+            key >> desc_id >> seed_id;
+            assert(desc_id == id);
+            std::vector<unsigned char> crypted;
+            value >> crypted;
+            pq_cseeds[seed_id] = crypted;
+            return DBErrors::LOAD_OK;
+        });
+        result = std::max(result, cpq_res.m_result);
+
         try {
-            pwallet->LoadDescriptorScriptPubKeyMan(id, *desc, keys, ckeys);
+            pwallet->LoadDescriptorScriptPubKeyMan(id, *desc, keys, ckeys, pq_seeds, pq_cseeds);
         } catch (std::runtime_error& e) {
             strErr = e.what();
             return DBErrors::CORRUPT;

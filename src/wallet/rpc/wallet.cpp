@@ -768,6 +768,10 @@ static RPCMethod createwalletdescriptor()
             std::shared_ptr<CWallet> const pwallet = GetWalletForJSONRPCRequest(request);
             if (!pwallet) return UniValue::VNULL;
 
+            // PQCH: a post-quantum wallet's descriptors come from its seed at creation; other types are not valid here.
+            if (IsPQWalletChain()) {
+                throw JSONRPCError(RPC_WALLET_ERROR, "createwalletdescriptor: only bech32m (post-quantum P2MR) descriptors exist on this network, and a wallet's p2mr() descriptors are made from its post-quantum seed when it is created");
+            }
             std::optional<OutputType> output_type = ParseOutputType(request.params[0].get_str());
             if (!output_type) {
                 throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, strprintf("Unknown address type '%s'", request.params[0].get_str()));

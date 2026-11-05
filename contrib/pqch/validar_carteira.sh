@@ -62,7 +62,36 @@ verifica "Endereco e meu e resoluvel" "$(w A a getaddressinfo "$ADDR_A" | js 'd[
 for t in legacy p2sh-segwit bech32; do
     contem "Tipo $t recusado" "$(w A a getnewaddress "" $t 2>&1 || true)" "No $t addresses available"
 done
-TPRV=$(w A a listdescriptors true | js 'd["descriptors"][0]["desc"].split("(")[1].split("/")[0]')
+contem "Descritor publico so com o id da semente" "$(w A a listdescriptors | js 'd["descriptors"][0]["desc"]')" "p2mr(pqseed("
+contem "Descritor privado com a semente pos-quantica" "$(w A a listdescriptors true | js 'd["descriptors"][0]["desc"]')" "p2mr(pqprv("
+# Nenhuma chave de curva eliptica da derivacao no ficheiro da carteira (registos de chaves e xpub).
+w A a backupwallet "$TMP/a.bak" >/dev/null
+TIPOS=$(python3 - "$TMP/a.bak" <<'PY'
+import sqlite3, sys
+db = sqlite3.connect(sys.argv[1])
+tipos = set()
+for (k,) in db.execute("select key from main"):
+    n = k[0]; tipos.add(k[1:1+n].decode())
+print(" ".join(sorted(tipos)))
+PY
+)
+for t in walletdescriptorkey walletdescriptorckey walletdescriptorcache walletdescriptorlhcache; do
+    verifica "Sem registos $t no ficheiro da carteira" "$([[ " $TIPOS " == *" $t "* ]] && echo sim || echo nao)" "nao"
+done
+contem "Semente pos-quantica guardada" "$TIPOS" "walletdescriptorpqseed"
+verifica "Sem tpub no ficheiro da carteira" "$(grep -ac tpub "$TMP/a.bak" || true)" "0"
+# Uma tprv qualquer, so para testar que os descritores do Bitcoin sao recusados.
+TPRV=$(python3 - <<'PY'
+import hashlib, hmac
+I = hmac.new(b"Bitcoin seed", bytes(32), hashlib.sha512).digest()
+raw = bytes.fromhex("04358394") + bytes(9) + I[32:] + b"\x00" + I[:32]
+raw += hashlib.sha256(hashlib.sha256(raw).digest()).digest()[:4]
+a = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+n = int.from_bytes(raw, "big"); out = ""
+while n: n, r = divmod(n, 58); out = a[r] + out
+print(out)
+PY
+)
 TR="tr($TPRV/86h/1h/0h/0/*)"
 TR="$TR#$(c A getdescriptorinfo "$TR" | js 'd["checksum"]')"
 R=$(w A a importdescriptors "[{\"desc\":\"$TR\",\"timestamp\":\"now\",\"active\":false}]" 2>&1 || true)
@@ -86,7 +115,7 @@ c A generatetoaddress 101 "$ADDR_A" >/dev/null
 espera_altura B 101 || true
 verifica "Saldo disponivel em A (1 recompensa madura)" "$(w A a getbalance)" "12.50000000"
 ADDR_B=$(w B b getnewaddress)
-OLD=$(c A deriveaddresses "$(c A getdescriptorinfo "wpkh($(w A a listdescriptors | js 'd["descriptors"][0]["desc"].split("(")[1].split("/")[0]')/0/0)" | js 'd["descriptor"]')" | js 'd[0]')
+OLD=$(c A deriveaddresses "$(c A getdescriptorinfo "wpkh($TPRV/0/0)" | js 'd["descriptor"]')" | js 'd[0]')
 contem "Envio para endereco antigo ($OLD) recusado" "$(w A a sendtoaddress "$OLD" 1 2>&1 || true)" "not valid on this network"
 HEX=$(w A a send "{\"$ADDR_A\": 1}" null "unset" null "{\"change_type\": \"bech32\", \"add_to_wallet\": false}" | js 'd["hex"]')
 verifica "Troco pedido como bech32 sai P2MR" "$(c A decoderawtransaction "$HEX" | js 'len(d["vout"])==2 and all(o["scriptPubKey"]["address"].startswith("pqcrt1p") for o in d["vout"])')" "True"
@@ -124,6 +153,23 @@ contem "Bloqueada nao assina" "$(w B r2 sendtoaddress "$ADDR_C" 1 2>&1 || true)"
 w B r2 walletpassphrase "frase-secreta" 60
 TX3=$(w B r2 sendtoaddress "$ADDR_C" 1)
 espera_mempool A "$TX3" && verifica "Desbloqueada assina (aceite por A)" "sim" "sim" || verifica "Desbloqueada assina (aceite por A)" "nao" "sim"
+
+w B r2 backupwallet "$TMP/r2.bak" >/dev/null
+TIPOS2=$(python3 - "$TMP/r2.bak" <<'PY'
+import sqlite3, sys
+db = sqlite3.connect(sys.argv[1])
+print(" ".join(sorted({k[1:1+k[0]].decode() for (k,) in db.execute("select key from main")})))
+PY
+)
+contem "Semente cifrada no ficheiro" "$TIPOS2" "walletdescriptorcpqseed"
+verifica "Sem semente em claro no ficheiro" "$([[ " $TIPOS2 " == *" walletdescriptorpqseed "* ]] && echo sim || echo nao)" "nao"
+para B
+arranca B 49754 49753 49744
+c B loadwallet r2 >/dev/null
+w B r2 walletpassphrase "frase-secreta" 60
+TX4=$(w B r2 sendtoaddress "$ADDR_C" 0.5)
+espera_mempool A "$TX4" && verifica "Carteira cifrada assina depois de reiniciar" "sim" "sim" || verifica "Carteira cifrada assina depois de reiniciar" "nao" "sim"
+contem "Frase errada recusada" "$(w B r2 walletpassphrase "errada" 60 2>&1 || true)" "passphrase entered was incorrect"
 
 echo
 if [[ $falhas -eq 0 ]]; then echo "Todas as verificacoes passaram."; else echo "$falhas verificacao(oes) falharam."; exit 1; fi
