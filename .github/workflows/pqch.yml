@@ -3,7 +3,7 @@
 # file COPYING or https://opensource.org/license/mit.
 
 # PQCH continuous integration: Linux only, to keep within a private repository's Actions budget.
-#   build-test   every push and pull request: build with the wallet, unit tests, wallet validation,
+#   build-test   pushes to main and pull requests: build with the wallet, unit tests, wallet validation,
 #                and the essential functional tests.
 #   sanitizers   pull requests and pushes to main: unit tests with ASan + UBSan (clang).
 #   fuzz         pull requests and pushes to main: the PQCH fuzz targets, one minute each.
@@ -13,8 +13,7 @@
 name: PQCH CI
 on:
   push:
-    branches: ['**']
-    tags-ignore: ['**']
+    branches: [main]
   pull_request:
   schedule:
     - cron: '17 3 * * 1'  # Mondays 03:17 UTC (TSan)
