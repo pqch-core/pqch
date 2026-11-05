@@ -92,5 +92,43 @@ BOOST_AUTO_TEST_CASE(p2mr_import_is_atomic)
     }
 }
 
+BOOST_AUTO_TEST_CASE(p2mr_cache_checked_against_seed)
+{
+    CWallet wallet(m_node.chain.get(), "", CreateMockableWalletDatabase());
+    LOCK(wallet.cs_wallet);
+    wallet.SetWalletFlag(WALLET_FLAG_DESCRIPTORS);
+    wallet.m_keypool_size = 3;
+    const p2mr::PQSeed seed{RandomSeed()}, attacker{RandomSeed()};
+
+    // A wallet file whose cache holds, for address 1, keys from another seed.
+    p2mr::AddressKeys fake;
+    const p2mr::Path path{360 | p2mr::HARDENED, 1 | p2mr::HARDENED, 0 | p2mr::HARDENED, 0 | p2mr::HARDENED, 1 | p2mr::HARDENED};
+    p2mr::Path rpath{path};
+    rpath.back() = p2mr::RECOVERY_KEY_INDEX | p2mr::HARDENED;
+    BOOST_REQUIRE(p2mr::DeriveAddressKeys(attacker, path, rpath, fake));
+
+    FlatSigningProvider keys;
+    keys.pq_seeds.emplace(seed.Id(), seed);
+    WalletDescriptor w_desc{ParseP2MR(seed.Id(), keys)};
+    w_desc.cache.CacheP2MRKeys(1, fake);
+    auto spkm{wallet.AddWalletDescriptor(w_desc, keys, "", false)};
+    BOOST_REQUIRE(spkm);
+    const auto bad{spkm->get().FindCacheMismatch()};
+    BOOST_REQUIRE(bad);
+    BOOST_CHECK_EQUAL(*bad, 1);
+
+    // An honest cache passes.
+    CWallet honest(m_node.chain.get(), "", CreateMockableWalletDatabase());
+    LOCK(honest.cs_wallet);
+    honest.SetWalletFlag(WALLET_FLAG_DESCRIPTORS);
+    honest.m_keypool_size = 3;
+    FlatSigningProvider keys2;
+    keys2.pq_seeds.emplace(seed.Id(), seed);
+    WalletDescriptor w_desc2{ParseP2MR(seed.Id(), keys2)};
+    auto spkm2{honest.AddWalletDescriptor(w_desc2, keys2, "", false)};
+    BOOST_REQUIRE(spkm2);
+    BOOST_CHECK(!spkm2->get().FindCacheMismatch());
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 } // namespace wallet

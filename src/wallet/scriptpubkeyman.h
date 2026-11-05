@@ -413,6 +413,10 @@ public:
      *  extend its address range, and payments to those addresses are not seen until it is unlocked
      *  and the blocks rescanned (CWallet::RescanAfterUnlock). Cleared by a successful top up. */
     bool TopUpBlockedByLock() const { return m_topup_blocked_by_lock; }
+    /** PQCH: with the wallet unlocked, derive again from the post-quantum seed every address kept
+     *  in the cache and compare. The cache is what receives payments: a changed wallet file must not
+     *  be able to swap in someone else's keys. Returns the first index that differs, if any. */
+    std::optional<int32_t> FindCacheMismatch() const;
     util::Result<void> UpdateWalletDescriptor(WalletDescriptor& descriptor, const FlatSigningProvider& provider);
     //! PQCH: the same, writing through `batch` (so that an import can be one database transaction).
     util::Result<void> UpdateWalletDescriptor(WalletBatch& batch, WalletDescriptor& descriptor, const FlatSigningProvider& provider);

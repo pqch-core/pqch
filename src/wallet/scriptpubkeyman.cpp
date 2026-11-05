@@ -1623,6 +1623,23 @@ void DescriptorScriptPubKeyMan::WriteDescriptor()
     }
 }
 
+std::optional<int32_t> DescriptorScriptPubKeyMan::FindCacheMismatch() const
+{
+    LOCK(cs_desc_man);
+    FlatSigningProvider provider;
+    provider.pq_seeds = GetPQSeeds();
+    if (provider.pq_seeds.empty()) return std::nullopt; // nothing secret to derive from (or locked)
+    std::map<int32_t, std::set<CScript>> cached;
+    for (const auto& [script, index] : m_map_script_pub_keys) cached[index].insert(script);
+    for (const auto& [index, scripts] : cached) {
+        std::vector<CScript> derived;
+        FlatSigningProvider out;
+        if (!m_wallet_descriptor.descriptor->Expand(index, provider, derived, out)) return index;
+        if (std::set<CScript>(derived.begin(), derived.end()) != scripts) return index;
+    }
+    return std::nullopt;
+}
+
 bool DescriptorScriptPubKeyMan::WriteDescriptor(WalletBatch& batch)
 {
     LOCK(cs_desc_man);

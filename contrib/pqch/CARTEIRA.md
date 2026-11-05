@@ -94,9 +94,34 @@ p2mr(pqprv(<semente>)/360h/1h/0h/0h/*h)            forma privada (listdescriptor
 - **Folha A:** Schnorr com `key_version` 0 e ML-DSA-44 com `key_version` 1, ambos sobre o hash de
   assinatura do BIP341 com o hash da folha. O contexto FIPS é `PQCH/tx/v1`. As assinaturas são
   "hedged": levam aleatoriedade nova, como recomenda o FIPS 204.
-- **Folha B:** SLH-DSA-128s com `key_version` 2. Por agora só se escolhe com a opção de assinatura
-  `p2mr_recovery`, nos testes.
-- A estimativa de taxas usa os tamanhos exatos do testemunho da folha A.
+- **Folha B:** SLH-DSA-128s com `key_version` 2. Escolhe-se com a opção `p2mr_recovery` de `send`,
+  `sendall`, `fundrawtransaction` e `walletcreatefundedpsbt`, ou com o 6.º argumento de
+  `walletprocesspsbt`. É para o dia em que o ML-DSA deixar de ser de confiança.
+- A estimativa de taxas usa os tamanhos exatos do testemunho da folha usada: 3.876 bytes na folha A,
+  7.947 na folha B.
+
+## Carteira cifrada e bloqueada
+
+- Uma carteira bloqueada não gera endereços novos: sem a semente nada se deriva. Se encontrar um
+  endereço usado e não conseguir gerar os seguintes, regista a altura do bloco e o `getwalletinfo`
+  mostra `rescan_after_unlock_from`.
+- O `walletpassphrase` gera os endereços em falta e reanalisa os blocos desde essa altura. Os
+  pagamentos que estavam à frente aparecem; não se perdem.
+- Ao desbloquear, o `walletpassphrase` volta a derivar da semente todos os endereços da cache e
+  compara-os. Se um ficheiro da carteira alterado tiver trocado chaves, a carteira volta a bloquear
+  e dá erro: não se recebe para endereços de outra pessoa.
+
+## Importação
+
+- O `importdescriptors` grava a semente, o descritor e a cache numa só transação da base de dados.
+  Se falhar a meio, nada fica gravado.
+- As mensagens de erro do analisador `p2mr()` nunca repetem a semente (`pqprv`).
+
+## RPC
+
+- `decodescript`, `getrawtransaction`, `getblock` e `getaddressinfo` chamam `p2mr` ao programa
+  witness v1 (no Bitcoin, `witness_v1_taproot`).
+- `getblockheader` e `getblock` mostram a prova de merged mining (objeto `auxpow`).
 
 ## Validação
 
@@ -160,25 +185,20 @@ quânticos, mas depende de uma frase-passe forte.
 
 ## Pendente
 
-- Escolher a folha de recuperação por RPC (`send` / `walletcreatefundedpsbt`), para o dia em que o
-  ML-DSA for desativado.
 - PSBT com assinaturas pós-quânticas parciais (multiassinatura, carteiras de hardware). Hoje a
   carteira assina cada entrada P2MR de uma vez só.
 - Registar o prefixo no SLIP-0173. O segundo passo do caminho usa `0h` na rede principal.
 - Mostrar a árvore P2MR em `getaddressinfo`; hoje o `desc` de um endereço é `addr(…)`.
-- Ao desbloquear a carteira, voltar a derivar as chaves P2MR guardadas em cache e compará-las.
+- Comparar a cache com a semente também ao carregar carteiras não cifradas (hoje só no
+  `walletpassphrase`).
 - A troca para as regras da carteira usa `PQRulesHeight == 0`, sem olhar para a altura (só afeta
   testes com `-testactivationheight=pqrules@N`).
 - Rever os alvos de fuzzing que assinam ou inferem descritores, porque agora leem os parâmetros da
   rede. O `psbt` já foi corrigido.
 - A migração de carteiras antigas do Bitcoin para descritores não é suportada nas redes PQCH.
-- **Carteira cifrada e bloqueada:** não consegue gerar endereços novos, porque sem a semente nada
-  se deriva. Uma reanálise longa com a carteira bloqueada para no limite de endereços já gerados.
-  As moedas mais à frente só aparecem depois de desbloquear e reanalisar; não se perdem.
-- **`importdescriptors` sem transação na base de dados:** se a importação falhar a meio, pode ficar
-  um registo de semente em claro sem descritor. Correr a importação numa transação.
-- **Mensagens de erro do `importdescriptors`:** repetem o descritor e, com ele, a semente. O
-  Bitcoin faz o mesmo com a xprv.
+- Adaptar ao subsídio de 12,5 e às unidades os testes funcionais de carteira herdados do Bitcoin
+  (`wallet_basic`, `wallet_send`, `wallet_sendall`, `wallet_importdescriptors`, `rpc_psbt`). Correm
+  no modo antigo e falham nos montantes, não nas funções.
 - **Carteiras de teste da primeira versão** (`p2mr(xprv…)`) já não carregam.
 - Carteiras de hardware com ML-DSA e SLH-DSA. Não são compatíveis com as carteiras BIP32 atuais.
 - Palavras de recuperação BIP39 (24 palavras, secção 21.5) e a cópia de segurança obrigatória no
