@@ -27,3 +27,9 @@ target/
 /guix-build-*
 
 /ci/scratch/
+
+# PQCH: libFuzzer artefacts
+crash-*
+leak-*
+timeout-*
+slow-unit-*
