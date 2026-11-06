@@ -26,7 +26,7 @@ get_directory_property(precious_variables CACHE_VARIABLES)
 #=============================
 # Project / Package metadata
 #=============================
-set(CLIENT_NAME "Bitcoin Core")
+set(CLIENT_NAME "PQCH") # PQCH (Bitcoin: "Bitcoin Core")
 set(CLIENT_VERSION_MAJOR 32)
 set(CLIENT_VERSION_MINOR 1)
 set(CLIENT_VERSION_BUILD 0)
@@ -62,9 +62,9 @@ if(CLIENT_VERSION_RC GREATER 0)
   string(APPEND CLIENT_VERSION_STRING "rc${CLIENT_VERSION_RC}")
 endif()
 
-set(COPYRIGHT_HOLDERS "The %s developers")
-set(COPYRIGHT_HOLDERS_FINAL "The ${CLIENT_NAME} developers")
-set(CLIENT_BUGREPORT "https://github.com/bitcoin/bitcoin/issues")
+set(COPYRIGHT_HOLDERS "The Bitcoin Core and %s developers") # PQCH: a fork of Bitcoin Core
+set(COPYRIGHT_HOLDERS_FINAL "The Bitcoin Core and ${CLIENT_NAME} developers")
+set(CLIENT_BUGREPORT "https://github.com/pqch-core/pqch/issues")
 
 #=============================
 # Language setup
@@ -640,6 +640,21 @@ add_subdirectory(test)
 add_subdirectory(doc)
 
 add_subdirectory(src)
+
+# PQCH: the executables carry the PQCH names (pqchd, pqch-cli, ...); the CMake targets keep
+# Bitcoin Core's names so that the inherited build files and upstream merges stay simple.
+foreach(pqch_rename IN ITEMS
+    "bitcoin:pqch" "bitcoind:pqchd" "bitcoin-node:pqch-node" "bitcoin-cli:pqch-cli"
+    "bitcoin-tx:pqch-tx" "bitcoin-util:pqch-util" "bitcoin-wallet:pqch-wallet"
+    "bitcoin-chainstate:pqch-chainstate" "bitcoin-qt:pqch-qt" "bitcoin-gui:pqch-gui"
+    "test_bitcoin:test_pqch" "test_bitcoin-qt:test_pqch-qt" "bench_bitcoin:bench_pqch")
+  string(REPLACE ":" ";" pqch_pair "${pqch_rename}")
+  list(GET pqch_pair 0 pqch_target)
+  list(GET pqch_pair 1 pqch_output)
+  if(TARGET ${pqch_target})
+    set_target_properties(${pqch_target} PROPERTIES OUTPUT_NAME ${pqch_output})
+  endif()
+endforeach()
 
 include(Maintenance)
 setup_split_debug_script()

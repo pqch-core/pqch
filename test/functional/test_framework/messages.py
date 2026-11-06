@@ -90,6 +90,7 @@ TX_MAX_STANDARD_VERSION = 3
 
 MAGIC_BYTES = {
     "mainnet": b"\xa7\xca\xdc\xbf",  # PQCH
+    "testnet": b"\xe8\xf4\xed\x9b",  # PQCH testnet
     "testnet4": b"\x1c\x16\x3f\x28",
     "regtest": b"\xa2\xf4\x92\xd4",  # PQCH
     "signet": b"\x0a\x03\xcf\x40",

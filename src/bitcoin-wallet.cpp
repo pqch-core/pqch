@@ -88,7 +88,12 @@ static std::optional<int> WalletAppInit(ArgsManager& args, int argc, char* argv[
         return EXIT_FAILURE;
     }
     // Check for chain settings (Params() calls are only valid after this clause)
-    SelectParams(args.GetChainType());
+    try {
+        SelectParams(CheckPQCHChainType(args.GetChainType()));
+    } catch (const std::exception& e) {
+        tfm::format(std::cerr, "Error: %s\n", e.what());
+        return EXIT_FAILURE;
+    }
 
     return std::nullopt;
 }

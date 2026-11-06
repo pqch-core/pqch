@@ -73,7 +73,7 @@ jobs:
             feature_nulldummy.py feature_utxo_set_hash.py p2p_invalid_tx.py p2p_invalid_block.py \
             p2p_invalid_messages.py rpc_validateaddress.py p2p_segwit.py \
             feature_coinstatsindex.py rpc_getblockstats.py feature_bip68_sequence.py p2p_ibd_stalling.py \
-            wallet_pqch_locked.py wallet_pqch_recovery.py rpc_help.py
+            wallet_pqch_locked.py wallet_pqch_recovery.py rpc_help.py wallet_crosschain.py feature_init.py
 
   sanitizers:
     name: 'ASan + UBSan'

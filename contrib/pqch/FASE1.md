@@ -27,6 +27,6 @@ Base: Bitcoin Core v32.1 (licença MIT; avisos de copyright mantidos).
 - **Génesis da rede principal:** é um marcador provisório (o do Bitcoin). O definitivo é criado no dia do lançamento, depois de o RandomX estar implementado (fase 3).
 - **Testnet3, testnet4 e signet:** continuam com os parâmetros do Bitcoin; serão substituídas por uma testnet PQCH própria (fase 6).
 - **Ajuste de dificuldade:** continua o do Bitcoin (a cada 2016 blocos); o ASERT entra na fase 2.
-- **Nomes dos programas** (`bitcoind`, `bitcoin-cli`) e pasta de dados: a renomear quando a base estabilizar.
+- **Nomes dos programas** e pasta de dados: renomeados para `pqchd`, `pqch-cli` e `~/.pqch` (ver TESTNET.md).
 - **Testes unitários e funcionais herdados** que assumem 50 BTC por bloco, o génesis do Bitcoin ou prefixos `bc`/`bcrt`: a atualizar progressivamente.
 - **Portas:** provisórias, a confirmar contra outras redes antes do lançamento.

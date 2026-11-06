@@ -51,6 +51,13 @@ const CBaseChainParams& BaseParams();
 /** Sets the params returned by Params() to those for the given chain. */
 void SelectBaseParams(ChainType chain);
 
+/**
+ * PQCH: the networks a user can select are the main network, the PQCH testnet and regtest. Bitcoin's
+ * testnet4 and signet are not PQCH networks: selecting them (-testnet4, -signet, -chain=...) is an
+ * error. Returns `chain` otherwise. (Their parameters stay in the code for the inherited unit tests.)
+ */
+ChainType CheckPQCHChainType(ChainType chain);
+
 /** List of possible chain / network names  */
 #define LIST_CHAIN_NAMES "main, test, testnet4, signet, regtest"
 

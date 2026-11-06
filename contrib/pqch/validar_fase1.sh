@@ -13,8 +13,8 @@
 set -euo pipefail
 
 BUILD="${1:-build}"
-BITCOIND="$BUILD/bin/bitcoind"
-CLI="$BUILD/bin/bitcoin-cli"
+BITCOIND="$BUILD/bin/pqchd"
+CLI="$BUILD/bin/pqch-cli"
 DATADIR="$(mktemp -d)"
 GENESIS_ESPERADO="dc23bf8241b903f340911cf5199292b79b6ca42078d45c1dca9ccfe18678364b"
 HALVING=150          # regtest

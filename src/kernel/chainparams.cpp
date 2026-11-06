@@ -234,28 +234,46 @@ public:
 };
 
 /**
- * Testnet (v3): public test network which is reset from time to time.
+ * PQCH testnet: public test network, same rules as the main network, coins without value. It can be
+ * restarted with a new genesis block.
  */
+// PQCH: the genesis message is a headline of The Times on the day the testnet was created (the
+// Bitcoin tradition); it proves the chain did not exist before that day.
+static constexpr const char* PQCH_TESTNET_GENESIS_MESSAGE{"The Times 06/Nov/2026 HEADLINE TO BE CONFIRMED"};
+static constexpr uint32_t PQCH_TESTNET_GENESIS_TIME{1793923200}; // 2026-11-06 00:00:00 UTC
+
 class CTestNetParams : public CChainParams {
 public:
     CTestNetParams(const TestNetOptions& opts) {
         m_chain_type = ChainType::TESTNET;
         consensus.signet_blocks = false;
         consensus.signet_challenge.clear();
-        consensus.nSubsidyHalvingInterval = 210000;
-        consensus.script_flag_exceptions.emplace( // BIP16 exception
-            uint256{"00000000dd30457c001f4095d208cc1296b0eed002427aa599874af7a432b105"}, SCRIPT_VERIFY_NONE);
-        consensus.BIP34Height = 21111;
-        consensus.BIP34Hash = uint256{"0000000023b3a96d3484e5abb3755c413e7d41500f8e2a5c3f0dd01299cd8ef8"};
-        consensus.BIP65Height = 581885; // 00000000007f6655f22f98e72ed80d8b06dc761d5da09df0fa1dc4be4f861eb6
-        consensus.BIP66Height = 330776; // 000000002104c8c45e99a8853285a3b592602a3ccde2b832481da85e9e4ba182
-        consensus.CSVHeight = 770112; // 00000000025e930139bac5c6c31a403776da130831ab85be56578f3fa75369bb
-        consensus.SegwitHeight = 834624; // 00000000002b980fcd729daaa248fd9316a5200e9b367f4ff2c42453e84201ca
-        consensus.MinBIP9WarningHeight = 2013984; // taproot activation height + miner confirmation window
-        consensus.powLimit = uint256{"00000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffff"};
+        // PQCH: the main network's consensus rules (see CMainParams), so that what is tested here is
+        // what will run there.
+        consensus.nSubsidyHalvingInterval = 2356000;
+        consensus.BIP34Height = 1;
+        consensus.BIP34Hash = uint256();
+        consensus.BIP65Height = 1;
+        consensus.BIP66Height = 1;
+        consensus.CSVHeight = 1;
+        consensus.SegwitHeight = 0;
+        consensus.PQRulesHeight = 0;
+        consensus.MinBIP9WarningHeight = 0;
+        consensus.powLimit = uint256{"00007fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"};
+        consensus.fPowUseRandomX = true;
+        consensus.nRandomXSeedInterval = 4096;
+        consensus.nRandomXSeedLag = 64;
+        consensus.nAuxPowHeight = 0;
         consensus.nPowTargetTimespan = 14 * 24 * 60 * 60; // two weeks
-        consensus.nPowTargetSpacing = 10 * 60;
-        consensus.fPowAllowMinDifficultyBlocks = true;
+        consensus.nPowTargetSpacing = 60;
+        consensus.fPowUseASERT = true;
+        consensus.nASERTHalfLife = 4 * 60 * 60; // 4 hours; the testnet is where it gets calibrated
+        consensus.nASERTAnchorHeight = 0;
+        // PQCH: 100 blocks (~100 min) instead of the main network's 720, so that testers can spend
+        // what they mine the same day.
+        consensus.nCoinbaseMaturity = COINBASE_MATURITY;
+        m_max_reorg_depth = 60;
+        consensus.fPowAllowMinDifficultyBlocks = false;
         consensus.enforce_BIP94 = false;
         consensus.fPowNoRetargeting = false;
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].bit = 28;
@@ -267,30 +285,25 @@ public:
 
         ApplyDeploymentOptions(opts.dep_opts);
 
-        consensus.nMinimumChainWork = uint256{"0000000000000000000000000000000000000000000017f49f702147f10c0eb6"};
-        consensus.defaultAssumeValid = uint256{"00000000b318a3703d14a844c55ef507f4c2fc8f8766e24271fd43c180c51637"}; // 5128859
+        consensus.nMinimumChainWork = uint256{};
+        consensus.defaultAssumeValid = uint256{};
 
-        pchMessageStart[0] = 0x0b;
-        pchMessageStart[1] = 0x11;
-        pchMessageStart[2] = 0x09;
-        pchMessageStart[3] = 0x07;
-        nDefaultPort = 18333;
+        // PQCH: randomly generated, distinct from the main network, regtest and Bitcoin's networks.
+        pchMessageStart[0] = 0xe8;
+        pchMessageStart[1] = 0xf4;
+        pchMessageStart[2] = 0xed;
+        pchMessageStart[3] = 0x9b;
+        nDefaultPort = 39333; // PQCH testnet (RPC 39332)
         nPruneAfterHeight = 1000;
-        m_assumed_blockchain_size = 245;
-        m_assumed_chain_state_size = 19;
+        m_assumed_blockchain_size = 0;
+        m_assumed_chain_state_size = 0;
 
-        genesis = CreateGenesisBlock(1296688602, 414098458, 0x1d00ffff, 1, 50 * COIN);
+        genesis = CreatePQCHGenesisBlock(PQCH_TESTNET_GENESIS_MESSAGE, PQCH_TESTNET_GENESIS_TIME, 0, 0x1e7fffff, 1'250'000'000);
         consensus.hashGenesisBlock = genesis.GetHash();
-        assert(consensus.hashGenesisBlock == uint256{"000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943"});
-        assert(genesis.hashMerkleRoot == uint256{"4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b"});
 
+        // PQCH: seeds are added when the first public nodes are up (contrib/pqch/TESTNET.md).
         vFixedSeeds.clear();
         vSeeds.clear();
-        // nodes with support for servicebits filtering should be at the top
-        vSeeds.emplace_back("testnet-seed.bitcoin.jonasschnelli.ch.");
-        vSeeds.emplace_back("seed.tbtc.petertodd.net.");
-        vSeeds.emplace_back("testnet-seed.bluematt.me."); // Just a static list of stable node(s), only supports x9
-        vSeeds.emplace_back("seed.testnet.achownodes.xyz."); // Ava Chow, only supports x1, x5, x9, x49, x809, x849, xd, x400, x404, x408, x448, xc08, xc48, x40c
 
         base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1,111);
         base58Prefixes[SCRIPT_ADDRESS] = std::vector<unsigned char>(1,196);
@@ -298,45 +311,23 @@ public:
         base58Prefixes[EXT_PUBLIC_KEY] = {0x04, 0x35, 0x87, 0xCF};
         base58Prefixes[EXT_SECRET_KEY] = {0x04, 0x35, 0x83, 0x94};
 
-        bech32_hrp = "tb";
-
-        vFixedSeeds = std::vector<uint8_t>(std::begin(chainparams_seed_test), std::end(chainparams_seed_test));
+        // PQCH: testnet addresses start with "pqct1".
+        bech32_hrp = "pqct";
 
         fDefaultConsistencyChecks = false;
         m_is_mockable_chain = false;
 
-        m_assumeutxo_data = {
-            {
-                .height = 2'500'000,
-                .hash_serialized = AssumeutxoHash{uint256{"f841584909f68e47897952345234e37fcd9128cd818f41ee6c3ca68db8071be7"}},
-                .m_chain_tx_count = 66484552,
-                .blockhash = uint256{"0000000000000093bcb68c03a9a168ae252572d348a2eaeba2cdf9231d73206f"},
-            },
-            {
-                .height = 4'840'000,
-                .hash_serialized = AssumeutxoHash{uint256{"ce6bb677bb2ee9789c4a1c9d73e6683c53fc20e8fdbedbdaaf468982a0c8db2a"}},
-                .m_chain_tx_count = 536078574,
-                .blockhash = uint256{"00000000000000f4971a7fb37fbdff89315b69a2e1920c467654a382f0d64786"},
-            },
-            {
-                .height = 5'125'000,
-                .hash_serialized = AssumeutxoHash{uint256{"d05430f34c9b7dd7eb98c0718cdf03782bcce8273847557d68ac2efc1365d4b8"}},
-                .m_chain_tx_count = 536708663,
-                .blockhash = uint256{"00000000000009ad1946e21cb4f1a6323ee99c89017b59d5166472672b868133"},
-            }
-        };
+        m_assumeutxo_data = {};
 
         chainTxData = ChainTxData{
-            // Data from RPC: getchaintxstats 4096 00000000b318a3703d14a844c55ef507f4c2fc8f8766e24271fd43c180c51637
-            .nTime    = 1788932318,
-            .tx_count = 536748780,
-            .dTxRate  = 0.02306697351149596,
+            .nTime    = 0,
+            .tx_count = 0,
+            .dTxRate  = 0,
         };
 
-        // Generated by headerssync-params.py on 2026-09-08.
         m_headers_sync_params = HeadersSyncParams{
-            .commitment_period = 682,
-            .redownload_buffer_size = 14613, // 14613/682 = ~21.4 commitments
+            .commitment_period = 649,
+            .redownload_buffer_size = 15400,
         };
     }
 };

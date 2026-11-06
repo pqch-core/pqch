@@ -16,8 +16,8 @@
 set -euo pipefail
 
 BUILD="${1:-build}"
-BITCOIND="$BUILD/bin/bitcoind"
-CLI="$BUILD/bin/bitcoin-cli"
+BITCOIND="$BUILD/bin/pqchd"
+CLI="$BUILD/bin/pqch-cli"
 PY="${PQ_PYTHON:-python3}"
 TOOL="$(dirname "$0")/pq_tool.py"
 TMP="$(mktemp -d)"
@@ -37,7 +37,7 @@ arranca() {
         echo "dnsseed=0"; echo "fixedseeds=0"; echo "listenonion=0"; echo "discover=0"
         echo "[regtest]"; echo "port=$p2p"; echo "rpcport=$rpc"; echo "bind=127.0.0.1"
         [[ -n "$ligar" ]] && echo "connect=127.0.0.1:$ligar"
-    } > "$dir/bitcoin.conf"
+    } > "$dir/pqch.conf"
     "$BITCOIND" -datadir="$dir" -daemon >/dev/null
     for _ in $(seq 1 60); do "$CLI" -datadir="$dir" getblockcount >/dev/null 2>&1 && return; sleep 1; done
     echo "no $nome nao arrancou"; exit 1

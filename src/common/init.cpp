@@ -5,6 +5,7 @@
 #include <common/init.h>
 
 #include <chainparams.h>
+#include <chainparamsbase.h>
 #include <common/args.h>
 #include <tinyformat.h>
 #include <util/fs.h>
@@ -40,7 +41,7 @@ std::optional<ConfigError> InitConfig(ArgsManager& args, SettingsAbortFn setting
         }
 
         // Check for chain settings (Params() calls are only valid after this clause)
-        SelectParams(args.GetChainType());
+        SelectParams(CheckPQCHChainType(args.GetChainType())); // PQCH: only main, testnet and regtest
 
         // Create datadir if it does not exist.
         const auto base_path{args.GetDataDirBase()};

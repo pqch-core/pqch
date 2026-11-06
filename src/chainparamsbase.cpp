@@ -10,6 +10,7 @@
 #include <util/chaintype.h>
 
 #include <cassert>
+#include <stdexcept>
 
 void SetupChainParamsBaseOptions(ArgsManager& argsman)
 {
@@ -17,12 +18,12 @@ void SetupChainParamsBaseOptions(ArgsManager& argsman)
     argsman.AddArg("-regtest", "Enter regression test mode, which uses a special chain in which blocks can be solved instantly. "
                  "This is intended for regression testing tools and app development. Equivalent to -chain=regtest.", ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::CHAINPARAMS);
     argsman.AddArg("-testactivationheight=name@height.", "Set the activation height of 'name' (segwit, bip34, dersig, cltv, csv). (test-only)", ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::DEBUG_TEST);
-    argsman.AddArg("-testnet", "Use the testnet3 chain. Equivalent to -chain=test. Support for testnet3 is deprecated and will be removed in an upcoming release. Consider moving to testnet4 now by using -testnet4.", ArgsManager::ALLOW_ANY, OptionsCategory::CHAINPARAMS);
-    argsman.AddArg("-testnet4", "Use the testnet4 chain. Equivalent to -chain=testnet4.", ArgsManager::ALLOW_ANY, OptionsCategory::CHAINPARAMS);
+    argsman.AddArg("-testnet", "Use the PQCH testnet: the main network's rules, coins without value. Equivalent to -chain=test.", ArgsManager::ALLOW_ANY, OptionsCategory::CHAINPARAMS);
+    argsman.AddArg("-testnet4", "Bitcoin's testnet4: not available in PQCH.", ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::CHAINPARAMS);
     argsman.AddArg("-vbparams=deployment:start:end[:min_activation_height]", "Use given start/end times and min_activation_height for specified version bits deployment (test-only)", ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::CHAINPARAMS);
-    argsman.AddArg("-signet", "Use the signet chain. Equivalent to -chain=signet. Note that the network is defined by the -signetchallenge parameter", ArgsManager::ALLOW_ANY, OptionsCategory::CHAINPARAMS);
-    argsman.AddArg("-signetchallenge", "Blocks must satisfy the given script to be considered valid (only for signet networks; defaults to the global default signet test network challenge)", ArgsManager::ALLOW_ANY | ArgsManager::DISALLOW_NEGATION, OptionsCategory::CHAINPARAMS);
-    argsman.AddArg("-signetseednode", "Specify a seed node for the signet network, in the hostname[:port] format, e.g. sig.net:1234 (may be used multiple times to specify multiple seed nodes; defaults to the global default signet test network seed node(s))", ArgsManager::ALLOW_ANY | ArgsManager::DISALLOW_NEGATION, OptionsCategory::CHAINPARAMS);
+    argsman.AddArg("-signet", "Bitcoin's signet: not available in PQCH.", ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::CHAINPARAMS);
+    argsman.AddArg("-signetchallenge", "Blocks must satisfy the given script to be considered valid (only for signet networks; defaults to the global default signet test network challenge)", ArgsManager::ALLOW_ANY | ArgsManager::DISALLOW_NEGATION | ArgsManager::DEBUG_ONLY, OptionsCategory::CHAINPARAMS);
+    argsman.AddArg("-signetseednode", "Specify a seed node for the signet network, in the hostname[:port] format, e.g. sig.net:1234 (may be used multiple times to specify multiple seed nodes; defaults to the global default signet test network seed node(s))", ArgsManager::ALLOW_ANY | ArgsManager::DISALLOW_NEGATION | ArgsManager::DEBUG_ONLY, OptionsCategory::CHAINPARAMS);
 }
 
 static std::unique_ptr<CBaseChainParams> globalChainBaseParams;
@@ -43,7 +44,7 @@ std::unique_ptr<CBaseChainParams> CreateBaseChainParams(const ChainType chain)
     case ChainType::MAIN:
         return std::make_unique<CBaseChainParams>("", 29332); // PQCH: provisional RPC port
     case ChainType::TESTNET:
-        return std::make_unique<CBaseChainParams>("testnet3", 18332);
+        return std::make_unique<CBaseChainParams>("testnet", 39332); // PQCH testnet
     case ChainType::TESTNET4:
         return std::make_unique<CBaseChainParams>("testnet4", 48332);
     case ChainType::SIGNET:
@@ -52,6 +53,14 @@ std::unique_ptr<CBaseChainParams> CreateBaseChainParams(const ChainType chain)
         return std::make_unique<CBaseChainParams>("regtest", 49443); // PQCH regtest RPC port
     }
     assert(false);
+}
+
+ChainType CheckPQCHChainType(const ChainType chain)
+{
+    if (chain == ChainType::SIGNET || chain == ChainType::TESTNET4) {
+        throw std::runtime_error(strprintf("%s is a Bitcoin test network, not available in PQCH: use -testnet (the PQCH testnet) or -regtest", ChainTypeToString(chain)));
+    }
+    return chain;
 }
 
 void SelectBaseParams(const ChainType chain)

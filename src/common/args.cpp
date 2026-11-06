@@ -32,7 +32,7 @@
 #include <utility>
 #include <variant>
 
-const char * const BITCOIN_CONF_FILENAME = "bitcoin.conf";
+const char * const BITCOIN_CONF_FILENAME = "pqch.conf"; // PQCH
 const char * const BITCOIN_SETTINGS_FILENAME = "settings.json";
 
 ArgsManager gArgs;
@@ -858,19 +858,13 @@ bool HasTestOption(const ArgsManager& args, const std::string& test_option)
 
 fs::path GetDefaultDataDir()
 {
-    // Windows:
-    //   old: C:\Users\Username\AppData\Roaming\Bitcoin
-    //   new: C:\Users\Username\AppData\Local\Bitcoin
-    // macOS: ~/Library/Application Support/Bitcoin
-    // Unix-like: ~/.bitcoin
+    // PQCH: its own data directory, never Bitcoin Core's (which may hold someone's Bitcoin wallets).
+    // Windows: C:\Users\Username\AppData\Local\PQCH
+    // macOS: ~/Library/Application Support/PQCH
+    // Unix-like: ~/.pqch
 #ifdef WIN32
     // Windows
-    // Check for existence of datadir in old location and keep it there
-    fs::path legacy_path = GetSpecialFolderPath(CSIDL_APPDATA) / "Bitcoin";
-    if (fs::exists(legacy_path)) return legacy_path;
-
-    // Otherwise, fresh installs can start in the new, "proper" location
-    return GetSpecialFolderPath(CSIDL_LOCAL_APPDATA) / "Bitcoin";
+    return GetSpecialFolderPath(CSIDL_LOCAL_APPDATA) / "PQCH";
 #else
     fs::path pathRet;
     char* pszHome = getenv("HOME");
@@ -880,10 +874,10 @@ fs::path GetDefaultDataDir()
         pathRet = fs::path(pszHome);
 #ifdef __APPLE__
     // macOS
-    return pathRet / "Library/Application Support/Bitcoin";
+    return pathRet / "Library/Application Support/PQCH";
 #else
     // Unix-like
-    return pathRet / ".bitcoin";
+    return pathRet / ".pqch";
 #endif
 #endif
 }

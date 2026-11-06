@@ -14,8 +14,8 @@
 set -euo pipefail
 
 BUILD="${1:-build}"
-BITCOIND="$BUILD/bin/bitcoind"
-CLI="$BUILD/bin/bitcoin-cli"
+BITCOIND="$BUILD/bin/pqchd"
+CLI="$BUILD/bin/pqch-cli"
 TMP="$(mktemp -d)"
 
 falhas=0
@@ -32,7 +32,7 @@ arranca() { # nome, porta p2p, porta rpc, [ligar a porta]
         echo "dnsseed=0"; echo "fixedseeds=0"; echo "listenonion=0"; echo "discover=0"; echo "fallbackfee=0.0001"
         echo "[regtest]"; echo "port=$p2p"; echo "rpcport=$rpc"; echo "bind=127.0.0.1"
         [[ -n "$ligar" ]] && echo "connect=127.0.0.1:$ligar"
-    } > "$dir/bitcoin.conf"
+    } > "$dir/pqch.conf"
     "$BITCOIND" -datadir="$dir" -daemon >/dev/null
     for _ in $(seq 1 60); do "$CLI" -datadir="$dir" getblockcount >/dev/null 2>&1 && return; sleep 1; done
     echo "no $nome nao arrancou"; exit 1
@@ -102,7 +102,7 @@ R=$(w A a importdescriptors "[{\"desc\":\"$WPKH\",\"timestamp\":\"now\",\"active
 contem "Descritor wpkh() recusado" "$R" "Only p2mr(), addr() and raw() descriptors"
 arranca C 49764 49763
 c C stop >/dev/null; sleep 3
-echo "addresstype=bech32" >> "$TMP/C/bitcoin.conf"
+echo "addresstype=bech32" >> "$TMP/C/pqch.conf"
 "$BITCOIND" -datadir="$TMP/C" -daemon >/dev/null
 for _ in $(seq 1 60); do c C getblockcount >/dev/null 2>&1 && break; sleep 1; done
 contem "-addresstype=bech32 recusado" "$(c C createwallet c 2>&1 || true)" "only bech32m"
