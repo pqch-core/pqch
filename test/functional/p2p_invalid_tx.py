@@ -172,7 +172,8 @@ class InvalidTxRequestTest(BitcoinTestFramework):
 
         tip = int(node.getbestblockhash(), 16)
         height = node.getblockcount() + 1
-        block_A = create_block(tip, height=height)
+        # PQCH: after the tip's time, which can run ahead of the clock (blocks mined faster than one a second)
+        block_A = create_block(tip, height=height, ntime=node.getblock(node.getbestblockhash())['time'] + 1)
         block_A.vtx.extend([tx_withhold, tx_withhold_until_block_A, tx_orphan_include_by_block_A])
         block_A.hashMerkleRoot = block_A.calc_merkle_root()
         block_A.solve()
@@ -199,7 +200,8 @@ class InvalidTxRequestTest(BitcoinTestFramework):
 
         tip = int(node.getbestblockhash(), 16)
         height = node.getblockcount() + 1
-        block_B = create_block(tip, height=height)
+        # PQCH: after the tip's time, which can run ahead of the clock (blocks mined faster than one a second)
+        block_B = create_block(tip, height=height, ntime=node.getblock(node.getbestblockhash())['time'] + 1)
         block_B.vtx.extend([tx_withhold_until_block_B, tx_orphan_include_by_block_B])
         block_B.hashMerkleRoot = block_B.calc_merkle_root()
         block_B.solve()

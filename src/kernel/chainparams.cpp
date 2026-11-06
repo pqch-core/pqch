@@ -239,7 +239,8 @@ public:
  */
 // PQCH: the genesis message is a headline of The Times on the day the testnet was created (the
 // Bitcoin tradition); it proves the chain did not exist before that day.
-static constexpr const char* PQCH_TESTNET_GENESIS_MESSAGE{"The Times 06/Nov/2026 HEADLINE TO BE CONFIRMED"};
+// Lead headline of thetimes.com on 06/Nov/2026 (sent by the project lead from the site).
+static constexpr const char* PQCH_TESTNET_GENESIS_MESSAGE{"The Times 06/Nov/2026 Vance has an awkward problem and little time to solve it"};
 static constexpr uint32_t PQCH_TESTNET_GENESIS_TIME{1793923200}; // 2026-11-06 00:00:00 UTC
 
 class CTestNetParams : public CChainParams {
@@ -300,6 +301,8 @@ public:
 
         genesis = CreatePQCHGenesisBlock(PQCH_TESTNET_GENESIS_MESSAGE, PQCH_TESTNET_GENESIS_TIME, 0, 0x1e7fffff, 1'250'000'000);
         consensus.hashGenesisBlock = genesis.GetHash();
+        assert(consensus.hashGenesisBlock == uint256{"b3079ef1e4520057cda8cfb841850523d295519c1815a8e3287e2a9c465d9caa"});
+        assert(genesis.hashMerkleRoot == uint256{"c39254a1cdab114a1e14d2fe8a31d686801052099170e132db6b2109109ab93c"});
 
         // PQCH: seeds are added when the first public nodes are up (contrib/pqch/TESTNET.md).
         vFixedSeeds.clear();

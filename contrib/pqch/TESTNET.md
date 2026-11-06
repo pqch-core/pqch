@@ -71,7 +71,12 @@ Mesmas regras de consenso da rede principal (RandomX, ASERT, P2MR, AuxPoW, reorg
 - Moedas sem valor.
 - Maturação das recompensas: 100 blocos (rede principal: 720), para os testadores poderem gastar no
   próprio dia.
-- Bloco génese próprio, com uma manchete do The Times do dia em que a testnet foi criada.
+- Bloco génese próprio, com a manchete principal de thetimes.com do dia em que a testnet foi criada:
+  `The Times 06/Nov/2026 Vance has an awkward problem and little time to solve it`
+  (hash `b3079ef1e4520057cda8cfb841850523d295519c1815a8e3287e2a9c465d9caa`, hora 2026-11-06 00:00 UTC).
+  Como no Bitcoin, a manchete prova que a cadeia não existia antes desse dia. O génese não tem prova de
+  trabalho RandomX (a chave RandomX do primeiro período é o próprio hash do génese); os nós não a
+  verificam no bloco 0.
 - Pode ser recomeçada com um génese novo, se for preciso.
 
 ### Como as pessoas encontram a testnet

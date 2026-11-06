@@ -993,10 +993,7 @@ bool AppInitParameterInteraction(const ArgsManager& args)
         return InitError(errors);
     }
 
-    // Testnet3 deprecation warning
-    if (chain == ChainType::TESTNET) {
-        LogInfo("Warning: Support for testnet3 is deprecated and will be removed in an upcoming release. Consider switching to testnet4.\n");
-    }
+    // PQCH: no testnet3 deprecation warning; -testnet is the PQCH testnet.
 
     // Warn if unrecognized section name are present in the config file.
     bilingual_str warnings;
