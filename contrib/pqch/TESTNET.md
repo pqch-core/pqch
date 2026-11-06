@@ -78,20 +78,97 @@ Mesmas regras de consenso da rede principal (RandomX, ASERT, P2MR, AuxPoW, reorg
 
 Um nó novo procura outros nós por esta ordem:
 
-1. **`-addnode` / `-connect`:** endereços indicados à mão. É assim no início.
+1. **`-addnode` / `-connect`:** endereços indicados à mão.
 2. **Sementes de DNS:** nomes (por exemplo `seed.testnet.<domínio>`) que devolvem endereços de nós
    ativos. Exigem um domínio e um servidor que vá vendo que nós estão de pé.
 3. **Sementes fixas:** lista de endereços escrita no código, usada quando o DNS falha.
 4. **Troca de endereços:** depois de ligado a um nó, o nó novo recebe endereços de outros e passa a
    encontrá-los sozinho.
 
-Plano:
+A testnet **não tem sementes de DNS nem sementes fixas**: um nó de fora não tem por onde começar.
 
-1. **Primeiro nó público:** um servidor com IP fixo e a porta 39333 aberta (só esta; a RPC nunca).
-   Fica no código como semente fixa e é publicado na documentação.
-2. **Instruções para testadores:** `pqchd -testnet -addnode=<ip>:39333`, ou só `pqchd -testnet`
-   quando houver sementes.
-3. **Mais nós:** dois ou três em sítios diferentes, para a rede não depender de uma máquina.
-4. **Semente de DNS:** quando houver um domínio para o projeto.
-5. **Torneira (faucet) e explorador de blocos:** uma página que dá moedas de teste e outra que
-   mostra blocos e transações.
+## Fase atual: testnet fechada à equipa
+
+Na primeira fase só a equipa conhecida usa a testnet. Uma blockchain não tem contas nem
+palavras-passe: qualquer nó que chegue à porta de outro pode ligar-se. Por isso o fecho faz-se na
+rede, em camadas:
+
+1. **Sem sementes no código** (acima).
+2. **Rede privada (VPN) da equipa:** WireGuard ou Tailscale. Cada nó só escuta no endereço da VPN e
+   só se liga aos endereços da VPN. Quem não está na VPN nem chega à porta. Não se abre nenhuma porta
+   no router.
+3. **Firewall:** nos nós sempre ligados, a porta 39333 só aceita a interface da VPN.
+4. **Código e binários** só para a equipa (o repositório é privado).
+
+### Rede privada
+
+Exemplo com WireGuard e a rede `10.77.0.0/24` (um endereço por membro; as chaves geram-se com
+`wg genkey | tee privada | wg pubkey > publica` e trocam-se só as públicas):
+
+```
+# /etc/wireguard/pqch.conf no nó âncora (10.77.0.1), que tem IP público e a porta UDP 51820 aberta
+[Interface]
+Address = 10.77.0.1/24
+ListenPort = 51820
+PrivateKey = <chave privada deste nó>
+
+[Peer]   # um bloco por membro
+PublicKey = <chave pública do membro>
+AllowedIPs = 10.77.0.2/32
+```
+
+```
+# /etc/wireguard/pqch.conf num membro (10.77.0.2)
+[Interface]
+Address = 10.77.0.2/24
+PrivateKey = <chave privada do membro>
+
+[Peer]
+PublicKey = <chave pública do nó âncora>
+Endpoint = <IP público do nó âncora>:51820
+AllowedIPs = 10.77.0.0/24
+PersistentKeepalive = 25
+```
+
+Ligar com `sudo systemctl enable --now wg-quick@pqch`. O Tailscale faz o mesmo sem configurar
+chaves à mão (cada membro entra na "tailnet" da equipa com uma conta).
+
+### `pqch.conf` de cada membro
+
+```
+testnet=1
+[test]
+# só a rede privada
+bind=10.77.0.2          # o endereço deste membro na VPN
+addnode=10.77.0.1       # o nó âncora (porta 39333 por omissão)
+addnode=10.77.0.3       # outros membros, se estiverem sempre ligados
+dnsseed=0
+fixedseeds=0
+discover=0              # não anunciar os IPs públicos desta máquina
+natpmp=0                # não pedir ao router para abrir portas
+listenonion=0
+# RPC só local (já é assim por omissão)
+rpcbind=127.0.0.1
+rpcallowip=127.0.0.1
+```
+
+Na firewall do nó âncora (exemplo com `ufw`):
+
+```
+sudo ufw allow 51820/udp                       # WireGuard
+sudo ufw allow in on pqch to any port 39333    # testnet, só pela VPN
+```
+
+### Cuidados
+
+- O runner da integração contínua corre código de pull requests: não deve ser o nó âncora.
+- Não pôr carteiras com valor real nas máquinas da testnet.
+- Para abrir a testnet mais tarde: nós públicos, sementes fixas e de DNS numa versão nova. Os nós da
+  equipa continuam a funcionar sem mudar nada.
+
+## Fases seguintes
+
+1. **Testnet aberta:** um ou dois nós públicos com IP fixo e a porta 39333 aberta (a RPC nunca),
+   sementes fixas no código, instruções `pqchd -testnet`.
+2. **Semente de DNS:** quando houver um domínio para o projeto.
+3. **Torneira (faucet) e explorador de blocos.**
