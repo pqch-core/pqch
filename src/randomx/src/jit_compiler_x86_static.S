@@ -262,3 +262,8 @@ DECL(randomx_reciprocal_fast):
 	mov rcx, rdi
 #endif
 	#include "asm/randomx_reciprocal.inc"
+
+/* PQCH: no executable stack (without this note the linker marks the whole program RWE). */
+#if defined(__linux__) && defined(__ELF__)
+.section .note.GNU-stack,"",%progbits
+#endif

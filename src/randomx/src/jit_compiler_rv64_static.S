@@ -1243,3 +1243,8 @@ DECL(randomx_riscv64_ssh_prefetch):
 
 DECL(randomx_riscv64_ssh_end):
     nop
+
+/* PQCH: no executable stack. */
+#if defined(__linux__) && defined(__ELF__)
+.section .note.GNU-stack,"",%progbits
+#endif

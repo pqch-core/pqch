@@ -45,3 +45,8 @@ rv64_test_vector_aes:
 	vaesdm.vv v0, v0
 	li x10, 0
 	ret
+
+/* PQCH: no executable stack. */
+#if defined(__linux__) && defined(__ELF__)
+.section .note.GNU-stack,"",%progbits
+#endif
