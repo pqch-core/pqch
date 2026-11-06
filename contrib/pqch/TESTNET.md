@@ -105,6 +105,25 @@ rede, em camadas:
 3. **Firewall:** nos nós sempre ligados, a porta 39333 só aceita a interface da VPN.
 4. **Código e binários** só para a equipa (o repositório é privado).
 
+### Instalação do nó âncora (automática)
+
+Num servidor Ubuntu 24.04 limpo, com o repositório clonado:
+
+```bash
+sudo contrib/pqch/instalar_ancora_testnet.sh
+```
+
+Atualiza o sistema, cria o utilizador `pqch` (sem sudo), compila e instala o PQCH, monta o centro da
+VPN (`10.77.0.1`, UDP 51820), ativa a firewall (só SSH e VPN entram; a 39333 só pela VPN), escreve o
+`pqch.conf` e instala o serviço `pqchd-testnet`. Para cada membro da equipa:
+
+```bash
+sudo contrib/pqch/adicionar_membro_vpn.sh <nome> <n.º 2-254> [chave pública do membro]
+```
+
+mostra a configuração WireGuard e o `pqch.conf` que o membro usa. O resto desta secção explica o que
+os scripts fazem, para quem prefira montar à mão.
+
 ### Rede privada
 
 Exemplo com WireGuard e a rede `10.77.0.0/24` (um endereço por membro; as chaves geram-se com
