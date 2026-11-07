@@ -37,7 +37,9 @@ arranca() { # nome, porta p2p, porta rpc, [ligar a porta]
     for _ in $(seq 1 60); do "$CLI" -datadir="$dir" getblockcount >/dev/null 2>&1 && return; sleep 1; done
     echo "no $nome nao arrancou"; exit 1
 }
-para() { "$CLI" -datadir="$TMP/$1" stop >/dev/null; for _ in $(seq 1 60); do "$CLI" -datadir="$TMP/$1" getblockcount >/dev/null 2>&1 || return 0; sleep 1; done; }
+# O RPC fecha antes de o processo terminar; o pqchd.pid só desaparece no fim, quando a pasta fica livre.
+espera_saida() { for _ in $(seq 1 120); do [[ -e "$TMP/$1/regtest/pqchd.pid" ]] || return 0; sleep 1; done; echo "no $1 nao terminou"; exit 1; }
+para() { "$CLI" -datadir="$TMP/$1" stop >/dev/null; espera_saida "$1"; }
 c() { local n=$1; shift; "$CLI" -datadir="$TMP/$n" "$@"; }
 w() { local n=$1 wl=$2; shift 2; "$CLI" -datadir="$TMP/$n" -rpcwallet="$wl" "$@"; }
 js() { python3 -c "import json,sys; d=json.load(sys.stdin); print($1)"; }
@@ -101,7 +103,7 @@ WPKH="$WPKH#$(c A getdescriptorinfo "$WPKH" | js 'd["checksum"]')"
 R=$(w A a importdescriptors "[{\"desc\":\"$WPKH\",\"timestamp\":\"now\",\"active\":false}]" 2>&1 || true)
 contem "Descritor wpkh() recusado" "$R" "Only p2mr(), addr() and raw() descriptors"
 arranca C 49764 49763
-c C stop >/dev/null; sleep 3
+para C
 echo "addresstype=bech32" >> "$TMP/C/pqch.conf"
 "$BITCOIND" -datadir="$TMP/C" -daemon >/dev/null
 for _ in $(seq 1 60); do c C getblockcount >/dev/null 2>&1 && break; sleep 1; done
