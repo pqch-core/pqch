@@ -20,10 +20,14 @@ As chaves saem de uma **semente pós-quântica própria** de 32 bytes. Não vêm
 (curva elíptica). Assim, o ficheiro da carteira não guarda nenhuma chave pública de curva elíptica
 a partir da qual um computador quântico pudesse chegar à semente.
 
-1. **Semente:** criada quando a carteira é criada, a partir de material aleatório novo
-   (HMAC-SHA512 com a etiqueta `PQCH/P2MR/v2/wallet-seed`). Fica no ficheiro da carteira, cifrada
-   se a carteira estiver cifrada. O id é um hash etiquetado (`PQCH/P2MR/v2/seed-id`): pode ser
-   mostrado sem revelar nada.
+1. **Semente:** sai das **24 palavras de recuperação** (BIP39 padrão, 256 bits de entropia):
+   - ao criar a carteira: 32 bytes aleatórios novos → 24 palavras → semente BIP39 (PBKDF2, com a
+     frase-passe BIP39 opcional) → `HMAC-SHA512("PQCH/P2MR/v2/bip39", semente BIP39)`, os
+     primeiros 32 bytes;
+   - a entropia das palavras fica no ficheiro da carteira, cifrada se a carteira estiver cifrada;
+     a frase-passe BIP39 opcional **não** é guardada;
+   - o id é um hash etiquetado (`PQCH/P2MR/v2/seed-id`): pode ser mostrado sem revelar nada.
+   Tudo isto são hashes, por isso mantém 128 bits de segurança contra um computador quântico.
 2. **Caminho:** `360h/{0h|1h}/0h/{0h receber | 1h troco}/*h`. O `1h` do segundo passo é para as
    redes de teste.
 3. **Nó de cada endereço:** `HMAC-SHA512(semente, "PQCH/P2MR/v2/node" ‖ caminho em 32 bits big
@@ -172,6 +176,24 @@ até ela. Foram corrigidos:
 - A migração de uma carteira antiga do Bitcoin derivava a semente de uma chave cuja chave pública
   ficava no ficheiro antigo. Agora usa uma semente nova.
 
+## Palavras de recuperação
+
+| Onde | O quê |
+| --- | --- |
+| `createwallet` | gera 24 palavras novas; `recovery_words` (e `recovery_passphrase`, opcional) restaura uma carteira a partir delas e procura as transações em toda a cadeia |
+| `getrecoverywords` | mostra as 24 palavras (com a carteira desbloqueada, se estiver cifrada) |
+| Aplicação gráfica | ao criar a carteira mostra as 24 palavras e pede 3 ao acaso para confirmar; *Ficheiro → Restaurar carteira a partir das palavras…*; *Definições → Mostrar palavras de recuperação…* |
+
+- As palavras aceitam maiúsculas e espaços a mais; são guardadas na forma normal (minúsculas, um
+  espaço).
+- `encryptwallet` dá **palavras novas**, tal como dá chaves novas: os endereços seguintes vêm
+  delas. As palavras antigas continuam a recuperar os fundos recebidos antes. A aplicação mostra
+  logo as novas.
+- Carteiras sem chaves privadas, em branco, com assinador externo ou com chaves importadas não têm
+  palavras.
+- Teste: `test/functional/wallet_pqch_recovery_words.py`; diálogos: `RecoveryWordsTests` em
+  `test_pqch-qt`.
+
 ## Ficheiro da carteira e computador quântico
 
 A primeira versão derivava as chaves de uma cadeia BIP32. O ficheiro da carteira guardava então
@@ -201,7 +223,4 @@ quânticos, mas depende de uma frase-passe forte.
   no modo antigo e falham nos montantes, não nas funções.
 - **Carteiras de teste da primeira versão** (`p2mr(xprv…)`) já não carregam.
 - Carteiras de hardware com ML-DSA e SLH-DSA. Não são compatíveis com as carteiras BIP32 atuais.
-- Palavras de recuperação BIP39 (24 palavras, secção 21.5) e a cópia de segurança obrigatória no
-  primeiro arranque (secção 20). Ficam para a aplicação. A semente pós-quântica pode sair das 24
-  palavras (por exemplo, com um HMAC da semente BIP39), mas isso tem de ficar decidido antes do
-  lançamento.
+

@@ -9,6 +9,7 @@
 #include <qt/createwalletdialog.h>
 #include <qt/guiconstants.h>
 #include <qt/guiutil.h>
+#include <qt/recoverywordsdialog.h>
 #include <qt/walletmodel.h>
 
 #include <external_signer.h>
@@ -271,6 +272,15 @@ void CreateWalletActivity::createWallet()
         auto wallet{node().walletLoader().createWallet(name, m_passphrase, flags, m_warning_message)};
 
         if (wallet) {
+            // PQCH: fetch the new recovery words to show them (unlocking briefly if encrypted).
+            interfaces::Wallet& w = **wallet;
+            if (w.pqWallet() && !(flags & (WALLET_FLAG_DISABLE_PRIVATE_KEYS | WALLET_FLAG_BLANK_WALLET | WALLET_FLAG_EXTERNAL_SIGNER))) {
+                const bool encrypted = !m_passphrase.empty();
+                if (!encrypted || w.unlock(m_passphrase)) {
+                    if (auto words{w.getRecoveryWords()}) m_recovery_words.assign(words->begin(), words->end());
+                    if (encrypted) w.lock();
+                }
+            }
             m_wallet_model = m_wallet_controller->getOrCreateWallet(std::move(*wallet));
         } else {
             m_error_message = util::ErrorString(wallet);
@@ -286,6 +296,13 @@ void CreateWalletActivity::finish()
         QMessageBox::critical(m_parent_widget, tr("Create wallet failed"), QString::fromStdString(m_error_message.translated));
     } else if (!m_warning_message.empty()) {
         QMessageBox::warning(m_parent_widget, tr("Create wallet warning"), QString::fromStdString(Join(m_warning_message, Untranslated("\n")).translated));
+    }
+
+    if (m_wallet_model && !m_recovery_words.empty()) {
+        // PQCH: the backup of the new wallet: show the 24 words and check three of them.
+        RecoveryWordsDialog dlg(m_recovery_words, RecoveryWordsDialog::Mode::Backup, m_parent_widget);
+        m_recovery_words.clear();
+        dlg.exec();
     }
 
     if (m_wallet_model) Q_EMIT created(m_wallet_model);
@@ -547,6 +564,88 @@ void MigrateWalletActivity::finish()
     }
 
     if (m_wallet_model) Q_EMIT migrated(m_wallet_model);
+
+    Q_EMIT finished();
+}
+
+RestoreWordsActivity::RestoreWordsActivity(WalletController* wallet_controller, QWidget* parent_widget)
+    : WalletControllerActivity(wallet_controller, parent_widget)
+{
+    m_passphrase.reserve(MAX_PASSPHRASE_SIZE);
+}
+
+RestoreWordsActivity::~RestoreWordsActivity()
+{
+    delete m_passphrase_dialog;
+}
+
+void RestoreWordsActivity::restore()
+{
+    RestoreWordsDialog dlg(m_parent_widget);
+    if (dlg.exec() != QDialog::Accepted) {
+        Q_EMIT finished();
+        return;
+    }
+    m_name = dlg.walletName().toStdString();
+    m_words = dlg.words();
+    m_words_passphrase = dlg.wordsPassphrase();
+    if (dlg.encrypt()) {
+        askPassphrase();
+    } else {
+        createWallet();
+    }
+}
+
+void RestoreWordsActivity::askPassphrase()
+{
+    m_passphrase_dialog = new AskPassphraseDialog(AskPassphraseDialog::Encrypt, m_parent_widget, &m_passphrase);
+    m_passphrase_dialog->setWindowModality(Qt::ApplicationModal);
+    m_passphrase_dialog->show();
+
+    connect(m_passphrase_dialog, &QObject::destroyed, [this] {
+        m_passphrase_dialog = nullptr;
+    });
+    connect(m_passphrase_dialog, &QDialog::accepted, [this] {
+        createWallet();
+    });
+    connect(m_passphrase_dialog, &QDialog::rejected, [this] {
+        Q_EMIT finished();
+    });
+}
+
+void RestoreWordsActivity::createWallet()
+{
+    showProgressDialog(
+        //: Title of progress window which is displayed when a wallet is restored from its recovery words.
+        tr("Restore Wallet"),
+        tr("Restoring Wallet <b>%1</b> and searching the blockchain for its transactions…").arg(QString::fromStdString(m_name).toHtmlEscaped()));
+
+    QTimer::singleShot(0, worker(), [this] {
+        auto wallet{node().walletLoader().createWalletFromWords(m_name, m_passphrase, m_words, m_words_passphrase, m_warning_message)};
+        m_words.clear();
+        m_words_passphrase.clear();
+
+        if (wallet) {
+            m_wallet_model = m_wallet_controller->getOrCreateWallet(std::move(*wallet));
+        } else {
+            m_error_message = util::ErrorString(wallet);
+        }
+
+        QTimer::singleShot(0, this, &RestoreWordsActivity::finish);
+    });
+}
+
+void RestoreWordsActivity::finish()
+{
+    if (!m_error_message.empty()) {
+        QMessageBox::critical(m_parent_widget, tr("Restore wallet failed"), QString::fromStdString(m_error_message.translated));
+    } else if (!m_warning_message.empty()) {
+        QMessageBox::warning(m_parent_widget, tr("Restore wallet warning"), QString::fromStdString(Join(m_warning_message, Untranslated("\n")).translated));
+    } else {
+        QMessageBox::information(m_parent_widget, tr("Restore wallet message"), tr("Wallet restored from its recovery words."));
+    }
+
+    if (m_wallet_model) Q_EMIT restored(m_wallet_model);
 
     Q_EMIT finished();
 }

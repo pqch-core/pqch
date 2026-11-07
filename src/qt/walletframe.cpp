@@ -255,6 +255,13 @@ void WalletFrame::changePassphrase()
         walletView->changePassphrase();
 }
 
+void WalletFrame::showRecoveryWords()
+{
+    WalletView *walletView = currentWalletView();
+    if (walletView)
+        walletView->showRecoveryWords();
+}
+
 void WalletFrame::unlockWallet()
 {
     WalletView *walletView = currentWalletView();

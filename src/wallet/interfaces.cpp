@@ -28,6 +28,7 @@
 #include <wallet/rpc/wallet.h>
 #include <wallet/spend.h>
 #include <wallet/wallet.h>
+#include <wallet/walletutil.h>
 
 #include <memory>
 #include <string>
@@ -486,6 +487,8 @@ public:
         auto spk_man = m_wallet->GetScriptPubKeyMan(OutputType::BECH32M, /*internal=*/false);
         return spk_man != nullptr;
     }
+    bool pqWallet() override { return IsPQWalletChain(); }
+    util::Result<std::string> getRecoveryWords() override { return m_wallet->GetPQMnemonic(); }
     OutputType getDefaultAddressType() override { return m_wallet->m_default_address_type; }
     CAmount getDefaultMaxTxFee() override { return m_wallet->m_default_max_tx_fee; }
     void remove() override
@@ -581,6 +584,21 @@ public:
         } else {
             return util::Error{error};
         }
+    }
+    util::Result<std::unique_ptr<Wallet>> createWalletFromWords(const std::string& name, const SecureString& passphrase, const SecureString& words, const SecureString& words_passphrase, std::vector<bilingual_str>& warnings) override
+    {
+        DatabaseOptions options;
+        DatabaseStatus status;
+        ReadDatabaseArgs(*m_context.args, options);
+        options.require_create = true;
+        options.create_flags = WALLET_FLAG_DESCRIPTORS;
+        options.create_passphrase = passphrase;
+        options.create_pq_mnemonic = words;
+        options.create_pq_mnemonic_passphrase = words_passphrase;
+        bilingual_str error;
+        std::unique_ptr<Wallet> wallet{MakeWallet(m_context, CreateWallet(m_context, name, /*load_on_start=*/true, options, status, error, warnings))};
+        if (wallet) return wallet;
+        return util::Error{error};
     }
     util::Result<std::unique_ptr<Wallet>> loadWallet(const std::string& name, std::vector<bilingual_str>& warnings) override
     {

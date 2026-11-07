@@ -96,6 +96,8 @@ public Q_SLOTS:
     void backupWallet();
     /** Change encrypted wallet passphrase */
     void changePassphrase();
+    //! PQCH: show the 24 recovery words (asks for the passphrase if the wallet is encrypted)
+    void showRecoveryWords(bool backup = false);
     /** Ask for passphrase to unlock wallet temporarily */
     void unlockWallet();
 

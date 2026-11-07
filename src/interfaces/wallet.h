@@ -258,6 +258,12 @@ public:
     // Return whether the wallet contains a Taproot scriptPubKeyMan
     virtual bool taprootEnabled() = 0;
 
+    //! PQCH: whether this network's wallets are post-quantum (P2MR addresses, recovery words).
+    virtual bool pqWallet() = 0;
+
+    //! PQCH: the wallet's 24 recovery words (wallet must be unlocked if encrypted).
+    virtual util::Result<std::string> getRecoveryWords() = 0;
+
     // Return whether wallet uses an external signer.
     virtual bool hasExternalSigner() = 0;
 
@@ -313,6 +319,9 @@ class WalletLoader : public ChainClient
 public:
     //! Create new wallet.
     virtual util::Result<std::unique_ptr<Wallet>> createWallet(const std::string& name, const SecureString& passphrase, uint64_t wallet_creation_flags, std::vector<bilingual_str>& warnings) = 0;
+
+    //! PQCH: create a wallet from 24 recovery words (and an optional BIP39 passphrase), then rescan.
+    virtual util::Result<std::unique_ptr<Wallet>> createWalletFromWords(const std::string& name, const SecureString& passphrase, const SecureString& words, const SecureString& words_passphrase, std::vector<bilingual_str>& warnings) = 0;
 
     //! Load existing wallet.
     virtual util::Result<std::unique_ptr<Wallet>> loadWallet(const std::string& name, std::vector<bilingual_str>& warnings) = 0;

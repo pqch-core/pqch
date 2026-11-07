@@ -8,6 +8,7 @@
 #include <qt/askpassphrasedialog.h>
 #include <qt/clientmodel.h>
 #include <qt/guiutil.h>
+#include <qt/recoverywordsdialog.h>
 #include <qt/optionsmodel.h>
 #include <qt/overviewpage.h>
 #include <qt/platformstyle.h>
@@ -20,10 +21,12 @@
 
 #include <interfaces/node.h>
 #include <node/interface_ui.h>
+#include <support/cleanse.h>
 #include <util/strencodings.h>
 
 #include <QAction>
 #include <QFileDialog>
+#include <QMessageBox>
 #include <QHBoxLayout>
 #include <QProgressDialog>
 #include <QPushButton>
@@ -205,6 +208,14 @@ void WalletView::encryptWallet()
     auto dlg = new AskPassphraseDialog(AskPassphraseDialog::Encrypt, this);
     dlg->setModel(walletModel);
     connect(dlg, &QDialog::finished, this, &WalletView::encryptionStatusChanged);
+    connect(dlg, &QDialog::accepted, this, [this] {
+        // PQCH: encrypting replaces the recovery words (as it replaces the keys).
+        if (!walletModel->wallet().pqWallet() || walletModel->getEncryptionStatus() == WalletModel::Unencrypted) return;
+        QMessageBox::information(this, tr("New recovery words"),
+            tr("Encrypting the wallet gave it <b>new recovery words</b>. New addresses come from them, so write them down now.<br><br>"
+               "Keep the old words too until the funds received before are spent."));
+        showRecoveryWords(/*backup=*/true);
+    }, Qt::QueuedConnection);
     GUIUtil::ShowModalDialogAsynchronously(dlg);
 }
 
@@ -233,6 +244,22 @@ void WalletView::changePassphrase()
     auto dlg = new AskPassphraseDialog(AskPassphraseDialog::ChangePass, this);
     dlg->setModel(walletModel);
     GUIUtil::ShowModalDialogAsynchronously(dlg);
+}
+
+void WalletView::showRecoveryWords(bool backup)
+{
+    if (!walletModel) return;
+    WalletModel::UnlockContext ctx(walletModel->requestUnlock());
+    if (!ctx.isValid()) return;
+    auto words{walletModel->wallet().getRecoveryWords()};
+    if (!words) {
+        QMessageBox::warning(this, tr("Recovery words"), QString::fromStdString(util::ErrorString(words).translated));
+        return;
+    }
+    SecureString secure(words->begin(), words->end());
+    memory_cleanse(words->data(), words->size());
+    RecoveryWordsDialog dlg(secure, backup ? RecoveryWordsDialog::Mode::Backup : RecoveryWordsDialog::Mode::Show, this);
+    dlg.exec();
 }
 
 void WalletView::unlockWallet()

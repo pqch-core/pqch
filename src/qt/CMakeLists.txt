@@ -184,6 +184,8 @@ if(ENABLE_WALLET)
       qrimagewidget.cpp
       qrimagewidget.h
       receivecoinsdialog.cpp
+      recoverywordsdialog.cpp
+      recoverywordsdialog.h
       receivecoinsdialog.h
       receiverequestdialog.cpp
       receiverequestdialog.h

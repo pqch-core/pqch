@@ -134,7 +134,34 @@ private:
     void finish();
 
     SecureString m_passphrase;
+    SecureString m_recovery_words; //!< PQCH: shown once the wallet is created
     CreateWalletDialog* m_create_wallet_dialog{nullptr};
+    AskPassphraseDialog* m_passphrase_dialog{nullptr};
+};
+
+/** PQCH: creates a wallet from its 24 recovery words. */
+class RestoreWordsActivity : public WalletControllerActivity
+{
+    Q_OBJECT
+
+public:
+    RestoreWordsActivity(WalletController* wallet_controller, QWidget* parent_widget);
+    ~RestoreWordsActivity();
+
+    void restore();
+
+Q_SIGNALS:
+    void restored(WalletModel* wallet_model);
+
+private:
+    void askPassphrase();
+    void createWallet();
+    void finish();
+
+    std::string m_name;
+    SecureString m_words;
+    SecureString m_words_passphrase;
+    SecureString m_passphrase;
     AskPassphraseDialog* m_passphrase_dialog{nullptr};
 };
 
