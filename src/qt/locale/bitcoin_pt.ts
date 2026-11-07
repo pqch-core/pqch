@@ -92,14 +92,14 @@
         <translation>Ocorreu um erro ao tentar guardar a lista de endereços para %1. Por favor, tente novamente.</translation>
     </message>
     <message>
-        <source>These are your Bitcoin addresses for receiving payments. Use the 'Create new receiving address' button in the receive tab to create new addresses.
-Signing is only possible with addresses of the type 'legacy'.</source>
-        <translation>Estes são seus novos endereços Bitcoin para o recebimento de pagamentos. Use o botão "Criar novo endereço de recebimento" na aba "Receber"  para criar novos endereços.
-Assinar só é possível com endereços do tipo "legado".</translation>
+        <source>These are your PQCH addresses for receiving payments. Use the 'Create new receiving address' button in the receive tab to create new addresses.
+Message signing is not available for post-quantum (P2MR) addresses yet.</source>
+        <translation>Estes são os seus endereços PQCH para receber pagamentos. Use o botão "Criar novo endereço de receção" no separador "Receber" para criar novos endereços.
+A assinatura de mensagens ainda não está disponível para endereços pós-quânticos (P2MR).</translation>
     </message>
     <message>
-        <source>These are your Bitcoin addresses for sending payments. Always check the amount and the receiving address before sending coins.</source>
-        <translation>Estes são os seus endereços Bitcoin para enviar pagamentos. Verifique sempre o valor e o endereço de receção antes de enviar moedas.</translation>
+        <source>These are your PQCH addresses for sending payments. Always check the amount and the receiving address before sending coins.</source>
+        <translation>Estes são os seus endereços PQCH para enviar pagamentos. Verifique sempre o valor e o endereço de receção antes de enviar moedas.</translation>
     </message>
 </context>
 <context>
@@ -172,8 +172,8 @@ Assinar só é possível com endereços do tipo "legado".</translation>
         <translation>Falha na alteração da frase de segurança</translation>
     </message>
     <message>
-        <source>Remember that encrypting your wallet cannot fully protect your bitcoins from being stolen by malware infecting your computer.</source>
-        <translation>Lembra se que encrostar a sua carteira não o pode defender na totalidade os seus bitcoins de serem roubados por um malware que possa infectar o seu computador.</translation>
+        <source>Remember that encrypting your wallet cannot fully protect your PQCH from being stolen by malware infecting your computer.</source>
+        <translation>Lembra se que encrostar a sua carteira não o pode defender na totalidade os seus PQCH de serem roubados por um malware que possa infectar o seu computador.</translation>
     </message>
     <message>
         <source>Repeat new passphrase</source>
@@ -232,8 +232,8 @@ Assinar só é possível com endereços do tipo "legado".</translation>
         <translation>Desbloqueio da carteira falhou</translation>
     </message>
     <message>
-        <source>Warning: If you encrypt your wallet and lose your passphrase, you will &lt;b&gt;LOSE ALL OF YOUR BITCOINS&lt;/b&gt;!</source>
-        <translation>Aviso: se encriptar a sua carteira e perder a sua frase de segurnça, &lt;b&gt;PERDERÁ TODOS OS SEUS BITCOINS&lt;/b&gt;!</translation>
+        <source>Warning: If you encrypt your wallet and lose your passphrase, you will &lt;b&gt;LOSE ALL OF YOUR PQCH&lt;/b&gt;!</source>
+        <translation>Aviso: se encriptar a sua carteira e perder a sua frase de segurnça, &lt;b&gt;PERDERÁ TODOS OS SEUS PQCH&lt;/b&gt;!</translation>
     </message>
     <message>
         <source>Warning: The Caps Lock key is on!</source>
@@ -285,6 +285,22 @@ Assinar só é possível com endereços do tipo "legado".</translation>
 <context>
     <name>BitcoinGUI</name>
     <message>
+        <source>Restore Wallet from Recovery Words…</source>
+        <translation>Restaurar carteira a partir das palavras…</translation>
+    </message>
+    <message>
+        <source>Restore a wallet from its 24 recovery words</source>
+        <translation>Restaurar uma carteira a partir das 24 palavras de recuperação</translation>
+    </message>
+    <message>
+        <source>Show &amp;Recovery Words…</source>
+        <translation>Mostrar palavras de &amp;recuperação…</translation>
+    </message>
+    <message>
+        <source>Show the 24 recovery words of this wallet, to write them down</source>
+        <translation>Mostrar as 24 palavras de recuperação desta carteira, para as escrever</translation>
+    </message>
+    <message>
         <source>%1 behind</source>
         <translation>%1 em atraso</translation>
     </message>
@@ -293,7 +309,7 @@ Assinar só é possível com endereços do tipo "legado".</translation>
         <translation>Cliente %1</translation>
     </message>
     <message numerus="yes">
-        <source>%n active connection(s) to Bitcoin network.</source>
+        <source>%n active connection(s) to PQCH network.</source>
         <extracomment>A substring of the tooltip.</extracomment>
         <translation type="unfinished"><numerusform /><numerusform /><numerusform /></translation>
     </message>
@@ -571,8 +587,8 @@ Assinar só é possível com endereços do tipo "legado".</translation>
         <translation>Abrir Carteira</translation>
     </message>
     <message>
-        <source>Open a bitcoin: URI</source>
-        <translation>Abrir um bitcoin URI</translation>
+        <source>Open a pqch: URI</source>
+        <translation>Abrir um PQCH URI</translation>
     </message>
     <message>
         <source>Open a wallet</source>
@@ -611,8 +627,8 @@ Assinar só é possível com endereços do tipo "legado".</translation>
         <translation>Sair da aplicação</translation>
     </message>
     <message>
-        <source>Request payments (generates QR codes and bitcoin: URIs)</source>
-        <translation>Solicitar pagamentos (gera códigos QR e bitcoin: URIs)</translation>
+        <source>Request payments (generates QR codes and pqch: URIs)</source>
+        <translation>Solicitar pagamentos (gera códigos QR e pqch: URIs)</translation>
     </message>
     <message>
         <source>Restore Wallet</source>
@@ -647,8 +663,8 @@ Assinar só é possível com endereços do tipo "legado".</translation>
         <translation>Mo&amp;strar</translation>
     </message>
     <message>
-        <source>Send coins to a Bitcoin address</source>
-        <translation>Enviar moedas para um endereço Bitcoin</translation>
+        <source>Send coins to a PQCH address</source>
+        <translation>Enviar moedas para um endereço PQCH</translation>
     </message>
     <message>
         <source>Sent transaction</source>
@@ -672,7 +688,7 @@ Assinar só é possível com endereços do tipo "legado".</translation>
         <translation>Mostrar informação sobre o Qt</translation>
     </message>
     <message>
-        <source>Show the %1 help message to get a list with possible Bitcoin command-line options</source>
+        <source>Show the %1 help message to get a list with possible PQCH command-line options</source>
         <translation>Mostrar a mensagem de ajuda %1 para obter uma lista com possíveis opções a usar na linha de comandos.</translation>
     </message>
     <message>
@@ -688,8 +704,8 @@ Assinar só é possível com endereços do tipo "legado".</translation>
         <translation>Assinar &amp;mensagem…</translation>
     </message>
     <message>
-        <source>Sign messages with your Bitcoin addresses to prove you own them</source>
-        <translation>Assine as mensagens com os seus endereços Bitcoin para provar que é o proprietário dos mesmos</translation>
+        <source>Sign messages with your PQCH addresses to prove you own them</source>
+        <translation>Assine as mensagens com os seus endereços PQCH para provar que é o proprietário dos mesmos</translation>
     </message>
     <message>
         <source>Synchronizing with network…</source>
@@ -718,8 +734,8 @@ Assinar só é possível com endereços do tipo "legado".</translation>
         <translation>Atualizado</translation>
     </message>
     <message>
-        <source>Verify messages to ensure they were signed with specified Bitcoin addresses</source>
-        <translation>Verifique mensagens para assegurar que foram assinadas com o endereço Bitcoin especificado</translation>
+        <source>Verify messages to ensure they were signed with specified PQCH addresses</source>
+        <translation>Verifique mensagens para assegurar que foram assinadas com o endereço PQCH especificado</translation>
     </message>
     <message>
         <source>Wallet Data</source>
@@ -1041,8 +1057,8 @@ Assinar só é possível com endereços do tipo "legado".</translation>
         <translation>O endereço inserido "%1" já está no livro de endereços com a etiqueta "%2".</translation>
     </message>
     <message>
-        <source>The entered address "%1" is not a valid Bitcoin address.</source>
-        <translation>O endereço introduzido "%1" não é um endereço bitcoin válido.</translation>
+        <source>The entered address "%1" is not a valid PQCH address.</source>
+        <translation>O endereço introduzido "%1" não é um endereço PQCH válido.</translation>
     </message>
     <message>
         <source>The label associated with this address list entry</source>
@@ -1090,8 +1106,8 @@ Assinar só é possível com endereços do tipo "legado".</translation>
 <context>
     <name>Intro</name>
     <message>
-        <source>%1 will download and store a copy of the Bitcoin block chain.</source>
-        <translation>%1 irá descarregar e armazenar uma cópia da cadeia de blocos da Bitcoin.</translation>
+        <source>%1 will download and store a copy of the PQCH block chain.</source>
+        <translation>%1 irá descarregar e armazenar uma cópia da cadeia de blocos da PQCH.</translation>
     </message>
     <message numerus="yes">
         <source>%n GB of space available</source>
@@ -1280,8 +1296,8 @@ O processo de migração criará um backup da carteira antes da migração. Este
         <translation>%1 está no momento sincronizando. Ela irá baixar os cabecários e blocos dos pares e validá-los até atingir a ponta da cadeia de blocos.</translation>
     </message>
     <message>
-        <source>Attempting to spend bitcoins that are affected by not-yet-displayed transactions will not be accepted by the network.</source>
-        <translation>Tentar enviar bitcoins que estão afetadas por transações ainda não exibidas não será aceite pela rede.</translation>
+        <source>Attempting to spend PQCH that are affected by not-yet-displayed transactions will not be accepted by the network.</source>
+        <translation>Tentar enviar PQCH que estão afetadas por transações ainda não exibidas não será aceite pela rede.</translation>
     </message>
     <message>
         <source>Esc</source>
@@ -1316,7 +1332,7 @@ O processo de migração criará um backup da carteira antes da migração. Este
         <translation>Aumento horário do progresso</translation>
     </message>
     <message>
-        <source>Recent transactions may not yet be visible, and therefore your wallet's balance might be incorrect. This information will be correct once your wallet has finished synchronizing with the bitcoin network, as detailed below.</source>
+        <source>Recent transactions may not yet be visible, and therefore your wallet's balance might be incorrect. This information will be correct once your wallet has finished synchronizing with the PQCH network, as detailed below.</source>
         <translation>Transações recentes podem não ser visíveis por agora, portanto o saldo da sua carteira pode estar incorreto. Esta informação será corrigida quando a sua carteira acabar de sincronizar com a rede, como está explicado em baixo.</translation>
     </message>
     <message>
@@ -1339,8 +1355,8 @@ O processo de migração criará um backup da carteira antes da migração. Este
 <context>
     <name>OpenURIDialog</name>
     <message>
-        <source>Open bitcoin URI</source>
-        <translation>Abrir um Bitcoin URI</translation>
+        <source>Open pqch URI</source>
+        <translation>Abrir um PQCH URI</translation>
     </message>
     <message>
         <source>Paste address from clipboard</source>
@@ -1444,8 +1460,8 @@ O processo de migração criará um backup da carteira antes da migração. Este
         <translation>Permitir ligações de "a receber"</translation>
     </message>
     <message>
-        <source>Automatically open the Bitcoin client port on the router. This only works when your router supports PCP or NAT-PMP and it is enabled. The external port could be random.</source>
-        <translation>Abrir automaticamente a porta do cliente Bitcoin no router. Esta função apenas funciona se o router suportar PCP ou NAT-PMP e essas opções estiverem ativadas. A porta externa pode ser atribuída aleatoriamente.</translation>
+        <source>Automatically open the PQCH client port on the router. This only works when your router supports PCP or NAT-PMP and it is enabled. The external port could be random.</source>
+        <translation>Abrir automaticamente a porta do cliente PQCH no router. Esta função apenas funciona se o router suportar PCP ou NAT-PMP e essas opções estiverem ativadas. A porta externa pode ser atribuída aleatoriamente.</translation>
     </message>
     <message>
         <source>Automatically start %1 after logging in to the system.</source>
@@ -1485,12 +1501,12 @@ O processo de migração criará um backup da carteira antes da migração. Este
         <translation>Confirme a reposição das opções</translation>
     </message>
     <message>
-        <source>Connect to the Bitcoin network through a SOCKS5 proxy.</source>
-        <translation>Conectar à rede da Bitcoin através dum proxy SOCLS5.</translation>
+        <source>Connect to the PQCH network through a SOCKS5 proxy.</source>
+        <translation>Conectar à rede da PQCH através dum proxy SOCLS5.</translation>
     </message>
     <message>
-        <source>Connect to the Bitcoin network through a separate SOCKS5 proxy for Tor onion services.</source>
-        <translation>Conecte-se a rede Bitcoin através de um proxy SOCKS5 separado para serviços Tor Onion</translation>
+        <source>Connect to the PQCH network through a separate SOCKS5 proxy for Tor onion services.</source>
+        <translation>Conecte-se a rede PQCH através de um proxy SOCKS5 separado para serviços Tor Onion</translation>
     </message>
     <message>
         <source>Continue</source>
@@ -1741,8 +1757,8 @@ O processo de migração criará um backup da carteira antes da migração. Este
         <translation>transações recentes</translation>
     </message>
     <message>
-        <source>The displayed information may be out of date. Your wallet automatically synchronizes with the Bitcoin network after a connection is established, but this process has not completed yet.</source>
-        <translation>A informação mostrada poderá estar desatualizada. A sua carteira sincroniza automaticamente com a rede Bitcoin depois de estabelecer ligação, mas este processo ainda não está completo.</translation>
+        <source>The displayed information may be out of date. Your wallet automatically synchronizes with the PQCH network after a connection is established, but this process has not completed yet.</source>
+        <translation>A informação mostrada poderá estar desatualizada. A sua carteira sincroniza automaticamente com a rede PQCH depois de estabelecer ligação, mas este processo ainda não está completo.</translation>
     </message>
     <message>
         <source>Total of transactions that have yet to be confirmed, and do not yet count toward the spendable balance</source>
@@ -1909,8 +1925,8 @@ Devido a falhas de segurança no BIP70, é recomendado que todas as instruções
 Se está a receber este erro, deverá pedir ao comerciante para fornecer um URI compatível com BIP21.</translation>
     </message>
     <message>
-        <source>Cannot start bitcoin: click-to-pay handler</source>
-        <translation>Impossível iniciar o controlador de bitcoin: click-to-pay</translation>
+        <source>Cannot start pqch: click-to-pay handler</source>
+        <translation>Impossível iniciar o controlador de pqch: click-to-pay</translation>
     </message>
     <message>
         <source>Payment request error</source>
@@ -1921,8 +1937,8 @@ Se está a receber este erro, deverá pedir ao comerciante para fornecer um URI 
         <translation>Controlo de pedidos de pagamento.</translation>
     </message>
     <message>
-        <source>URI cannot be parsed! This can be caused by an invalid Bitcoin address or malformed URI parameters.</source>
-        <translation>URI não foi lido corretamente! Isto pode ser causado por um endereço Bitcoin inválido ou por parâmetros URI malformados.</translation>
+        <source>URI cannot be parsed! This can be caused by an invalid PQCH address or malformed URI parameters.</source>
+        <translation>URI não foi lido corretamente! Isto pode ser causado por um endereço PQCH inválido ou por parâmetros URI malformados.</translation>
     </message>
     <message>
         <source>URI handling</source>
@@ -2058,8 +2074,8 @@ Se está a receber este erro, deverá pedir ao comerciante para fornecer um URI 
         <translation>"%1" embutido</translation>
     </message>
     <message>
-        <source>Enter a Bitcoin address (e.g. %1)</source>
-        <translation>Introduza um endereço Bitcoin (ex. %1)</translation>
+        <source>Enter a PQCH address (e.g. %1)</source>
+        <translation>Introduza um endereço PQCH (ex. %1)</translation>
     </message>
     <message>
         <source>Error: %1</source>
@@ -2382,8 +2398,8 @@ Se está a receber este erro, deverá pedir ao comerciante para fornecer um URI 
         <translation>Atividade de rede desativada</translation>
     </message>
     <message>
-        <source>Network addresses that your Bitcoin node is currently using to communicate with other nodes.</source>
-        <translation>Endereços de rede que seu nó Bitcoin está usando atualmente para se comunicar com outros nós.</translation>
+        <source>Network addresses that your PQCH node is currently using to communicate with other nodes.</source>
+        <translation>Endereços de rede que seu nó PQCH está usando atualmente para se comunicar com outros nós.</translation>
     </message>
     <message>
         <source>Never</source>
@@ -2626,6 +2642,14 @@ Para mais informação acerca da utilização desta consola, escreva %6.
 <context>
     <name>ReceiveCoinsDialog</name>
     <message>
+        <source>P2MR (post-quantum)</source>
+        <translation>P2MR (pós-quântico)</translation>
+    </message>
+    <message>
+        <source>Post-quantum address (pqc1…). Funds sent here are protected by ML-DSA, with SLH-DSA as a recovery path.</source>
+        <translation>Endereço pós-quântico (pqc1…). Os fundos enviados para aqui são protegidos por ML-DSA, com SLH-DSA como caminho de recuperação.</translation>
+    </message>
+    <message>
         <source>&amp;Amount:</source>
         <translation>&amp;Quantia:</translation>
     </message>
@@ -2662,8 +2686,8 @@ Para mais informação acerca da utilização desta consola, escreva %6.
         <translation>Uma mensagem opicional que é anexada ao pedido de pagamento e pode ser mostrada para o remetente.</translation>
     </message>
     <message>
-        <source>An optional message to attach to the payment request, which will be displayed when the request is opened. Note: The message will not be sent with the payment over the Bitcoin network.</source>
-        <translation>Uma mensagem opcional para anexar ao pedido de pagamento, que será exibida quando o pedido for aberto. Nota: A mensagem não será enviada com o pagamento através da rede Bitcoin.</translation>
+        <source>An optional message to attach to the payment request, which will be displayed when the request is opened. Note: The message will not be sent with the payment over the PQCH network.</source>
+        <translation>Uma mensagem opcional para anexar ao pedido de pagamento, que será exibida quando o pedido for aberto. Nota: A mensagem não será enviada com o pagamento através da rede PQCH.</translation>
     </message>
     <message>
         <source>Base58 (Legacy)</source>
@@ -3167,15 +3191,15 @@ Nota: como a taxa é calculada por byte, uma taxa de "100 satoshis por kvB" para
         <translation>Aviso: atualmente, não é possível a estimativa da taxa.</translation>
     </message>
     <message>
-        <source>Warning: Invalid Bitcoin address</source>
-        <translation>Aviso: endereço Bitcoin inválido</translation>
+        <source>Warning: Invalid PQCH address</source>
+        <translation>Aviso: endereço PQCH inválido</translation>
     </message>
     <message>
         <source>Warning: Unknown change address</source>
         <translation>Aviso: endereço de troco desconhecido</translation>
     </message>
     <message>
-        <source>When there is less transaction volume than space in the blocks, miners as well as relaying nodes may enforce a minimum fee. Paying only this minimum fee is just fine, but be aware that this can result in a never confirming transaction once there is more demand for bitcoin transactions than the network can process.</source>
+        <source>When there is less transaction volume than space in the blocks, miners as well as relaying nodes may enforce a minimum fee. Paying only this minimum fee is just fine, but be aware that this can result in a never confirming transaction once there is more demand for PQCH transactions than the network can process.</source>
         <translation>Quando o volume de transações é maior que o espaço nos blocos, os mineradores, bem como os nós de retransmissão, podem impor uma taxa mínima. Pagar apenas esta taxa mínima é muito bom, mas esteja ciente que isso pode resultar numa transação nunca confirmada, uma vez que há mais pedidos para transações do que a rede pode processar.</translation>
     </message>
     <message>
@@ -3198,8 +3222,8 @@ Nota: como a taxa é calculada por byte, uma taxa de "100 satoshis por kvB" para
         <translation>&amp;Etiqueta</translation>
     </message>
     <message>
-        <source>A message that was attached to the bitcoin: URI which will be stored with the transaction for your reference. Note: This message will not be sent over the Bitcoin network.</source>
-        <translation>Uma mensagem que estava anexada ao URI bitcoin: que será armazenada com a transação para sua referência. Nota: Esta mensagem não será enviada através da rede Bitcoin.</translation>
+        <source>A message that was attached to the pqch: URI which will be stored with the transaction for your reference. Note: This message will not be sent over the PQCH network.</source>
+        <translation>Uma mensagem que estava anexada ao URI pqch: que será armazenada com a transação para sua referência. Nota: Esta mensagem não será enviada através da rede PQCH.</translation>
     </message>
     <message>
         <source>A&amp;mount:</source>
@@ -3234,16 +3258,16 @@ Nota: como a taxa é calculada por byte, uma taxa de "100 satoshis por kvB" para
         <translation>S&amp;ubtrair a taxa ao montante</translation>
     </message>
     <message>
-        <source>The Bitcoin address to send the payment to</source>
-        <translation>O endereço Bitcoin para enviar o pagamento</translation>
+        <source>The PQCH address to send the payment to</source>
+        <translation>O endereço PQCH para enviar o pagamento</translation>
     </message>
     <message>
         <source>The amount to send in the selected unit</source>
         <translation>A quantidade para enviar na unidade selecionada</translation>
     </message>
     <message>
-        <source>The fee will be deducted from the amount being sent. The recipient will receive less bitcoins than you enter in the amount field. If multiple recipients are selected, the fee is split equally.</source>
-        <translation>A taxa será deduzida ao valor que está a ser enviado. O destinatário irá receber menos bitcoins do que as que inseridas no campo do valor. Se estiverem selecionados múltiplos destinatários, a taxa será repartida equitativamente.</translation>
+        <source>The fee will be deducted from the amount being sent. The recipient will receive less PQCH than you enter in the amount field. If multiple recipients are selected, the fee is split equally.</source>
+        <translation>A taxa será deduzida ao valor que está a ser enviado. O destinatário irá receber menos PQCH do que as que inseridas no campo do valor. Se estiverem selecionados múltiplos destinatários, a taxa será repartida equitativamente.</translation>
     </message>
     <message>
         <source>Use available balance</source>
@@ -3351,8 +3375,8 @@ Nota: como a taxa é calculada por byte, uma taxa de "100 satoshis por kvB" para
         <translation>Assinar &amp;Mensagem</translation>
     </message>
     <message>
-        <source>Sign the message to prove you own this Bitcoin address</source>
-        <translation>Assine uma mensagem para provar que é dono deste endereço Bitcoin</translation>
+        <source>Sign the message to prove you own this PQCH address</source>
+        <translation>Assine uma mensagem para provar que é dono deste endereço PQCH</translation>
     </message>
     <message>
         <source>Signature</source>
@@ -3363,12 +3387,12 @@ Nota: como a taxa é calculada por byte, uma taxa de "100 satoshis por kvB" para
         <translation>Assinaturas - Assinar / Verificar uma Mensagem</translation>
     </message>
     <message>
-        <source>The Bitcoin address the message was signed with</source>
-        <translation>O endereço Bitcoin com que a mensagem foi designada</translation>
+        <source>The PQCH address the message was signed with</source>
+        <translation>O endereço PQCH com que a mensagem foi designada</translation>
     </message>
     <message>
-        <source>The Bitcoin address to sign the message with</source>
-        <translation>O endereço Bitcoin para designar a mensagem</translation>
+        <source>The PQCH address to sign the message with</source>
+        <translation>O endereço PQCH para designar a mensagem</translation>
     </message>
     <message>
         <source>The entered address does not refer to a legacy (P2PKH) key. Message signing for SegWit and other non-P2PKH address types is not supported in this version of %1. Please check the address and try again.</source>
@@ -3399,16 +3423,16 @@ Nota: como a taxa é calculada por byte, uma taxa de "100 satoshis por kvB" para
         <translation>Verificar &amp;Mensagem</translation>
     </message>
     <message>
-        <source>Verify the message to ensure it was signed with the specified Bitcoin address</source>
-        <translation>Verifique a mensagem para assegurar que foi assinada com o endereço Bitcoin especificado</translation>
+        <source>Verify the message to ensure it was signed with the specified PQCH address</source>
+        <translation>Verifique a mensagem para assegurar que foi assinada com o endereço PQCH especificado</translation>
     </message>
     <message>
         <source>Wallet unlock was cancelled.</source>
         <translation>O desbloqueio da carteira foi cancelado.</translation>
     </message>
     <message>
-        <source>You can sign messages/agreements with your legacy (P2PKH) addresses to prove you can receive bitcoins sent to them. Be careful not to sign anything vague or random, as phishing attacks may try to trick you into signing your identity over to them. Only sign fully-detailed statements you agree to.</source>
-        <translation>Você pode assinar mensagens com seus endereços legados (P2PKH) para provar que pode receber bitcoins enviados a eles. Tenha cuidado para não assinar nada vago ou aleatório, pois ataques de phishing podem tentar enganá-lo para assinar sua identidade para eles. Assine apenas declarações totalmente detalhadas com as quais você concorda.</translation>
+        <source>You can sign messages/agreements with your legacy (P2PKH) addresses to prove you can receive PQCH sent to them. Be careful not to sign anything vague or random, as phishing attacks may try to trick you into signing your identity over to them. Only sign fully-detailed statements you agree to.</source>
+        <translation>Você pode assinar mensagens com seus endereços legados (P2PKH) para provar que pode receber PQCH enviados a eles. Tenha cuidado para não assinar nada vago ou aleatório, pois ataques de phishing podem tentar enganá-lo para assinar sua identidade para eles. Assine apenas declarações totalmente detalhadas com as quais você concorda.</translation>
     </message>
 </context>
 <context>
@@ -3977,6 +4001,18 @@ Ir para o arquivo &gt; Abrir carteira para carregar a carteira
 </context>
 <context>
     <name>WalletView</name>
+    <message>
+        <source>New recovery words</source>
+        <translation>Novas palavras de recuperação</translation>
+    </message>
+    <message>
+        <source>Encrypting the wallet gave it &lt;b&gt;new recovery words&lt;/b&gt;. New addresses come from them, so write them down now.&lt;br&gt;&lt;br&gt;Keep the old words too until the funds received before are spent.</source>
+        <translation>Cifrar a carteira deu-lhe &lt;b&gt;novas palavras de recuperação&lt;/b&gt;. Os novos endereços saem delas, por isso escreva-as já.&lt;br&gt;&lt;br&gt;Guarde também as palavras antigas até gastar os fundos recebidos antes.</translation>
+    </message>
+    <message>
+        <source>Recovery words</source>
+        <translation>Palavras de recuperação</translation>
+    </message>
     <message>
         <source>&amp;Export</source>
         <translation>&amp;Exportar</translation>
@@ -4985,6 +5021,151 @@ A carteira pode ter sido adulterada ou criada com intenções maliciosas.
     <message>
         <source>whitebind may only be used for incoming connections ("out" was passed)</source>
         <translation>whitebind só pode ser utilizado para conexões de entrada ("out" foi passado)</translation>
+    </message>
+</context>
+<context>
+    <name>RecoveryWordsDialog</name>
+    <message>
+        <source>Recovery words</source>
+        <translation>Palavras de recuperação</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;Write down these 24 words, in order, on paper.&lt;/b&gt; They are the only way to recover this wallet if this computer is lost, broken or stolen.</source>
+        <translation>&lt;b&gt;Escreva estas 24 palavras em papel, pela ordem.&lt;/b&gt; São a única forma de recuperar esta carteira se este computador se perder, avariar ou for roubado.</translation>
+    </message>
+    <message>
+        <source>These are the 24 recovery words of this wallet, in order.</source>
+        <translation>Estas são as 24 palavras de recuperação desta carteira, pela ordem.</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;Keep them secret and offline.&lt;/b&gt; Anyone with these words can take all the funds. Never type them into a website, never photograph them, never store them in email, chat or the cloud. PQCH will never ask for them.</source>
+        <translation>&lt;b&gt;Guarde-as em segredo e fora da internet.&lt;/b&gt; Quem tiver estas palavras pode levar todos os fundos. Nunca as escreva num site, nunca as fotografe, nunca as guarde em email, chat ou na nuvem. O PQCH nunca as vai pedir.</translation>
+    </message>
+    <message>
+        <source>I have written down the 24 words</source>
+        <translation>Escrevi as 24 palavras</translation>
+    </message>
+    <message>
+        <source>Next</source>
+        <translation>Seguinte</translation>
+    </message>
+    <message>
+        <source>Close</source>
+        <translation>Fechar</translation>
+    </message>
+    <message>
+        <source>To make sure the words were written down correctly, type the words asked below.</source>
+        <translation>Para confirmar que as palavras ficaram bem escritas, escreva as palavras pedidas abaixo.</translation>
+    </message>
+    <message>
+        <source>Back to the words</source>
+        <translation>Voltar às palavras</translation>
+    </message>
+    <message>
+        <source>Confirm</source>
+        <translation>Confirmar</translation>
+    </message>
+    <message>
+        <source>Word %1</source>
+        <translation>Palavra %1</translation>
+    </message>
+    <message>
+        <source>At least one word is not right. Check what you wrote down, or go back to the words.</source>
+        <translation>Pelo menos uma palavra não está certa. Verifique o que escreveu, ou volte às palavras.</translation>
+    </message>
+    <message>
+        <source>Recovery words not confirmed</source>
+        <translation>Palavras de recuperação não confirmadas</translation>
+    </message>
+    <message>
+        <source>Without the recovery words, this wallet cannot be recovered if this computer is lost.&lt;br&gt;&lt;br&gt;You can see them again later in &lt;b&gt;Settings → Show recovery words…&lt;/b&gt;. Close anyway?</source>
+        <translation>Sem as palavras de recuperação, esta carteira não pode ser recuperada se este computador se perder.&lt;br&gt;&lt;br&gt;Pode voltar a vê-las em &lt;b&gt;Configurações → Mostrar palavras de recuperação…&lt;/b&gt;. Fechar mesmo assim?</translation>
+    </message>
+</context>
+<context>
+    <name>RestoreWordsDialog</name>
+    <message>
+        <source>Restore wallet from recovery words</source>
+        <translation>Restaurar carteira a partir das palavras</translation>
+    </message>
+    <message>
+        <source>Type the 24 recovery words of the wallet, in order, separated by spaces. The wallet then searches the whole blockchain for its transactions, which can take a while.</source>
+        <translation>Escreva as 24 palavras de recuperação da carteira, pela ordem, separadas por espaços. Depois, a carteira procura as suas transações em toda a cadeia de blocos, o que pode demorar.</translation>
+    </message>
+    <message>
+        <source>Restored wallet</source>
+        <translation>Carteira restaurada</translation>
+    </message>
+    <message>
+        <source>Wallet name</source>
+        <translation>Nome da carteira</translation>
+    </message>
+    <message>
+        <source>Recovery words</source>
+        <translation>Palavras de recuperação</translation>
+    </message>
+    <message>
+        <source>Leave empty unless one was used</source>
+        <translation>Deixe vazio se não usou nenhuma</translation>
+    </message>
+    <message>
+        <source>Optional BIP39 passphrase (&quot;25th word&quot;). A different passphrase gives a different wallet.</source>
+        <translation>Frase-passe BIP39 opcional (&quot;25.ª palavra&quot;). Uma frase-passe diferente dá uma carteira diferente.</translation>
+    </message>
+    <message>
+        <source>Extra passphrase</source>
+        <translation>Frase-passe extra</translation>
+    </message>
+    <message>
+        <source>Encrypt the restored wallet with a password (recommended)</source>
+        <translation>Cifrar a carteira restaurada com uma palavra-passe (recomendado)</translation>
+    </message>
+    <message>
+        <source>Only type the recovery words on a computer you trust. PQCH will never ask for them on a website.</source>
+        <translation>Escreva as palavras de recuperação apenas num computador em que confia. O PQCH nunca as pede num site.</translation>
+    </message>
+    <message>
+        <source>Restore</source>
+        <translation>Restaurar</translation>
+    </message>
+    <message>
+        <source>There must be 24 words (%1 typed).</source>
+        <translation>Têm de ser 24 palavras (escreveu %1).</translation>
+    </message>
+    <message>
+        <source>These words are not valid recovery words. Check for a misspelled word or a wrong order.</source>
+        <translation>Estas palavras não são palavras de recuperação válidas. Verifique se há uma palavra mal escrita ou fora de ordem.</translation>
+    </message>
+    <message>
+        <source>The extra passphrase may only use letters, digits, spaces and common symbols (no accents).</source>
+        <translation>A frase-passe extra só pode ter letras, algarismos, espaços e símbolos comuns (sem acentos).</translation>
+    </message>
+</context>
+<context>
+    <name>RestoreWordsActivity</name>
+    <message>
+        <source>Restore Wallet</source>
+        <translation>Restaurar carteira</translation>
+    </message>
+    <message>
+        <source>Restoring Wallet &lt;b&gt;%1&lt;/b&gt; and searching the blockchain for its transactions…</source>
+        <translation>A restaurar a carteira &lt;b&gt;%1&lt;/b&gt; e a procurar as suas transações na cadeia de blocos…</translation>
+    </message>
+    <message>
+        <source>Restore wallet failed</source>
+        <translation>Falha ao restaurar a carteira</translation>
+    </message>
+    <message>
+        <source>Restore wallet warning</source>
+        <translation>Aviso ao restaurar a carteira</translation>
+    </message>
+    <message>
+        <source>Restore wallet message</source>
+        <translation>Carteira restaurada</translation>
+    </message>
+    <message>
+        <source>Wallet restored from its recovery words.</source>
+        <translation>Carteira restaurada a partir das palavras de recuperação.</translation>
     </message>
 </context>
 </TS>
