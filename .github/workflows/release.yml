@@ -1,0 +1,180 @@
+# Copyright (c) 2026 The PQCH developers
+# Distributed under the MIT software license, see the accompanying
+# file COPYING or https://opensource.org/license/mit.
+
+# PQCH release builds: PQCH Core (GUI + node) for Linux x86_64 and Windows x64, built with the
+# depends system (pinned, hash-checked sources) on the project's own runner.
+#
+#   tag vX.Y.Z  ->  build, SHA256SUMS, and a *draft* GitHub release with the files
+#   Run workflow (by hand)  ->  build and SHA256SUMS as an Actions artifact only (version dev-<commit>)
+#
+# Nothing is signed here: the runner holds no keys. The release manager downloads SHA256SUMS,
+# checks it, signs it on their own computer (contrib/pqch/RELEASE.md) and adds SHA256SUMS.asc.
+# macOS comes after launch.
+#
+# Where the jobs run: the repository variable PQCH_RUNS_ON, as in pqch.yml. The first build of
+# each platform compiles Qt and takes 1-2 hours; later ones reuse the depends cache in the
+# runner's home directory.
+
+name: PQCH Release
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+concurrency:
+  group: pqch-release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    name: 'Build ${{ matrix.name }}'
+    runs-on: ${{ fromJSON(vars.PQCH_RUNS_ON || '"ubuntu-24.04"') }}
+    timeout-minutes: 600
+    strategy:
+      fail-fast: false
+      max-parallel: 1  # one runner: one platform at a time
+      matrix:
+        include:
+          - name: x86_64-linux-gnu
+            host: x86_64-pc-linux-gnu
+          - name: win64
+            host: x86_64-w64-mingw32
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version
+        id: version
+        run: |
+          v() { sed -n "s/^set(CLIENT_VERSION_$1 \([0-9]*\)).*/\1/p" CMakeLists.txt; }
+          CMAKE_VERSION="$(v MAJOR).$(v MINOR).$(v BUILD)"
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+            if [[ "${VERSION}" != "${CMAKE_VERSION}"* ]]; then
+              echo "::error::Tag v${VERSION} does not match the version in CMakeLists.txt (${CMAKE_VERSION})."
+              exit 1
+            fi
+          else
+            VERSION="dev-${GITHUB_SHA::10}"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "PQCH ${VERSION} (${{ matrix.name }})"
+
+      - name: Packages (GitHub-hosted runner only)
+        if: runner.environment == 'github-hosted'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential cmake pkgconf python3 \
+            ccache bison byacc gperf curl xz-utils g++-mingw-w64-x86-64-posix nsis zip
+
+      - name: Caches in the runner's home (self-hosted)
+        run: |
+          if [[ "${{ runner.environment }}" == "self-hosted" ]]; then base="$HOME/pqch-release-cache"; else base="$RUNNER_TEMP/pqch-release-cache"; fi
+          mkdir -p "$base/sources" "$base/built" "$base/ccache"
+          {
+            echo "SOURCES_PATH=$base/sources"
+            echo "BASE_CACHE=$base/built"
+            echo "CCACHE_DIR=$base/ccache"
+            echo "CCACHE_MAXSIZE=2G"
+          } >> "$GITHUB_ENV"
+
+      - name: Check the tools
+        run: |
+          for t in make cmake curl ccache bison; do command -v "$t" >/dev/null || { echo "::error::$t is missing (contrib/pqch/instalar_runner.sh)"; exit 1; }; done
+          if [[ "${{ matrix.host }}" == *mingw32 ]]; then
+            command -v x86_64-w64-mingw32-g++-posix >/dev/null || { echo "::error::g++-mingw-w64-x86-64-posix is missing"; exit 1; }
+            command -v makensis >/dev/null || { echo "::error::nsis is missing"; exit 1; }
+            command -v zip >/dev/null || { echo "::error::zip is missing"; exit 1; }
+          fi
+
+      - name: Dependencies (depends, sources checked by SHA256)
+        run: make -C depends HOST=${{ matrix.host }} NO_IPC=1 NO_USDT=1 -j"$(nproc)"
+
+      - name: Configure
+        run: |
+          cmake -B build --toolchain "depends/${{ matrix.host }}/toolchain.cmake" \
+            -DBUILD_GUI=ON -DBUILD_TESTS=ON -DBUILD_TX=ON -DBUILD_UTIL=ON -DBUILD_BENCH=OFF \
+            -DBUILD_FUZZ_BINARY=OFF -DENABLE_IPC=OFF -DWITH_CCACHE=ON -DREDUCE_EXPORTS=ON
+
+      - name: Build
+        run: cmake --build build -j"$(nproc)"
+
+      - name: PQCH unit tests (Linux)
+        if: matrix.host == 'x86_64-pc-linux-gnu'
+        run: build/bin/test_pqch --run_test='pqch_*' --log_level=test_suite
+
+      - name: Package (Linux)
+        if: matrix.host == 'x86_64-pc-linux-gnu'
+        run: |
+          VER="${{ steps.version.outputs.version }}"
+          NAME="pqch-${VER}"
+          cmake --install build --prefix "stage/${NAME}" --strip
+          # tests stay out; the inherited man pages still describe Bitcoin Core
+          rm -f "stage/${NAME}/bin/test_pqch"* "stage/${NAME}/libexec/test_pqch"*
+          rm -rf "stage/${NAME}/share/man"
+          rmdir "stage/${NAME}/libexec" "stage/${NAME}/share" 2>/dev/null || true
+          cp COPYING "stage/${NAME}/COPYING"
+          cp doc/README_windows.txt "stage/${NAME}/README.txt"
+          mkdir -p out
+          tar -C stage --owner=0 --group=0 --numeric-owner --sort=name --mtime="@$(git log -1 --format=%ct)" \
+            -czf "out/${NAME}-x86_64-linux-gnu.tar.gz" "${NAME}"
+          tar -tzf "out/${NAME}-x86_64-linux-gnu.tar.gz"
+
+      - name: Package (Windows)
+        if: matrix.host == 'x86_64-w64-mingw32'
+        run: |
+          VER="${{ steps.version.outputs.version }}"
+          NAME="pqch-${VER}"
+          cmake --build build --target deploy
+          mkdir -p out "stage/${NAME}"
+          mv build/pqch-win64-setup.exe "out/${NAME}-win64-setup.exe"
+          cp build/release/pqch*.exe "stage/${NAME}/"
+          cp COPYING "stage/${NAME}/COPYING.txt"
+          cp doc/README_windows.txt "stage/${NAME}/README.txt"
+          (cd stage && zip -X -r "../out/${NAME}-win64.zip" "${NAME}")
+          unzip -l "out/${NAME}-win64.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pqch-${{ steps.version.outputs.version }}-${{ matrix.name }}
+          path: out/*
+          if-no-files-found: error
+          retention-days: 30
+
+  sums:
+    name: 'SHA256SUMS'
+    needs: build
+    runs-on: ${{ fromJSON(vars.PQCH_RUNS_ON || '"ubuntu-24.04"') }}
+    permissions:
+      contents: write  # draft release on tags
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dl
+          pattern: pqch-*
+          merge-multiple: true
+      - name: SHA256SUMS
+        run: |
+          cd dl
+          sha256sum pqch-* | sort -k2 > SHA256SUMS
+          cat SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pqch-release-${{ github.ref_name }}-${{ github.run_number }}
+          path: dl/*
+          retention-days: 30
+      - name: Draft release (tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" dl/* --repo "${GITHUB_REPOSITORY}" --draft \
+            --title "PQCH ${GITHUB_REF_NAME}" \
+            --notes "Draft. Before publishing: check SHA256SUMS, sign it (contrib/pqch/RELEASE.md) and add SHA256SUMS.asc."

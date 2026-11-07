@@ -1,23 +1,20 @@
-Bitcoin Core
-=============
+PQCH Core
+=========
 
 Intro
 -----
-Bitcoin is a free open source peer-to-peer electronic cash system that is
-completely decentralized, without the need for a central server or trusted
-parties.  Users hold the crypto keys to their own money and transact directly
-with each other, with the help of a P2P network to check for double-spending.
-
+PQCH (PostQuantum Cash) is a free, open source peer-to-peer electronic cash
+system built on Bitcoin Core, with post-quantum signatures (ML-DSA-44, with
+SLH-DSA-128s as a recovery path) and P2MR addresses (pqc1p...).
 
 Setup
 -----
-Unpack the files into a directory and run bitcoin-qt.exe.
+Run pqch-qt.exe. On first start PQCH Core creates a wallet and shows its
+24 recovery words: write them on paper and keep them safe and offline.
+Anyone with the 24 words has your funds. PQCH will never ask for them.
 
-Bitcoin Core is the original Bitcoin client and it builds the backbone of the network.
-However, it downloads and stores the entire history of Bitcoin transactions;
-depending on the speed of your computer and network connection, the synchronization
-process can take anywhere from a few hours to a day or more.
+PQCH Core downloads and checks the entire history of PQCH transactions;
+depending on your computer and connection this can take a while.
 
-See the bitcoin wiki at:
-  https://en.bitcoin.it/wiki/Main_Page
-for more help and information.
+Verify every download against the signed SHA256SUMS published at:
+  https://pqch.org/

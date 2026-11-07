@@ -22,7 +22,7 @@ function(add_windows_deploy_target)
   configure_file(${PROJECT_SOURCE_DIR}/cmake/script/GenerateWindowsInstaller.cmake.in ${PROJECT_BINARY_DIR}/GenerateWindowsInstaller.cmake USE_SOURCE_PERMISSIONS @ONLY)
   if(MINGW AND TARGET bitcoin AND TARGET bitcoin-qt AND TARGET bitcoind AND TARGET bitcoin-cli AND TARGET bitcoin-tx AND TARGET bitcoin-wallet AND TARGET bitcoin-util AND TARGET test_bitcoin)
     add_custom_command(
-      OUTPUT ${PROJECT_BINARY_DIR}/bitcoin-win64-setup.exe
+      OUTPUT ${PROJECT_BINARY_DIR}/pqch-win64-setup.exe
       WORKING_DIRECTORY ${PROJECT_BINARY_DIR}
       COMMAND ${CMAKE_COMMAND} -E make_directory release
       COMMAND ${CMAKE_STRIP} $<TARGET_FILE:bitcoin> -o release/$<TARGET_FILE_NAME:bitcoin>
@@ -35,7 +35,7 @@ function(add_windows_deploy_target)
       COMMAND ${CMAKE_STRIP} $<TARGET_FILE:test_bitcoin> -o release/$<TARGET_FILE_NAME:test_bitcoin>
       COMMAND ${CMAKE_COMMAND} -D BIN_DIR=release -D LIBEXEC_DIR=release -P GenerateWindowsInstaller.cmake
     )
-    add_custom_target(deploy DEPENDS ${PROJECT_BINARY_DIR}/bitcoin-win64-setup.exe)
+    add_custom_target(deploy DEPENDS ${PROJECT_BINARY_DIR}/pqch-win64-setup.exe)
   endif()
 endfunction()
 
