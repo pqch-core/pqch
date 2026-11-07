@@ -154,6 +154,9 @@ OptionsDialog::OptionsDialog(QWidget* parent, bool enableWallet)
     ui->openBitcoinConfButton->setToolTip(ui->openBitcoinConfButton->toolTip().arg(CLIENT_NAME));
 
     ui->lang->setToolTip(ui->lang->toolTip().arg(CLIENT_NAME));
+    // PQCH: the application is always in English, so there is no language to choose.
+    ui->lang->setVisible(false);
+    ui->langLabel->setVisible(false);
     ui->lang->addItem(QString("(") + tr("default") + QString(")"), QVariant(""));
     for (const QString &langStr : translations.entryList())
     {

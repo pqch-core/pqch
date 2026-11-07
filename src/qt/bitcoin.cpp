@@ -117,6 +117,10 @@ static void initTranslations(QTranslator &qtTranslatorBase, QTranslator &qtTrans
     QApplication::removeTranslator(&translatorBase);
     QApplication::removeTranslator(&translator);
 
+    // PQCH: the application is always in English (one set of texts to review, the same menu names
+    // everywhere, as on pqch.org). No translation is loaded, whatever the system or -lang says.
+    if constexpr (true) return;
+
     // Get desired locale (e.g. "de_DE")
     // 1) System default language
     QString lang_territory = GetLangTerritory();
