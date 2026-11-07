@@ -176,6 +176,11 @@ BitcoinGUI::BitcoinGUI(interfaces::Node& node, const PlatformStyle *_platformSty
     if(enableWallet)
     {
         frameBlocksLayout->addStretch();
+        // PQCH: the project's cube logo, as on pqch.org, next to the unit
+        auto* logo = new QLabel(frameBlocks);
+        logo->setPixmap(QIcon(":/icons/pqch_logo").pixmap(QSize(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE)));
+        logo->setToolTip(tr("PQCH — PostQuantum Cash"));
+        frameBlocksLayout->addWidget(logo);
         frameBlocksLayout->addWidget(unitDisplayControl);
         frameBlocksLayout->addStretch();
         frameBlocksLayout->addWidget(labelWalletEncryptionIcon);
@@ -695,6 +700,23 @@ void BitcoinGUI::createToolBars()
         m_wallet_selector_label_action->setVisible(false);
         m_wallet_selector_action->setVisible(false);
 #endif
+        // PQCH: the brand as on pqch.org (cube logo + PQCH), at the right of the toolbar
+        auto* brand = new QWidget();
+        auto* brand_layout = new QHBoxLayout(brand);
+        brand_layout->setContentsMargins(14, 0, 8, 0);
+        brand_layout->setSpacing(7);
+        auto* brand_logo = new QLabel();
+        brand_logo->setPixmap(QIcon(":/icons/pqch_logo").pixmap(QSize(26, 26)));
+        auto* brand_name = new QLabel(QStringLiteral("PQCH"));
+        QFont brand_font = brand_name->font();
+        brand_font.setBold(true);
+        brand_font.setPointSizeF(brand_font.pointSizeF() * 1.35);
+        brand_font.setLetterSpacing(QFont::PercentageSpacing, 104);
+        brand_name->setFont(brand_font);
+        brand_layout->addWidget(brand_logo);
+        brand_layout->addWidget(brand_name);
+        brand->setToolTip(tr("PQCH — PostQuantum Cash"));
+        toolbar->addWidget(brand);
     }
 }
 
