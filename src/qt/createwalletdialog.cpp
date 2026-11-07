@@ -45,7 +45,7 @@ CreateWalletDialog::CreateWalletDialog(QWidget* parent) :
     });
 
     connect(ui->external_signer_checkbox, &QCheckBox::toggled, [this](bool checked) {
-        ui->encrypt_wallet_checkbox->setEnabled(!checked);
+        ui->encrypt_wallet_checkbox->setEnabled(false); // PQCH: never optional
         ui->blank_wallet_checkbox->setEnabled(!checked);
         ui->disable_privkeys_checkbox->setEnabled(!checked);
 
@@ -83,6 +83,12 @@ CreateWalletDialog::CreateWalletDialog(QWidget* parent) :
         }
     });
 
+    // PQCH: a wallet with private keys is always encrypted, so whoever uses or repairs this computer
+    // cannot open it, spend from it or copy its keys without the password.
+    ui->encrypt_wallet_checkbox->setChecked(true);
+    ui->encrypt_wallet_checkbox->setEnabled(false);
+    ui->encrypt_wallet_checkbox->setToolTip(tr("Required: the wallet is always protected by a password."));
+
 #ifndef ENABLE_EXTERNAL_SIGNER
         //: "External signing" means using devices such as hardware wallets.
         ui->external_signer_checkbox->setToolTip(tr("Compiled without external signing support (required for external signing)"));
@@ -99,7 +105,9 @@ CreateWalletDialog::~CreateWalletDialog()
 
 void CreateWalletDialog::setSigners(const std::vector<std::unique_ptr<interfaces::ExternalSigner>>& signers)
 {
-    m_has_signers = !signers.empty();
+    // PQCH: external signers (hardware wallets) cannot sign P2MR outputs yet, and wallets with keys are always encrypted.
+    m_has_signers = false;
+    (void)signers;
     if (m_has_signers) {
         ui->external_signer_checkbox->setEnabled(true);
         ui->external_signer_checkbox->setChecked(true);

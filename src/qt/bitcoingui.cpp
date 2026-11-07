@@ -363,8 +363,8 @@ void BitcoinGUI::createActions()
     m_restore_words_action = new QAction(tr("Restore Wallet from Recovery Words…"), this);
     m_restore_words_action->setEnabled(false);
     m_restore_words_action->setStatusTip(tr("Restore a wallet from its 24 recovery words"));
-    m_show_words_action = new QAction(tr("Show &Recovery Words…"), this);
-    m_show_words_action->setStatusTip(tr("Show the 24 recovery words of this wallet, to write them down"));
+    m_show_words_action = new QAction(tr("&Recovery Words…"), this);
+    m_show_words_action->setStatusTip(tr("Finish the backup of the 24 recovery words, or check your paper copy"));
 
     m_close_all_wallets_action = new QAction(tr("Close All Wallets…"), this);
     m_close_all_wallets_action->setStatusTip(tr("Close all wallets"));
@@ -402,7 +402,7 @@ void BitcoinGUI::createActions()
         connect(encryptWalletAction, &QAction::triggered, walletFrame, &WalletFrame::encryptWallet);
         connect(backupWalletAction, &QAction::triggered, walletFrame, &WalletFrame::backupWallet);
         connect(changePassphraseAction, &QAction::triggered, walletFrame, &WalletFrame::changePassphrase);
-        connect(m_show_words_action, &QAction::triggered, walletFrame, &WalletFrame::showRecoveryWords);
+        connect(m_show_words_action, &QAction::triggered, walletFrame, &WalletFrame::recoveryWords);
         connect(signMessageAction, &QAction::triggered, [this]{ showNormalIfMinimized(); });
         connect(signMessageAction, &QAction::triggered, [this]{ gotoSignMessageTab(); });
         connect(m_load_psbt_action, &QAction::triggered, [this]{ gotoLoadPSBT(); });
@@ -814,6 +814,15 @@ void BitcoinGUI::addWallet(WalletModel* walletModel)
 {
     if (!walletFrame || !m_wallet_controller) return;
 
+    // PQCH: an encrypted wallet opens only with its password, so whoever turns on or repairs this
+    // computer cannot see balances, history or addresses (and, as before, cannot spend or export keys).
+    if (walletModel->wallet().isCrypted() && !m_wallet_controller->takePasswordGiven(walletModel->wallet().getWalletName())) {
+        if (!askPasswordToOpen(walletModel)) {
+            walletModel->wallet().unloadKeepSettings(); // still opens (asking again) on the next start
+            return;
+        }
+    }
+
     WalletView* wallet_view = new WalletView(walletModel, platformStyle, walletFrame);
     if (!walletFrame->addView(wallet_view)) return;
 
@@ -837,6 +846,23 @@ void BitcoinGUI::addWallet(WalletModel* walletModel)
     wallet_view->setPrivacy(isPrivacyModeActivated());
     const QString display_name = walletModel->getDisplayName();
     m_wallet_selector->addItem(display_name, QVariant::fromValue(walletModel));
+}
+
+bool BitcoinGUI::askPasswordToOpen(WalletModel* walletModel)
+{
+    const QString name = walletModel->getDisplayName().toHtmlEscaped();
+    QString note;
+    for (;;) {
+        bool ok = false;
+        const QString pass = QInputDialog::getText(this, tr("Open wallet"),
+            note + tr("Enter the password of wallet <b>%1</b> to open it.").arg(name),
+            QLineEdit::Password, QString(), &ok);
+        if (!ok) return false;
+        const QByteArray bytes = pass.toUtf8();
+        SecureString secure(bytes.constData(), bytes.size());
+        if (walletModel->wallet().checkPassphrase(secure)) return true;
+        note = tr("<span style=\"color:#c0392b\">Wrong password.</span><br>");
+    }
 }
 
 void BitcoinGUI::removeWallet(WalletModel* walletModel)

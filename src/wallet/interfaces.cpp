@@ -489,6 +489,15 @@ public:
     }
     bool pqWallet() override { return IsPQWalletChain(); }
     util::Result<std::string> getRecoveryWords() override { return m_wallet->GetPQMnemonic(); }
+    bool hasRecoveryWords() override { return m_wallet->HasPQMnemonic(); }
+    util::Result<void> forgetRecoveryWords() override { return m_wallet->ForgetPQMnemonic(); }
+    util::Result<bool> verifyRecoveryWords(const SecureString& words, const SecureString& passphrase) override
+    {
+        LOCK(m_wallet->cs_wallet);
+        return m_wallet->VerifyPQMnemonic(words, passphrase);
+    }
+    bool checkPassphrase(const SecureString& passphrase) override { return m_wallet->CheckPassphrase(passphrase); }
+    void unloadKeepSettings() override { RemoveWallet(m_context, m_wallet, /*load_on_start=*/std::nullopt); }
     OutputType getDefaultAddressType() override { return m_wallet->m_default_address_type; }
     CAmount getDefaultMaxTxFee() override { return m_wallet->m_default_max_tx_fee; }
     void remove() override

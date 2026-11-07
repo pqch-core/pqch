@@ -377,6 +377,10 @@ public:
     bool HasPQMnemonic() const;
     //! PQCH: the BIP39 entropy and seed id; nullopt if there is none or the wallet is locked
     std::optional<std::pair<uint256, std::vector<unsigned char>>> GetPQMnemonic() const;
+    //! PQCH: delete the recovery words (memory and database); the keys stay
+    bool ForgetPQMnemonicWithDB(WalletBatch& batch);
+    //! PQCH: ids of the post-quantum seeds this descriptor's keys come from
+    std::set<uint256> GetPQSeedIds() const;
     static std::unique_ptr<DescriptorScriptPubKeyMan> CreateFromImport(WalletStorage& storage, WalletDescriptor& descriptor, int64_t keypool_size, const FlatSigningProvider& provider);
     static std::unique_ptr<DescriptorScriptPubKeyMan> CreateFromMigration(WalletStorage& storage, WalletBatch& batch, WalletDescriptor& descriptor, int64_t keypool_size, const FlatSigningProvider& provider);
     static std::unique_ptr<DescriptorScriptPubKeyMan> GenerateNewSingleSig(WalletStorage& storage, WalletBatch& batch, int64_t keypool_size, const CExtKey& master_key, OutputType addr_type, bool internal, const PQWalletSecret* pq_secret = nullptr);

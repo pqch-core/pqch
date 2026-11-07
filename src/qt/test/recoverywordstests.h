@@ -15,6 +15,7 @@ class RecoveryWordsTests : public QObject
 private Q_SLOTS:
     void backupDialogTests();
     void restoreDialogTests();
+    void verifyDialogTests();
 };
 
 #endif // BITCOIN_QT_TEST_RECOVERYWORDSTESTS_H

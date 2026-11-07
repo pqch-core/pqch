@@ -1062,6 +1062,14 @@ public:
     /** PQCH: the 24 recovery words of the active receiving descriptor. Error if the wallet has
      * none (created before recovery words, or imported) or is locked. */
     util::Result<std::string> GetPQMnemonic() const;
+    //! PQCH: whether this is the wallet's passphrase (does not unlock or lock anything)
+    bool CheckPassphrase(const SecureString& passphrase) const;
+    //! PQCH: whether the recovery words are still stored (not yet deleted after the backup)
+    bool HasPQMnemonic() const;
+    //! PQCH: delete the stored recovery words of every descriptor; the keys stay
+    util::Result<void> ForgetPQMnemonic();
+    //! PQCH: whether these words (and optional BIP39 passphrase) give this wallet's seed; never stores them
+    util::Result<bool> VerifyPQMnemonic(const SecureString& words, const SecureString& passphrase) const;
 
     //! Return the DescriptorScriptPubKeyMan for a WalletDescriptor if it is already in the wallet
     DescriptorScriptPubKeyMan* GetDescriptorScriptPubKeyMan(const WalletDescriptor& desc) const;

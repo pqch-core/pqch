@@ -1164,6 +1164,30 @@ std::optional<std::pair<uint256, std::vector<unsigned char>>> DescriptorScriptPu
     return std::make_pair(id, std::vector<unsigned char>{plain.begin(), plain.end()});
 }
 
+bool DescriptorScriptPubKeyMan::ForgetPQMnemonicWithDB(WalletBatch& batch)
+{
+    LOCK(cs_desc_man);
+    std::set<uint256> ids;
+    for (const auto& [id, _] : m_pq_mnemonics) ids.insert(id);
+    for (const auto& [id, _] : m_crypted_pq_mnemonics) ids.insert(id);
+    for (const auto& id : ids) {
+        if (!batch.EraseDescriptorPQMnemonic(GetID(), id)) return false;
+    }
+    for (auto& [_, entropy] : m_pq_mnemonics) memory_cleanse(entropy.data(), entropy.size());
+    m_pq_mnemonics.clear();
+    m_crypted_pq_mnemonics.clear();
+    return true;
+}
+
+std::set<uint256> DescriptorScriptPubKeyMan::GetPQSeedIds() const
+{
+    LOCK(cs_desc_man);
+    std::set<uint256> ids;
+    for (const auto& [id, _] : m_pq_seeds) ids.insert(id);
+    for (const auto& [id, _] : m_crypted_pq_seeds) ids.insert(id);
+    return ids;
+}
+
 void DescriptorScriptPubKeyMan::LoadPQSeeds(const PQSeedMap& seeds, const CryptedPQSeedMap& cseeds)
 {
     LOCK(cs_desc_man);

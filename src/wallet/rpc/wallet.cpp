@@ -455,8 +455,9 @@ static RPCMethod getrecoverywords()
 {
     return RPCMethod{
         "getrecoverywords",
-        "PQCH: returns the 24 BIP39 recovery words of the wallet's active receiving addresses.\n"
+        "PQCH: returns the 24 BIP39 recovery words of a new wallet, until their backup is confirmed with forgetrecoverywords.\n"
         "Write them on paper and keep them offline: anyone with the words (and the recovery passphrase, if one was used) can spend the coins.\n"
+        "Then call forgetrecoverywords: the words are deleted from the wallet file and can only be checked (verifyrecoverywords), never shown again.\n"
         "Requires the wallet to be unlocked if it is encrypted. Note: encryptwallet on an unencrypted wallet creates new addresses with new words.\n",
         {},
         RPCResult{
@@ -474,11 +475,71 @@ static RPCMethod getrecoverywords()
     const std::shared_ptr<const CWallet> pwallet = GetWalletForJSONRPCRequest(request);
     if (!pwallet) return UniValue::VNULL;
     LOCK(pwallet->cs_wallet);
+    if (!pwallet->HasPQMnemonic()) throw JSONRPCError(RPC_WALLET_ERROR, util::ErrorString(pwallet->GetPQMnemonic()).original);
     EnsureWalletIsUnlocked(*pwallet);
     auto words{pwallet->GetPQMnemonic()};
     if (!words) throw JSONRPCError(RPC_WALLET_ERROR, util::ErrorString(words).original);
     UniValue obj(UniValue::VOBJ);
     obj.pushKV("words", *words);
+    return obj;
+},
+    };
+}
+
+static RPCMethod forgetrecoverywords()
+{
+    return RPCMethod{
+        "forgetrecoverywords",
+        "PQCH: deletes the stored recovery words from the wallet file, after you have written them down (getrecoverywords).\n"
+        "The keys and funds stay. Afterwards the words can never be shown again, only checked with verifyrecoverywords.\n",
+        {},
+        RPCResult{RPCResult::Type::NONE, "", ""},
+        RPCExamples{
+            HelpExampleCli("forgetrecoverywords", "")
+            + HelpExampleRpc("forgetrecoverywords", "")
+        },
+        [](const RPCMethod& self, const JSONRPCRequest& request) -> UniValue
+{
+    const std::shared_ptr<CWallet> pwallet = GetWalletForJSONRPCRequest(request);
+    if (!pwallet) return UniValue::VNULL;
+    if (!pwallet->HasPQMnemonic()) throw JSONRPCError(RPC_WALLET_ERROR, "This wallet has no stored recovery words");
+    if (auto res{pwallet->ForgetPQMnemonic()}; !res) throw JSONRPCError(RPC_WALLET_ERROR, util::ErrorString(res).original);
+    return UniValue::VNULL;
+},
+    };
+}
+
+static RPCMethod verifyrecoverywords()
+{
+    return RPCMethod{
+        "verifyrecoverywords",
+        "PQCH: checks whether 24 recovery words (and the optional recovery passphrase) belong to this wallet.\n"
+        "Nothing is stored and the wallet does not need to be unlocked.\n",
+        {
+            {"words", RPCArg::Type::STR, RPCArg::Optional::NO, "The 24 recovery words, separated by spaces"},
+            {"passphrase", RPCArg::Type::STR, RPCArg::Default{""}, "The recovery (BIP39) passphrase, if one was used"},
+        },
+        RPCResult{
+            RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::BOOL, "valid", "Whether the words give this wallet's keys"},
+            }
+        },
+        RPCExamples{
+            HelpExampleCli("verifyrecoverywords", "\"word1 word2 ... word24\"")
+            + HelpExampleRpc("verifyrecoverywords", "\"word1 word2 ... word24\"")
+        },
+        [](const RPCMethod& self, const JSONRPCRequest& request) -> UniValue
+{
+    const std::shared_ptr<const CWallet> pwallet = GetWalletForJSONRPCRequest(request);
+    if (!pwallet) return UniValue::VNULL;
+    SecureString words{request.params[0].get_str()};
+    SecureString passphrase{request.params[1].isNull() ? "" : request.params[1].get_str()};
+    LOCK(pwallet->cs_wallet);
+    const auto valid{pwallet->VerifyPQMnemonic(words, passphrase)};
+    if (!valid) throw JSONRPCError(RPC_INVALID_PARAMETER, util::ErrorString(valid).original);
+    UniValue obj(UniValue::VOBJ);
+    obj.pushKV("valid", *valid);
     return obj;
 },
     };
@@ -702,7 +763,8 @@ RPCMethod gethdkeys()
         {
             {"options", RPCArg::Type::OBJ_NAMED_PARAMS, RPCArg::Optional::OMITTED, "", {
                 {"active_only", RPCArg::Type::BOOL, RPCArg::Default{false}, "Show the keys for only active descriptors"},
-                {"private", RPCArg::Type::BOOL, RPCArg::Default{false}, "Show private keys"}
+                {"private", RPCArg::Type::BOOL, RPCArg::Default{false}, "Show private keys"},
+                {"passphrase", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "PQCH: the wallet passphrase. Required with private=true if the wallet is encrypted, even when it is unlocked."},
             }},
         },
         RPCResult{RPCResult::Type::ARR, "", "", {
@@ -727,15 +789,18 @@ RPCMethod gethdkeys()
         },
         [](const RPCMethod& self, const JSONRPCRequest& request) -> UniValue
         {
-            const std::shared_ptr<const CWallet> wallet = GetWalletForJSONRPCRequest(request);
+            const std::shared_ptr<CWallet> wallet = GetWalletForJSONRPCRequest(request);
             if (!wallet) return UniValue::VNULL;
 
+            LOCK(wallet->m_relock_mutex);
+            struct Relock { CWallet& w; bool on{false}; ~Relock() { if (on) w.Lock(); } } relock{*wallet};
             LOCK(wallet->cs_wallet);
 
             UniValue options{request.params[0].isNull() ? UniValue::VOBJ : request.params[0]};
             const bool active_only{options.exists("active_only") ? options["active_only"].get_bool() : false};
             const bool priv{options.exists("private") ? options["private"].get_bool() : false};
             if (priv) {
+                relock.on = EnsurePassphraseForPrivateExport(*wallet, options.exists("passphrase") ? options["passphrase"] : UniValue{});
                 EnsureWalletIsUnlocked(*wallet);
             }
 
@@ -1193,6 +1258,8 @@ std::span<const CRPCCommand> GetWalletRPCCommands()
         {"wallet", &psbtbumpfee},
         {"wallet", &createwallet},
         {"wallet", &getrecoverywords},
+        {"wallet", &forgetrecoverywords},
+        {"wallet", &verifyrecoverywords},
         {"wallet", &createwalletdescriptor},
         {"wallet", &derivehdkey},
         {"wallet", &restorewallet},

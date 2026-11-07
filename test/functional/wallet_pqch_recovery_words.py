@@ -5,9 +5,11 @@
 """PQCH: 24 BIP39 recovery words.
 
 A new wallet's post-quantum seed comes from 24 new BIP39 words, kept in the wallet (encrypted if it
-is) and shown by getrecoverywords. createwallet recovery_words restores a wallet from them, with the
-same addresses and, after the rescan, the same balance. The optional BIP39 passphrase gives a
-different wallet. The words survive a restart; encryptwallet rotates to new words, as it rotates keys.
+is) and shown by getrecoverywords until the backup is confirmed with forgetrecoverywords; after that
+they are gone from the wallet file and can only be checked (verifyrecoverywords). createwallet
+recovery_words restores a wallet from them, with the same addresses and, after the rescan, the same
+balance. The optional BIP39 passphrase gives a different wallet. The words survive a restart;
+encryptwallet rotates to new words, as it rotates keys.
 """
 
 from decimal import Decimal
@@ -68,6 +70,30 @@ class PQCHWalletRecoveryWordsTest(BitcoinTestFramework):
         # and it can spend
         r.sendtoaddress(other.getnewaddress(), 1)
 
+        self.log.info("verifyrecoverywords: right words, wrong words, passphrase; nothing needs unlocking")
+        assert_equal(w1.verifyrecoverywords(words), {"valid": True})
+        assert_equal(w1.verifyrecoverywords("  " + words.upper() + " "), {"valid": True})
+        assert_equal(w1.verifyrecoverywords(ZERO_WORDS), {"valid": False})
+        assert_equal(w1.verifyrecoverywords(words, "extra"), {"valid": False})
+        assert_raises_rpc_error(-8, "Invalid recovery words", w1.verifyrecoverywords, " ".join(["abandon"] * 24))
+
+        self.log.info("forgetrecoverywords: deleted from the wallet file, keys and funds stay, still verifiable")
+        w1_balance = w1.getbalance()
+        w1.forgetrecoverywords()
+        assert_raises_rpc_error(-4, "no stored recovery words", w1.getrecoverywords)
+        assert_raises_rpc_error(-4, "no stored recovery words", w1.forgetrecoverywords)
+        assert_equal(w1.verifyrecoverywords(words), {"valid": True})
+        assert_equal(w1.getbalance(), w1_balance)
+        assert_equal(r.getnewaddress(), w1.getnewaddress())
+        self.restart_node(0)
+        node.loadwallet("w1")
+        node.loadwallet("w1_restored")
+        node.loadwallet("other")
+        w1, r, other = (node.get_wallet_rpc(n) for n in ("w1", "w1_restored", "other"))
+        assert_raises_rpc_error(-4, "no stored recovery words", w1.getrecoverywords)
+        assert_equal(w1.verifyrecoverywords(words), {"valid": True})
+        w1_words_forgotten = True
+
         self.log.info("Upper case and extra spaces are accepted; the stored words are normalized")
         node.createwallet("w1_messy", recovery_words="  " + words.upper().replace(" ", "   ") + " ")
         assert_equal(node.get_wallet_rpc("w1_messy").getrecoverywords()["words"], words)
@@ -115,7 +141,8 @@ class PQCHWalletRecoveryWordsTest(BitcoinTestFramework):
         self.restart_node(0)
         for name in ["w1", "w1_restored", "e1"]:
             node.loadwallet(name)
-        assert_equal(node.get_wallet_rpc("w1").getrecoverywords()["words"], words)
+        assert w1_words_forgotten
+        assert_equal(node.get_wallet_rpc("w1_restored").getrecoverywords()["words"], words)
         e1 = node.get_wallet_rpc("e1")
         e1.walletpassphrase("pw", 30)
         assert_equal(e1.getrecoverywords()["words"], e_words)
@@ -135,10 +162,18 @@ class PQCHWalletRecoveryWordsTest(BitcoinTestFramework):
         self.log.info("Wallets whose keys were imported have no words")
         node.createwallet("imported", blank=True)
         imp = node.get_wallet_rpc("imported")
-        descs = [d for d in node.get_wallet_rpc("w1_restored").listdescriptors(True)["descriptors"]]
+        descs = [d for d in node.get_wallet_rpc("w1_restored").listdescriptors(True)["descriptors"]]  # unencrypted: no passphrase needed
         assert all(imp.importdescriptors([{"desc": d["desc"], "timestamp": 0, "active": d["active"],
                                             "internal": d.get("internal", False)}])[0]["success"] for d in descs)
-        assert_raises_rpc_error(-4, "no recovery words", imp.getrecoverywords)
+        assert_raises_rpc_error(-4, "no stored recovery words", imp.getrecoverywords)
+
+        self.log.info("Encrypted wallet: forget needs no unlocking; verify works while locked")
+        e1 = node.get_wallet_rpc("e1")
+        e1.forgetrecoverywords()
+        assert_equal(e1.verifyrecoverywords(e_words), {"valid": True})
+        e1.walletpassphrase("pw", 30)
+        assert_raises_rpc_error(-4, "no stored recovery words", e1.getrecoverywords)
+        e1.walletlock()
 
 
 if __name__ == '__main__':

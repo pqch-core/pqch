@@ -285,20 +285,32 @@ A assinatura de mensagens ainda não está disponível para endereços pós-quâ
 <context>
     <name>BitcoinGUI</name>
     <message>
+        <source>&lt;span style=&quot;color:#c0392b&quot;&gt;Wrong password.&lt;/span&gt;&lt;br&gt;</source>
+        <translation>&lt;span style=&quot;color:#c0392b&quot;&gt;Palavra-passe errada.&lt;/span&gt;&lt;br&gt;</translation>
+    </message>
+    <message>
+        <source>Enter the password of wallet &lt;b&gt;%1&lt;/b&gt; to open it.</source>
+        <translation>Introduza a palavra-passe da carteira &lt;b&gt;%1&lt;/b&gt; para a abrir.</translation>
+    </message>
+    <message>
+        <source>Open wallet</source>
+        <translation>Abrir carteira</translation>
+    </message>
+    <message>
+        <source>Finish the backup of the 24 recovery words, or check your paper copy</source>
+        <translation>Terminar a cópia das 24 palavras de recuperação, ou verificar a sua cópia em papel</translation>
+    </message>
+    <message>
+        <source>&amp;Recovery Words…</source>
+        <translation>Palavras de &amp;recuperação…</translation>
+    </message>
+    <message>
         <source>Restore Wallet from Recovery Words…</source>
         <translation>Restaurar carteira a partir das palavras…</translation>
     </message>
     <message>
         <source>Restore a wallet from its 24 recovery words</source>
         <translation>Restaurar uma carteira a partir das 24 palavras de recuperação</translation>
-    </message>
-    <message>
-        <source>Show &amp;Recovery Words…</source>
-        <translation>Mostrar palavras de &amp;recuperação…</translation>
-    </message>
-    <message>
-        <source>Show the 24 recovery words of this wallet, to write them down</source>
-        <translation>Mostrar as 24 palavras de recuperação desta carteira, para as escrever</translation>
     </message>
     <message>
         <source>%1 behind</source>
@@ -944,6 +956,10 @@ A assinatura de mensagens ainda não está disponível para endereços pós-quâ
 </context>
 <context>
     <name>CreateWalletDialog</name>
+    <message>
+        <source>Required: the wallet is always protected by a password.</source>
+        <translation>Obrigatório: a carteira fica sempre protegida por uma palavra-passe.</translation>
+    </message>
     <message>
         <source>Advanced Options</source>
         <translation>Opções avançadas</translation>
@@ -4002,12 +4018,12 @@ Ir para o arquivo &gt; Abrir carteira para carregar a carteira
 <context>
     <name>WalletView</name>
     <message>
-        <source>New recovery words</source>
-        <translation>Novas palavras de recuperação</translation>
+        <source>Encrypting the wallet gave it &lt;b&gt;new recovery words&lt;/b&gt;. New addresses come from them, so write them down now: they are shown only once.&lt;br&gt;&lt;br&gt;Keep the old words too until the funds received before are spent.</source>
+        <translation>Encriptar a carteira deu-lhe &lt;b&gt;novas palavras de recuperação&lt;/b&gt;. Os novos endereços saem delas, por isso escreva-as já: são mostradas só uma vez.&lt;br&gt;&lt;br&gt;Guarde também as palavras antigas até gastar os fundos recebidos antes.</translation>
     </message>
     <message>
-        <source>Encrypting the wallet gave it &lt;b&gt;new recovery words&lt;/b&gt;. New addresses come from them, so write them down now.&lt;br&gt;&lt;br&gt;Keep the old words too until the funds received before are spent.</source>
-        <translation>Cifrar a carteira deu-lhe &lt;b&gt;novas palavras de recuperação&lt;/b&gt;. Os novos endereços saem delas, por isso escreva-as já.&lt;br&gt;&lt;br&gt;Guarde também as palavras antigas até gastar os fundos recebidos antes.</translation>
+        <source>New recovery words</source>
+        <translation>Novas palavras de recuperação</translation>
     </message>
     <message>
         <source>Recovery words</source>
@@ -5026,12 +5042,16 @@ A carteira pode ter sido adulterada ou criada com intenções maliciosas.
 <context>
     <name>RecoveryWordsDialog</name>
     <message>
-        <source>Recovery words</source>
-        <translation>Palavras de recuperação</translation>
+        <source>Without the recovery words, this wallet cannot be recovered if this computer is lost.&lt;br&gt;&lt;br&gt;Until you confirm them, you can finish the backup later in &lt;b&gt;Settings → Recovery Words…&lt;/b&gt;. Close anyway?</source>
+        <translation>Sem as palavras de recuperação, esta carteira não pode ser recuperada se este computador se perder.&lt;br&gt;&lt;br&gt;Enquanto não as confirmar, pode terminar a cópia mais tarde em &lt;b&gt;Configurações → Palavras de recuperação…&lt;/b&gt;. Fechar mesmo assim?</translation>
     </message>
     <message>
-        <source>&lt;b&gt;Write down these 24 words, in order, on paper.&lt;/b&gt; They are the only way to recover this wallet if this computer is lost, broken or stolen.</source>
-        <translation>&lt;b&gt;Escreva estas 24 palavras em papel, pela ordem.&lt;/b&gt; São a única forma de recuperar esta carteira se este computador se perder, avariar ou for roubado.</translation>
+        <source>&lt;b&gt;Write down these 24 words, in order, on paper.&lt;/b&gt; They are the only way to recover this wallet if this computer is lost, broken or stolen. &lt;b&gt;They are shown only this once:&lt;/b&gt; after you confirm them, they are deleted from this computer.</source>
+        <translation>&lt;b&gt;Escreva estas 24 palavras em papel, pela ordem.&lt;/b&gt; São a única forma de recuperar esta carteira se este computador se perder, avariar ou for roubado. &lt;b&gt;São mostradas só esta vez:&lt;/b&gt; depois de as confirmar, são apagadas deste computador.</translation>
+    </message>
+    <message>
+        <source>Recovery words</source>
+        <translation>Palavras de recuperação</translation>
     </message>
     <message>
         <source>These are the 24 recovery words of this wallet, in order.</source>
@@ -5077,13 +5097,13 @@ A carteira pode ter sido adulterada ou criada com intenções maliciosas.
         <source>Recovery words not confirmed</source>
         <translation>Palavras de recuperação não confirmadas</translation>
     </message>
-    <message>
-        <source>Without the recovery words, this wallet cannot be recovered if this computer is lost.&lt;br&gt;&lt;br&gt;You can see them again later in &lt;b&gt;Settings → Show recovery words…&lt;/b&gt;. Close anyway?</source>
-        <translation>Sem as palavras de recuperação, esta carteira não pode ser recuperada se este computador se perder.&lt;br&gt;&lt;br&gt;Pode voltar a vê-las em &lt;b&gt;Configurações → Mostrar palavras de recuperação…&lt;/b&gt;. Fechar mesmo assim?</translation>
-    </message>
 </context>
 <context>
     <name>RestoreWordsDialog</name>
+    <message>
+        <source>Encrypt the restored wallet with a password (required)</source>
+        <translation>Cifrar a carteira restaurada com uma palavra-passe (obrigatório)</translation>
+    </message>
     <message>
         <source>Restore wallet from recovery words</source>
         <translation>Restaurar carteira a partir das palavras</translation>
@@ -5115,10 +5135,6 @@ A carteira pode ter sido adulterada ou criada com intenções maliciosas.
     <message>
         <source>Extra passphrase</source>
         <translation>Frase-passe extra</translation>
-    </message>
-    <message>
-        <source>Encrypt the restored wallet with a password (recommended)</source>
-        <translation>Cifrar a carteira restaurada com uma palavra-passe (recomendado)</translation>
     </message>
     <message>
         <source>Only type the recovery words on a computer you trust. PQCH will never ask for them on a website.</source>
@@ -5166,6 +5182,45 @@ A carteira pode ter sido adulterada ou criada com intenções maliciosas.
     <message>
         <source>Wallet restored from its recovery words.</source>
         <translation>Carteira restaurada a partir das palavras de recuperação.</translation>
+    </message>
+</context>
+<context>
+    <name>VerifyWordsDialog</name>
+    <message>
+        <source>These words are valid, but they do not belong to this wallet (or the extra passphrase is different).</source>
+        <translation>Estas palavras são válidas, mas não pertencem a esta carteira (ou a frase-passe extra é diferente).</translation>
+    </message>
+    <message>
+        <source>Correct: these words belong to this wallet. Keep the paper copy safe.</source>
+        <translation>Certo: estas palavras pertencem a esta carteira. Guarde a cópia em papel em segurança.</translation>
+    </message>
+    <message>
+        <source>These are not valid recovery words. Check for a misspelled word or a wrong order.</source>
+        <translation>Estas palavras não são palavras de recuperação válidas. Verifique se há uma palavra mal escrita ou fora de ordem.</translation>
+    </message>
+    <message>
+        <source>Check</source>
+        <translation>Verificar</translation>
+    </message>
+    <message>
+        <source>Extra passphrase</source>
+        <translation>Frase-passe extra</translation>
+    </message>
+    <message>
+        <source>Leave empty unless one was used</source>
+        <translation>Deixe vazio se não usou nenhuma</translation>
+    </message>
+    <message>
+        <source>Recovery words</source>
+        <translation>Palavras de recuperação</translation>
+    </message>
+    <message>
+        <source>Type the 24 words of your paper copy to check that they belong to this wallet. For your safety, this wallet no longer keeps them and can never show them again.</source>
+        <translation>Escreva as 24 palavras da sua cópia em papel para confirmar que pertencem a esta carteira. Por segurança, esta carteira já não as guarda e nunca as pode voltar a mostrar.</translation>
+    </message>
+    <message>
+        <source>Check recovery words</source>
+        <translation>Verificar palavras de recuperação</translation>
     </message>
 </context>
 </TS>

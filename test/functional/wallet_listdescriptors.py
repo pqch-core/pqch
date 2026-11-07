@@ -100,9 +100,15 @@ class ListDescriptorsTest(BitcoinTestFramework):
         assert_equal(expected, wallet.listdescriptors())
 
         self.log.info('Test list private descriptors with encrypted wallet')
-        assert_raises_rpc_error(-13, 'Please enter the wallet passphrase with walletpassphrase first.', wallet.listdescriptors, True)
+        # PQCH: the passphrase is needed as an argument, even when the wallet is unlocked
+        assert_raises_rpc_error(-13, 'needs the wallet passphrase', wallet.listdescriptors, True)
+        assert_raises_rpc_error(-14, 'passphrase entered was incorrect', wallet.listdescriptors, True, "wrong")
+        assert_equal(expected_private, wallet.listdescriptors(True, "pass"))
+        assert_equal(wallet.getwalletinfo()["unlocked_until"], 0)  # still locked
         wallet.walletpassphrase(passphrase="pass", timeout=1000000)
-        assert_equal(expected_private, wallet.listdescriptors(True))
+        assert_raises_rpc_error(-13, 'needs the wallet passphrase', wallet.listdescriptors, True)
+        assert_equal(expected_private, wallet.listdescriptors(True, "pass"))
+        assert wallet.getwalletinfo()["unlocked_until"] > 0  # an unlocked wallet stays unlocked
 
         self.log.info('Test list private descriptors with watch-only wallet')
         node.createwallet(wallet_name='watch-only', disable_private_keys=True)

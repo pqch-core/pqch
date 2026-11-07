@@ -265,6 +265,8 @@ public:
     //! PQCH: BIP39 entropy of a seed (the 24 recovery words), plain or encrypted
     bool WriteDescriptorPQMnemonic(const uint256& desc_id, const uint256& seed_id, std::span<const unsigned char> entropy);
     bool WriteCryptedDescriptorPQMnemonic(const uint256& desc_id, const uint256& seed_id, const std::vector<unsigned char>& secret);
+    //! PQCH: delete the recovery words of a seed (plain and encrypted records)
+    bool EraseDescriptorPQMnemonic(const uint256& desc_id, const uint256& seed_id);
 
     bool WriteLockedUTXO(const COutPoint& output);
     bool EraseLockedUTXO(const COutPoint& output);

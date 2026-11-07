@@ -6,10 +6,12 @@
 #define BITCOIN_QT_RECOVERYWORDSDIALOG_H
 
 #include <support/allocators/secure.h>
+#include <util/result.h>
 
 #include <QDialog>
 
 #include <array>
+#include <functional>
 
 class QCheckBox;
 class QLabel;
@@ -71,6 +73,25 @@ private:
     QLineEdit* m_passphrase{nullptr};
     QCheckBox* m_encrypt{nullptr};
     QLabel* m_error{nullptr};
+};
+
+/** PQCH: checks typed recovery words against the wallet. The words are never shown or stored. */
+class VerifyWordsDialog : public QDialog
+{
+    Q_OBJECT
+
+public:
+    using Check = std::function<util::Result<bool>(const SecureString& words, const SecureString& passphrase)>;
+    VerifyWordsDialog(Check check, QWidget* parent);
+    ~VerifyWordsDialog();
+
+private:
+    void verify();
+
+    Check m_check;
+    QPlainTextEdit* m_words{nullptr};
+    QLineEdit* m_passphrase{nullptr};
+    QLabel* m_result{nullptr};
 };
 
 #endif // BITCOIN_QT_RECOVERYWORDSDIALOG_H

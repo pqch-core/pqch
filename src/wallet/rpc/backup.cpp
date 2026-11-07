@@ -482,7 +482,8 @@ RPCMethod listdescriptors()
         "listdescriptors",
         "List all descriptors present in a wallet.\n",
         {
-            {"private", RPCArg::Type::BOOL, RPCArg::Default{false}, "Show private descriptors."}
+            {"private", RPCArg::Type::BOOL, RPCArg::Default{false}, "Show private descriptors."},
+            {"passphrase", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "PQCH: the wallet passphrase. Required with private=true if the wallet is encrypted, even when it is unlocked."},
         },
         RPCResult{RPCResult::Type::OBJ, "", "", {
             {RPCResult::Type::STR, "wallet_name", "Name of wallet this operation was performed on"},
@@ -504,23 +505,30 @@ RPCMethod listdescriptors()
         }},
         RPCExamples{
             HelpExampleCli("listdescriptors", "") + HelpExampleRpc("listdescriptors", "")
-            + HelpExampleCli("listdescriptors", "true") + HelpExampleRpc("listdescriptors", "true")
+            + HelpExampleCli("listdescriptors", "true \"my passphrase\"") + HelpExampleRpc("listdescriptors", "true, \"my passphrase\"")
         },
         [](const RPCMethod& self, const JSONRPCRequest& request) -> UniValue
 {
-    const std::shared_ptr<const CWallet> wallet = GetWalletForJSONRPCRequest(request);
+    const std::shared_ptr<CWallet> wallet = GetWalletForJSONRPCRequest(request);
     if (!wallet) return UniValue::VNULL;
 
     const bool priv = !request.params[0].isNull() && request.params[0].get_bool();
     if (wallet->IsWalletFlagSet(WALLET_FLAG_DISABLE_PRIVATE_KEYS) && priv) {
         throw JSONRPCError(RPC_WALLET_ERROR, "Can't get private descriptor string for watch-only wallets");
     }
+    LOCK(wallet->m_relock_mutex);
+    // Locks the wallet again on the way out (also on errors) if this call unlocked it.
+    struct Relock { CWallet& w; bool on{false}; ~Relock() { if (on) w.Lock(); } } relock{*wallet};
     if (priv) {
+        relock.on = EnsurePassphraseForPrivateExport(*wallet, request.params[1]);
         EnsureWalletIsUnlocked(*wallet);
     }
 
+    util::Expected<std::vector<WalletDescInfo>, std::string> exported = [&] {
+        LOCK(wallet->cs_wallet);
+        return ExportDescriptors(*wallet, priv);
+    }();
     LOCK(wallet->cs_wallet);
-    util::Expected<std::vector<WalletDescInfo>, std::string> exported = ExportDescriptors(*wallet, priv);
     if (!exported) {
         throw JSONRPCError(RPC_WALLET_ERROR, exported.error());
     }

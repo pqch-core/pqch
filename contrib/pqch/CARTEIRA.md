@@ -178,21 +178,36 @@ até ela. Foram corrigidos:
 
 ## Palavras de recuperação
 
+As palavras são mostradas **uma só vez**, como numa carteira de hardware. Depois de o utilizador
+confirmar que as escreveu, são **apagadas do ficheiro da carteira**. A partir daí só se podem
+**verificar** (escrevê-las e a carteira diz se pertencem a ela), nunca mostrar. As chaves e os
+fundos não mudam.
+
 | Onde | O quê |
 | --- | --- |
 | `createwallet` | gera 24 palavras novas; `recovery_words` (e `recovery_passphrase`, opcional) restaura uma carteira a partir delas e procura as transações em toda a cadeia |
-| `getrecoverywords` | mostra as 24 palavras (com a carteira desbloqueada, se estiver cifrada) |
-| Aplicação gráfica | ao criar a carteira mostra as 24 palavras e pede 3 ao acaso para confirmar; *Ficheiro → Restaurar carteira a partir das palavras…*; *Definições → Mostrar palavras de recuperação…* |
+| `getrecoverywords` | mostra as 24 palavras enquanto ainda estão guardadas (carteira desbloqueada, se estiver cifrada) |
+| `forgetrecoverywords` | apaga as palavras guardadas, depois de escritas em papel |
+| `verifyrecoverywords "palavras" ["frase-passe"]` | diz se as palavras pertencem a esta carteira; não guarda nada e não precisa de desbloquear |
+| Aplicação gráfica | ao criar a carteira mostra as 24 palavras, pede 3 ao acaso e, confirmadas, apaga-as; *Ficheiro → Restaurar carteira a partir das palavras…* (não guarda as palavras); *Configurações → Palavras de recuperação…*: termina a cópia se ainda não foi confirmada, senão verifica a cópia em papel |
 
-- As palavras aceitam maiúsculas e espaços a mais; são guardadas na forma normal (minúsculas, um
-  espaço).
-- `encryptwallet` dá **palavras novas**, tal como dá chaves novas: os endereços seguintes vêm
-  delas. As palavras antigas continuam a recuperar os fundos recebidos antes. A aplicação mostra
-  logo as novas.
-- Carteiras sem chaves privadas, em branco, com assinador externo ou com chaves importadas não têm
-  palavras.
-- Teste: `test/functional/wallet_pqch_recovery_words.py`; diálogos: `RecoveryWordsTests` em
-  `test_pqch-qt`.
+- As palavras aceitam maiúsculas e espaços a mais.
+- `encryptwallet` dá **palavras novas**, tal como dá chaves novas; a aplicação mostra-as logo (uma vez).
+- Carteiras sem chaves privadas, em branco ou com chaves importadas não têm palavras.
+
+## Palavra-passe
+
+- Na aplicação gráfica, uma carteira com chaves é **sempre cifrada** (a opção não se pode desligar).
+- Uma carteira cifrada **só abre com a palavra-passe**: sem ela, a aplicação não mostra saldo,
+  histórico nem endereços. Cancelar fecha a carteira (volta a pedir no arranque seguinte).
+- Exportar chaves privadas (`listdescriptors true`, `gethdkeys private=true`) de uma carteira cifrada
+  exige **sempre a palavra-passe como argumento**, mesmo com a carteira desbloqueada; se estava
+  bloqueada, volta a ficar bloqueada no fim.
+- Não há PIN curto: num computador, quem copiasse o ficheiro podia testar todos os PINs sem limite de
+  tentativas. Só uma palavra-passe longa resiste a isso.
+
+Testes: `wallet_pqch_recovery_words.py`, `wallet_listdescriptors.py`, `wallet_gethdkeys.py`;
+diálogos: `RecoveryWordsTests` em `test_pqch-qt`.
 
 ## Ficheiro da carteira e computador quântico
 

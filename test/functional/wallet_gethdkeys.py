@@ -63,11 +63,16 @@ class WalletGetHDKeyTest(BitcoinTestFramework):
         assert_equal(xpub_info[0]["has_private"], True)
 
         self.log.info("HD privkey can be retrieved from encrypted wallets")
-        assert_raises_rpc_error(-13, "Error: Please enter the wallet passphrase with walletpassphrase first", wallet.gethdkeys, private=True)
+        # PQCH: private keys of an encrypted wallet need the passphrase as an argument, even when unlocked
+        assert_raises_rpc_error(-13, "needs the wallet passphrase", wallet.gethdkeys, private=True)
+        assert_raises_rpc_error(-14, "passphrase entered was incorrect", wallet.gethdkeys, private=True, passphrase="wrong")
+        assert_equal(wallet.gethdkeys(active_only=True, private=True, passphrase="pass")[0]["xpub"], wallet.gethdkeys(active_only=True)[0]["xpub"])
+        assert_equal(wallet.getwalletinfo()["unlocked_until"], 0)  # locked again afterwards
         with WalletUnlock(wallet, "pass"):
-            xpub_info = wallet.gethdkeys(active_only=True, private=True)[0]
+            assert_raises_rpc_error(-13, "needs the wallet passphrase", wallet.gethdkeys, private=True)
+            xpub_info = wallet.gethdkeys(active_only=True, private=True, passphrase="pass")[0]
             assert_not_equal(xpub_info["xprv"], xprv)
-            for desc in wallet.listdescriptors(True)["descriptors"]:
+            for desc in wallet.listdescriptors(True, "pass")["descriptors"]:
                 if desc["active"]:
                     # After encrypting, HD key was rotated and should appear in all active descriptors
                     assert xpub_info["xprv"] in desc["desc"]

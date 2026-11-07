@@ -82,6 +82,21 @@ std::shared_ptr<CWallet> GetWalletForJSONRPCRequest(const JSONRPCRequest& reques
         "Multiple wallets are loaded. Please select which wallet to use by requesting the RPC through the /wallet/<walletname> URI path.");
 }
 
+bool EnsurePassphraseForPrivateExport(CWallet& wallet, const UniValue& passphrase)
+{
+    if (!wallet.HasEncryptionKeys()) return false;
+    if (passphrase.isNull() || passphrase.get_str().empty()) {
+        throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Exporting private keys from an encrypted wallet needs the wallet passphrase as an argument, even if the wallet is unlocked.");
+    }
+    const SecureString pass{passphrase.get_str()};
+    if (!wallet.CheckPassphrase(pass)) {
+        throw JSONRPCError(RPC_WALLET_PASSPHRASE_INCORRECT, "Error: The wallet passphrase entered was incorrect.");
+    }
+    if (!wallet.IsLocked()) return false;
+    if (!wallet.Unlock(pass)) throw JSONRPCError(RPC_WALLET_PASSPHRASE_INCORRECT, "Error: The wallet passphrase entered was incorrect.");
+    return true;
+}
+
 void EnsureWalletIsUnlocked(const CWallet& wallet)
 {
     if (wallet.IsLocked()) {

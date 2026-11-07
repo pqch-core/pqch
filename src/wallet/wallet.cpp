@@ -698,6 +698,16 @@ bool CWallet::Unlock(const SecureString& strWalletPassphrase)
     return false;
 }
 
+bool CWallet::CheckPassphrase(const SecureString& passphrase) const
+{
+    LOCK(cs_wallet);
+    CKeyingMaterial plain_master_key;
+    for (const auto& [_, master_key] : mapMasterKeys) {
+        if (DecryptMasterKey(passphrase, master_key, plain_master_key)) return true;
+    }
+    return false;
+}
+
 bool CWallet::ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase, const SecureString& strNewWalletPassphrase)
 {
     bool fWasLocked = IsLocked();
@@ -3855,7 +3865,7 @@ util::Result<std::string> CWallet::GetPQMnemonic() const
 {
     const auto* spkm{dynamic_cast<const DescriptorScriptPubKeyMan*>(GetScriptPubKeyMan(OutputType::BECH32M, /*internal=*/false))};
     if (!spkm || !spkm->HasPQMnemonic()) {
-        return util::Error{Untranslated("This wallet has no recovery words (it was created before they existed, or its keys were imported). Back it up with backupwallet or listdescriptors true.")};
+        return util::Error{Untranslated("This wallet has no stored recovery words: they are deleted once their backup is confirmed (forgetrecoverywords), and wallets with imported keys never had them. Check a paper copy with verifyrecoverywords.")};
     }
     const auto mnemonic{spkm->GetPQMnemonic()};
     if (!mnemonic) return util::Error{Untranslated("Please enter the wallet passphrase with walletpassphrase first.")};
@@ -3864,6 +3874,38 @@ util::Result<std::string> CWallet::GetPQMnemonic() const
     std::string words{bip39::MnemonicFromEntropy(entropy)};
     memory_cleanse(entropy.data(), entropy.size());
     return words;
+}
+
+bool CWallet::HasPQMnemonic() const
+{
+    const auto* spkm{dynamic_cast<const DescriptorScriptPubKeyMan*>(GetScriptPubKeyMan(OutputType::BECH32M, /*internal=*/false))};
+    return spkm && spkm->HasPQMnemonic();
+}
+
+util::Result<void> CWallet::ForgetPQMnemonic()
+{
+    LOCK(cs_wallet);
+    const bool ok{RunWithinTxn(GetDatabase(), /*process_desc=*/"forget recovery words", [&](WalletBatch& batch) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet) {
+        for (ScriptPubKeyMan* spkm : GetAllScriptPubKeyMans()) {
+            auto* desc{dynamic_cast<DescriptorScriptPubKeyMan*>(spkm)};
+            if (desc && desc->HasPQMnemonic() && !desc->ForgetPQMnemonicWithDB(batch)) return false;
+        }
+        return true;
+    })};
+    if (!ok) return util::Error{Untranslated("Error: cannot delete the recovery words from the wallet file")};
+    return {};
+}
+
+util::Result<bool> CWallet::VerifyPQMnemonic(const SecureString& words, const SecureString& passphrase) const
+{
+    const SecureString lower{LowerCaseWords(words)};
+    const auto normalized{bip39::NormalizeMnemonic(std::string_view{lower.data(), lower.size()})};
+    if (!normalized) return util::Error{_("Invalid recovery words: they must be 24 words from the BIP39 English list, with a valid checksum")};
+    const auto seed{p2mr::SeedFromMnemonic(*normalized, std::string_view{passphrase.data(), passphrase.size()})};
+    if (!seed) return util::Error{Untranslated("Invalid recovery words")};
+    const auto* spkm{dynamic_cast<const DescriptorScriptPubKeyMan*>(GetScriptPubKeyMan(OutputType::BECH32M, /*internal=*/false))};
+    if (!spkm || spkm->GetPQSeedIds().empty()) return util::Error{Untranslated("This wallet has no post-quantum seed to compare with")};
+    return spkm->GetPQSeedIds().contains(seed->Id());
 }
 
 void CWallet::SetupDescriptorScriptPubKeyMans()

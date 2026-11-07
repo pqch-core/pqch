@@ -212,9 +212,9 @@ void WalletView::encryptWallet()
         // PQCH: encrypting replaces the recovery words (as it replaces the keys).
         if (!walletModel->wallet().pqWallet() || walletModel->getEncryptionStatus() == WalletModel::Unencrypted) return;
         QMessageBox::information(this, tr("New recovery words"),
-            tr("Encrypting the wallet gave it <b>new recovery words</b>. New addresses come from them, so write them down now.<br><br>"
-               "Keep the old words too until the funds received before are spent."));
-        showRecoveryWords(/*backup=*/true);
+            tr("Encrypting the wallet gave it <b>new recovery words</b>. New addresses come from them, so write them down now: "
+               "they are shown only once.<br><br>Keep the old words too until the funds received before are spent."));
+        recoveryWords();
     }, Qt::QueuedConnection);
     GUIUtil::ShowModalDialogAsynchronously(dlg);
 }
@@ -246,20 +246,33 @@ void WalletView::changePassphrase()
     GUIUtil::ShowModalDialogAsynchronously(dlg);
 }
 
-void WalletView::showRecoveryWords(bool backup)
+void WalletView::recoveryWords()
 {
     if (!walletModel) return;
+    interfaces::Wallet& wallet = walletModel->wallet();
+    if (!wallet.hasRecoveryWords()) {
+        // The words were deleted after their backup: they can only be checked, never shown.
+        VerifyWordsDialog dlg([&wallet](const SecureString& words, const SecureString& passphrase) {
+            return wallet.verifyRecoveryWords(words, passphrase);
+        }, this);
+        dlg.exec();
+        return;
+    }
     WalletModel::UnlockContext ctx(walletModel->requestUnlock());
     if (!ctx.isValid()) return;
-    auto words{walletModel->wallet().getRecoveryWords()};
+    auto words{wallet.getRecoveryWords()};
     if (!words) {
         QMessageBox::warning(this, tr("Recovery words"), QString::fromStdString(util::ErrorString(words).translated));
         return;
     }
     SecureString secure(words->begin(), words->end());
     memory_cleanse(words->data(), words->size());
-    RecoveryWordsDialog dlg(secure, backup ? RecoveryWordsDialog::Mode::Backup : RecoveryWordsDialog::Mode::Show, this);
-    dlg.exec();
+    RecoveryWordsDialog dlg(secure, RecoveryWordsDialog::Mode::Backup, this);
+    if (dlg.exec() == QDialog::Accepted) {
+        if (auto res{wallet.forgetRecoveryWords()}; !res) {
+            QMessageBox::warning(this, tr("Recovery words"), QString::fromStdString(util::ErrorString(res).translated));
+        }
+    }
 }
 
 void WalletView::unlockWallet()

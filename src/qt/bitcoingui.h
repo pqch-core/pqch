@@ -90,6 +90,8 @@ public:
     */
     void addWallet(WalletModel* walletModel);
     void removeWallet(WalletModel* walletModel);
+    //! PQCH: asks the wallet's password before showing it; false if cancelled
+    bool askPasswordToOpen(WalletModel* walletModel);
     void removeAllWallets();
 #endif // ENABLE_WALLET
     bool enableWallet = false;

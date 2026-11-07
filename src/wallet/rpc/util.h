@@ -46,6 +46,12 @@ std::optional<std::string> GetWalletNameFromJSONRPCRequest(const JSONRPCRequest&
 std::string EnsureUniqueWalletName(const JSONRPCRequest& request, std::optional<std::string_view> wallet_name);
 
 void EnsureWalletIsUnlocked(const CWallet&);
+/**
+ * PQCH: exporting private keys from an encrypted wallet always needs its passphrase, even if the
+ * wallet is unlocked (someone at an unlocked computer must not be able to copy the keys).
+ * Returns true if this call unlocked the wallet (the caller locks it again afterwards).
+ */
+bool EnsurePassphraseForPrivateExport(CWallet& wallet, const UniValue& passphrase);
 WalletContext& EnsureWalletContext(const std::any& context);
 
 bool GetAvoidReuseFlag(const CWallet& wallet, const UniValue& param);

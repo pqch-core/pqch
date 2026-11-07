@@ -42,9 +42,7 @@ class PQCHWalletLockedTest(BitcoinTestFramework):
         node.createwallet("w")
         w = node.get_wallet_rpc("w")
         w.encryptwallet("pass")
-        w.walletpassphrase("pass", 60)
-        descs = [d for d in w.listdescriptors(True)["descriptors"] if d["active"]]
-        w.walletlock()
+        descs = [d for d in w.listdescriptors(True, "pass")["descriptors"] if d["active"]]
         assert all(d["desc"].startswith("p2mr(pqprv(") for d in descs)
         node.createwallet("ahead", blank=True)
         ahead = node.get_wallet_rpc("ahead")

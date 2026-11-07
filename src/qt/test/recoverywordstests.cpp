@@ -5,6 +5,7 @@
 #include <qt/test/recoverywordstests.h>
 
 #include <qt/recoverywordsdialog.h>
+#include <util/translation.h>
 
 #include <QCheckBox>
 #include <QLabel>
@@ -107,5 +108,46 @@ void RecoveryWordsTests::restoreDialogTests()
     QVERIFY(dlg.words() == Secure(ZERO_WORDS.join(' ')));
     QVERIFY(dlg.wordsPassphrase().empty());
     QVERIFY(dlg.encrypt());
+    QVERIFY(!dlg.findChild<QCheckBox*>()->isEnabled()); // PQCH: encryption is not optional
     QCOMPARE(dlg.walletName(), QString("Restored wallet"));
+}
+
+void RecoveryWordsTests::verifyDialogTests()
+{
+    // The dialog only passes the typed words to the wallet's check and shows the answer.
+    SecureString seen_words, seen_pass;
+    VerifyWordsDialog dlg([&](const SecureString& words, const SecureString& pass) -> util::Result<bool> {
+        seen_words = words;
+        seen_pass = pass;
+        if (words == Secure(ZERO_WORDS.join(' '))) return pass.empty();
+        return util::Error{Untranslated("Invalid recovery words")};
+    }, nullptr);
+    dlg.show();
+    auto* words = dlg.findChild<QPlainTextEdit*>();
+    auto* pass = dlg.findChild<QLineEdit*>();
+    QPushButton* check = Button(dlg, "Check");
+    QVERIFY(words && pass && check);
+    QLabel* result = nullptr;
+    auto result_text = [&] {
+        for (auto* l : dlg.findChildren<QLabel*>()) {
+            if (l->text().startsWith("Correct") || l->text().startsWith("These")) return l->text();
+        }
+        return QString();
+    };
+
+    words->setPlainText(" " + ZERO_WORDS.join("  ").toUpper());
+    check->click();
+    QVERIFY(seen_words == Secure(ZERO_WORDS.join(' '))); // normalized before the check
+    QVERIFY(result_text().startsWith("Correct"));
+    Shot(dlg, "verify-words");
+
+    pass->setText("other");
+    check->click();
+    QVERIFY(seen_pass == Secure("other"));
+    QVERIFY(result_text().contains("do not belong"));
+
+    words->setPlainText("abandon abandon");
+    check->click();
+    QVERIFY(result_text().contains("not valid"));
+    (void)result;
 }

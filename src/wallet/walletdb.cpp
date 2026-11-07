@@ -276,6 +276,13 @@ bool WalletBatch::WriteDescriptorPQMnemonic(const uint256& desc_id, const uint25
     return ok;
 }
 
+bool WalletBatch::EraseDescriptorPQMnemonic(const uint256& desc_id, const uint256& seed_id)
+{
+    const auto key{std::make_pair(desc_id, seed_id)};
+    return EraseIC(std::make_pair(DBKeys::WALLETDESCRIPTORPQMNEMONIC, key)) &&
+           EraseIC(std::make_pair(DBKeys::WALLETDESCRIPTORCPQMNEMONIC, key));
+}
+
 bool WalletBatch::WriteCryptedDescriptorPQMnemonic(const uint256& desc_id, const uint256& seed_id, const std::vector<unsigned char>& secret)
 {
     if (!WriteIC(std::make_pair(DBKeys::WALLETDESCRIPTORCPQMNEMONIC, std::make_pair(desc_id, seed_id)), secret, false)) {

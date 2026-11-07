@@ -264,6 +264,21 @@ public:
     //! PQCH: the wallet's 24 recovery words (wallet must be unlocked if encrypted).
     virtual util::Result<std::string> getRecoveryWords() = 0;
 
+    //! PQCH: whether the recovery words are still stored (their backup not yet confirmed).
+    virtual bool hasRecoveryWords() = 0;
+
+    //! PQCH: delete the stored recovery words once their backup is confirmed; the keys stay.
+    virtual util::Result<void> forgetRecoveryWords() = 0;
+
+    //! PQCH: whether typed recovery words (and optional BIP39 passphrase) belong to this wallet.
+    virtual util::Result<bool> verifyRecoveryWords(const SecureString& words, const SecureString& passphrase) = 0;
+
+    //! PQCH: unload the wallet without changing whether it loads on startup.
+    virtual void unloadKeepSettings() = 0;
+
+    //! PQCH: whether this is the wallet's passphrase (does not unlock).
+    virtual bool checkPassphrase(const SecureString& passphrase) = 0;
+
     // Return whether wallet uses an external signer.
     virtual bool hasExternalSigner() = 0;
 

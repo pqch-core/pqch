@@ -17,6 +17,8 @@
 
 #include <QMessageBox>
 #include <QMutex>
+
+#include <set>
 #include <QProgressDialog>
 #include <QThread>
 #include <QTimer>
@@ -59,6 +61,11 @@ public:
 
     WalletModel* getOrCreateWallet(std::unique_ptr<interfaces::Wallet> wallet);
 
+    //! PQCH: the user just typed this wallet's password (create/restore), so opening it does not ask again
+    void markPasswordGiven(const std::string& wallet_name);
+    //! PQCH: whether markPasswordGiven was called for this wallet (consumes the mark)
+    bool takePasswordGiven(const std::string& wallet_name);
+
     //! Returns all wallet names in the wallet dir mapped to whether the wallet
     //! is loaded.
     std::map<std::string, std::pair<bool, std::string>> listWalletDir() const;
@@ -81,6 +88,7 @@ private:
     OptionsModel* const m_options_model;
     mutable QMutex m_mutex;
     std::vector<WalletModel*> m_wallets;
+    std::set<std::string> m_password_given; //!< PQCH, guarded by m_mutex
     std::unique_ptr<interfaces::Handler> m_handler_load_wallet;
 
     friend class WalletControllerActivity;

@@ -73,7 +73,7 @@ RecoveryWordsDialog::RecoveryWordsDialog(const SecureString& words, Mode mode, Q
     auto* show_page = new QWidget;
     auto* show_layout = new QVBoxLayout(show_page);
     auto* intro = new QLabel(mode == Mode::Backup
-        ? tr("<b>Write down these 24 words, in order, on paper.</b> They are the only way to recover this wallet if this computer is lost, broken or stolen.")
+        ? tr("<b>Write down these 24 words, in order, on paper.</b> They are the only way to recover this wallet if this computer is lost, broken or stolen. <b>They are shown only this once:</b> after you confirm them, they are deleted from this computer.")
         : tr("These are the 24 recovery words of this wallet, in order."));
     intro->setWordWrap(true);
     show_layout->addWidget(intro);
@@ -200,7 +200,7 @@ void RecoveryWordsDialog::reject()
     if (m_mode == Mode::Backup) {
         const auto answer = QMessageBox::warning(this, tr("Recovery words not confirmed"),
             tr("Without the recovery words, this wallet cannot be recovered if this computer is lost.<br><br>"
-               "You can see them again later in <b>Settings → Show recovery words…</b>. Close anyway?"),
+               "Until you confirm them, you can finish the backup later in <b>Settings → Recovery Words…</b>. Close anyway?"),
             QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
         if (answer != QMessageBox::Yes) return;
     }
@@ -234,8 +234,9 @@ RestoreWordsDialog::RestoreWordsDialog(QWidget* parent)
     form->addRow(tr("Extra passphrase"), m_passphrase);
     layout->addLayout(form);
 
-    m_encrypt = new QCheckBox(tr("Encrypt the restored wallet with a password (recommended)"));
+    m_encrypt = new QCheckBox(tr("Encrypt the restored wallet with a password (required)"));
     m_encrypt->setChecked(true);
+    m_encrypt->setEnabled(false);
     layout->addWidget(m_encrypt);
     layout->addWidget(WarningLabel(tr("Only type the recovery words on a computer you trust. PQCH will never ask for them on a website.")));
 
@@ -292,4 +293,60 @@ void RestoreWordsDialog::accept()
         return;
     }
     QDialog::accept();
+}
+
+VerifyWordsDialog::VerifyWordsDialog(Check check, QWidget* parent)
+    : QDialog(parent, GUIUtil::dialog_flags), m_check(std::move(check))
+{
+    setWindowTitle(tr("Check recovery words"));
+    setModal(true);
+    auto* layout = new QVBoxLayout(this);
+    auto* intro = new QLabel(tr("Type the 24 words of your paper copy to check that they belong to this wallet. "
+                                "For your safety, this wallet no longer keeps them and can never show them again."));
+    intro->setWordWrap(true);
+    layout->addWidget(intro);
+    auto* form = new QFormLayout;
+    m_words = new QPlainTextEdit;
+    m_words->setTabChangesFocus(true);
+    m_words->setMinimumHeight(110);
+    m_words->setFont(GUIUtil::fixedPitchFont());
+    form->addRow(tr("Recovery words"), m_words);
+    m_passphrase = new QLineEdit;
+    m_passphrase->setEchoMode(QLineEdit::Password);
+    m_passphrase->setPlaceholderText(tr("Leave empty unless one was used"));
+    form->addRow(tr("Extra passphrase"), m_passphrase);
+    layout->addLayout(form);
+    m_result = new QLabel;
+    m_result->setWordWrap(true);
+    layout->addWidget(m_result);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Close);
+    auto* check_button = buttons->addButton(tr("Check"), QDialogButtonBox::ActionRole);
+    check_button->setDefault(true);
+    connect(check_button, &QPushButton::clicked, this, &VerifyWordsDialog::verify);
+    connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
+    layout->addWidget(buttons);
+    resize(560, sizeHint().height());
+}
+
+VerifyWordsDialog::~VerifyWordsDialog()
+{
+    m_words->clear();
+    m_passphrase->clear();
+}
+
+void VerifyWordsDialog::verify()
+{
+    const SecureString words{CleanWords(m_words->toPlainText())};
+    const QByteArray pass = m_passphrase->text().toUtf8();
+    const auto res{m_check(words, SecureString(pass.constData(), pass.size()))};
+    if (!res) {
+        m_result->setStyleSheet("QLabel { color: #c0392b; }");
+        m_result->setText(tr("These are not valid recovery words. Check for a misspelled word or a wrong order."));
+    } else if (*res) {
+        m_result->setStyleSheet("QLabel { color: #1e8449; font-weight: bold; }");
+        m_result->setText(tr("Correct: these words belong to this wallet. Keep the paper copy safe."));
+    } else {
+        m_result->setStyleSheet("QLabel { color: #c0392b; }");
+        m_result->setText(tr("These words are valid, but they do not belong to this wallet (or the extra passphrase is different)."));
+    }
 }

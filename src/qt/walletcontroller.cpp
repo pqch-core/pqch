@@ -176,6 +176,18 @@ WalletModel* WalletController::getOrCreateWallet(std::unique_ptr<interfaces::Wal
     return wallet_model;
 }
 
+void WalletController::markPasswordGiven(const std::string& wallet_name)
+{
+    QMutexLocker locker(&m_mutex);
+    m_password_given.insert(wallet_name);
+}
+
+bool WalletController::takePasswordGiven(const std::string& wallet_name)
+{
+    QMutexLocker locker(&m_mutex);
+    return m_password_given.erase(wallet_name) > 0;
+}
+
 void WalletController::removeAndDeleteWallet(WalletModel* wallet_model)
 {
     // Unregister wallet model.
@@ -281,6 +293,7 @@ void CreateWalletActivity::createWallet()
                     if (encrypted) w.lock();
                 }
             }
+            if (!m_passphrase.empty()) m_wallet_controller->markPasswordGiven(name);
             m_wallet_model = m_wallet_controller->getOrCreateWallet(std::move(*wallet));
         } else {
             m_error_message = util::ErrorString(wallet);
@@ -302,7 +315,8 @@ void CreateWalletActivity::finish()
         // PQCH: the backup of the new wallet: show the 24 words and check three of them.
         RecoveryWordsDialog dlg(m_recovery_words, RecoveryWordsDialog::Mode::Backup, m_parent_widget);
         m_recovery_words.clear();
-        dlg.exec();
+        // Confirmed: the words are deleted from this computer, like a hardware wallet that shows them only once.
+        if (dlg.exec() == QDialog::Accepted) (void)m_wallet_model->wallet().forgetRecoveryWords();
     }
 
     if (m_wallet_model) Q_EMIT created(m_wallet_model);
@@ -626,6 +640,9 @@ void RestoreWordsActivity::createWallet()
         m_words_passphrase.clear();
 
         if (wallet) {
+            // The user has the words on paper already: nothing to keep on this computer.
+            (void)(*wallet)->forgetRecoveryWords();
+            if (!m_passphrase.empty()) m_wallet_controller->markPasswordGiven(m_name);
             m_wallet_model = m_wallet_controller->getOrCreateWallet(std::move(*wallet));
         } else {
             m_error_message = util::ErrorString(wallet);
