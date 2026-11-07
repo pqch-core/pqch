@@ -7,6 +7,8 @@
 
 #include <wallet/walletdb.h>
 
+#include <script/bip39.h>
+
 #include <support/cleanse.h>
 
 #include <common/system.h>
@@ -62,6 +64,8 @@ const std::string WALLETDESCRIPTORLHCACHE{"walletdescriptorlhcache"};
 const std::string WALLETDESCRIPTORP2MRCACHE{"walletdescriptorp2mrcache"}; // PQCH
 const std::string WALLETDESCRIPTORPQSEED{"walletdescriptorpqseed"};       // PQCH
 const std::string WALLETDESCRIPTORCPQSEED{"walletdescriptorcpqseed"};     // PQCH
+const std::string WALLETDESCRIPTORPQMNEMONIC{"walletdescriptorpqmnemonic"};   // PQCH
+const std::string WALLETDESCRIPTORCPQMNEMONIC{"walletdescriptorcpqmnemonic"}; // PQCH
 const std::string WALLETDESCRIPTORCKEY{"walletdescriptorckey"};
 const std::string WALLETDESCRIPTORKEY{"walletdescriptorkey"};
 const std::string WATCHMETA{"watchmeta"};
@@ -261,6 +265,23 @@ bool WalletBatch::WriteCryptedDescriptorPQSeed(const uint256& desc_id, const uin
         return false;
     }
     EraseIC(std::make_pair(DBKeys::WALLETDESCRIPTORPQSEED, std::make_pair(desc_id, seed_id)));
+    return true;
+}
+
+bool WalletBatch::WriteDescriptorPQMnemonic(const uint256& desc_id, const uint256& seed_id, std::span<const unsigned char> entropy)
+{
+    std::vector<unsigned char> bytes{entropy.begin(), entropy.end()};
+    const bool ok{WriteIC(std::make_pair(DBKeys::WALLETDESCRIPTORPQMNEMONIC, std::make_pair(desc_id, seed_id)), bytes, false)};
+    memory_cleanse(bytes.data(), bytes.size());
+    return ok;
+}
+
+bool WalletBatch::WriteCryptedDescriptorPQMnemonic(const uint256& desc_id, const uint256& seed_id, const std::vector<unsigned char>& secret)
+{
+    if (!WriteIC(std::make_pair(DBKeys::WALLETDESCRIPTORCPQMNEMONIC, std::make_pair(desc_id, seed_id)), secret, false)) {
+        return false;
+    }
+    EraseIC(std::make_pair(DBKeys::WALLETDESCRIPTORPQMNEMONIC, std::make_pair(desc_id, seed_id)));
     return true;
 }
 
@@ -992,8 +1013,44 @@ static DBErrors LoadDescriptorWalletRecords(CWallet* pwallet, DatabaseBatch& bat
         });
         result = std::max(result, cpq_res.m_result);
 
+        // PQCH: recovery-word entropy, plain and encrypted
+        PQMnemonicMap pq_mnemonics;
+        prefix = PrefixStream(DBKeys::WALLETDESCRIPTORPQMNEMONIC, id);
+        LoadResult pqm_res = LoadRecords(pwallet, batch, DBKeys::WALLETDESCRIPTORPQMNEMONIC, prefix,
+            [&id, &pq_mnemonics] (CWallet* pwallet, DataStream& key, DataStream& value, std::string& err) {
+            uint256 desc_id, seed_id;
+            key >> desc_id >> seed_id;
+            assert(desc_id == id);
+            std::vector<unsigned char> bytes;
+            value >> bytes;
+            if (bytes.size() != bip39::ENTROPY_SIZE) {
+                err = "Error reading wallet database: recovery words corrupt";
+                return DBErrors::CORRUPT;
+            }
+            pq_mnemonics[seed_id] = bytes;
+            memory_cleanse(bytes.data(), bytes.size());
+            return DBErrors::LOAD_OK;
+        });
+        result = std::max(result, pqm_res.m_result);
+        CryptedPQMnemonicMap pq_cmnemonics;
+        prefix = PrefixStream(DBKeys::WALLETDESCRIPTORCPQMNEMONIC, id);
+        LoadResult cpqm_res = LoadRecords(pwallet, batch, DBKeys::WALLETDESCRIPTORCPQMNEMONIC, prefix,
+            [&id, &pq_cmnemonics] (CWallet* pwallet, DataStream& key, DataStream& value, std::string& err) {
+            uint256 desc_id, seed_id;
+            key >> desc_id >> seed_id;
+            assert(desc_id == id);
+            std::vector<unsigned char> crypted;
+            value >> crypted;
+            pq_cmnemonics[seed_id] = crypted;
+            return DBErrors::LOAD_OK;
+        });
+        result = std::max(result, cpqm_res.m_result);
+
         try {
             pwallet->LoadDescriptorScriptPubKeyMan(id, *desc, keys, ckeys, pq_seeds, pq_cseeds);
+            if (auto* dspkm = dynamic_cast<DescriptorScriptPubKeyMan*>(pwallet->GetScriptPubKeyMan(id))) {
+                dspkm->LoadPQMnemonics(pq_mnemonics, pq_cmnemonics);
+            }
         } catch (std::runtime_error& e) {
             strErr = e.what();
             return DBErrors::CORRUPT;

@@ -1044,9 +1044,9 @@ public:
     void DeactivateScriptPubKeyMan(uint256 id, OutputType type, bool internal);
 
     //! Create new DescriptorScriptPubKeyMan and add it to the wallet
-    DescriptorScriptPubKeyMan& SetupDescriptorScriptPubKeyMan(WalletBatch& batch, const CExtKey& master_key, const OutputType& output_type, bool internal) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
+    DescriptorScriptPubKeyMan& SetupDescriptorScriptPubKeyMan(WalletBatch& batch, const CExtKey& master_key, const OutputType& output_type, bool internal, const PQWalletSecret* pq_secret = nullptr) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
     //! Create new DescriptorScriptPubKeyMans and add them to the wallet
-    void SetupDescriptorScriptPubKeyMans(WalletBatch& batch, const CExtKey& master_key) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
+    void SetupDescriptorScriptPubKeyMans(WalletBatch& batch, const CExtKey& master_key, const PQWalletSecret* pq_secret = nullptr) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
     void SetupDescriptorScriptPubKeyMans() EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
 
     //! Create new seed and default DescriptorScriptPubKeyMans for this wallet
@@ -1054,6 +1054,14 @@ public:
 
     //! Setup new descriptors or seed for new address generation
     void SetupWalletGeneration() EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
+
+    /** PQCH: make the active P2MR descriptors from 24 BIP39 recovery words (and an optional
+     * passphrase), dated 0 so that the whole chain is rescanned. The wallet must be unlocked and
+     * have private keys. */
+    util::Result<void> SetupFromPQMnemonic(const SecureString& words, const SecureString& passphrase) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
+    /** PQCH: the 24 recovery words of the active receiving descriptor. Error if the wallet has
+     * none (created before recovery words, or imported) or is locked. */
+    util::Result<std::string> GetPQMnemonic() const;
 
     //! Return the DescriptorScriptPubKeyMan for a WalletDescriptor if it is already in the wallet
     DescriptorScriptPubKeyMan* GetDescriptorScriptPubKeyMan(const WalletDescriptor& desc) const;

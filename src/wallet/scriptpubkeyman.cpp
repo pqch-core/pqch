@@ -9,6 +9,7 @@
 #include <key_io.h>
 #include <node/types.h>
 #include <outputtype.h>
+#include <script/bip39.h>
 #include <script/descriptor.h>
 #include <script/script.h>
 #include <script/sign.h>
@@ -29,6 +30,12 @@ using util::ToString;
 namespace wallet {
 
 typedef std::vector<unsigned char> valtype;
+
+//! PQCH: IV for encrypting a seed's recovery-word entropy (the seed itself uses its id)
+static uint256 PQMnemonicIV(const uint256& seed_id)
+{
+    return (HashWriter{} << std::string{"PQCH/P2MR/v2/mnemonic-iv"} << seed_id).GetSHA256();
+}
 
 // Legacy wallet IsMine(). Used only in migration
 // DO NOT USE ANYTHING IN THIS NAMESPACE OUTSIDE OF MIGRATION
@@ -865,13 +872,14 @@ std::unique_ptr<DescriptorScriptPubKeyMan> DescriptorScriptPubKeyMan::LoadFromSt
     return std::unique_ptr<DescriptorScriptPubKeyMan>(new DescriptorScriptPubKeyMan(storage, id, descriptor, keypool_size, keys, ckeys));
 }
 
-std::unique_ptr<DescriptorScriptPubKeyMan> DescriptorScriptPubKeyMan::GenerateNewSingleSig(WalletStorage& storage, WalletBatch& batch, int64_t keypool_size, const CExtKey& master_key, OutputType addr_type, bool internal)
+std::unique_ptr<DescriptorScriptPubKeyMan> DescriptorScriptPubKeyMan::GenerateNewSingleSig(WalletStorage& storage, WalletBatch& batch, int64_t keypool_size, const CExtKey& master_key, OutputType addr_type, bool internal, const PQWalletSecret* pq_secret)
 {
     // PQCH: on PQCH chains the wallet's addresses come from a post-quantum seed, and no elliptic
     // curve key of the derivation is stored (script/p2mr.h).
     const bool pq{IsPQWalletChain() && addr_type == OutputType::BECH32M};
-    const p2mr::PQSeed pq_seed{pq ? p2mr::SeedFromMasterKey(master_key) : p2mr::PQSeed{}};
-    WalletDescriptor desc = pq ? GenerateP2MRWalletDescriptor(pq_seed, internal) : GenerateWalletDescriptor(master_key.Neuter(), addr_type, internal);
+    // The seed comes from the recovery words when the caller has them (new wallets, restores).
+    const p2mr::PQSeed pq_seed{!pq ? p2mr::PQSeed{} : (pq_secret ? pq_secret->seed : p2mr::SeedFromMasterKey(master_key))};
+    WalletDescriptor desc = pq ? GenerateP2MRWalletDescriptor(pq_seed, internal, pq_secret ? pq_secret->creation_time : std::nullopt) : GenerateWalletDescriptor(master_key.Neuter(), addr_type, internal);
 
     auto spkm = std::unique_ptr<DescriptorScriptPubKeyMan>(new DescriptorScriptPubKeyMan(storage, desc, keypool_size));
 
@@ -882,6 +890,10 @@ std::unique_ptr<DescriptorScriptPubKeyMan> DescriptorScriptPubKeyMan::GenerateNe
     if (pq) {
         if (!spkm->AddPQSeedWithDB(batch, pq_seed)) {
             throw std::runtime_error(std::string(__func__) + ": writing descriptor post-quantum seed failed");
+        }
+        if (pq_secret && !pq_secret->mnemonic_entropy.empty() &&
+            !spkm->AddPQMnemonicWithDB(batch, pq_seed.Id(), pq_secret->mnemonic_entropy)) {
+            throw std::runtime_error(std::string(__func__) + ": writing recovery words failed");
         }
     } else if (!spkm->AddDescriptorKeyWithDB(batch, master_key.key, master_key.key.GetPubKey())) {
         throw std::runtime_error(std::string(__func__) + ": writing descriptor master private key failed");
@@ -1042,6 +1054,16 @@ bool DescriptorScriptPubKeyMan::Encrypt(const CKeyingMaterial& master_key, Walle
     }
     m_pq_seeds.clear();
 
+    // PQCH: recovery-word entropy, with an IV different from its seed's
+    for (const auto& [id, entropy] : m_pq_mnemonics) {
+        CKeyingMaterial secret{entropy.begin(), entropy.end()};
+        std::vector<unsigned char> crypted;
+        if (!EncryptSecret(master_key, secret, PQMnemonicIV(id), crypted)) return false;
+        m_crypted_pq_mnemonics[id] = crypted;
+        batch->WriteCryptedDescriptorPQMnemonic(GetID(), id, crypted);
+    }
+    m_pq_mnemonics.clear();
+
     for (const KeyMap::value_type& key_in : m_map_keys)
     {
         const CKey &key = key_in.second;
@@ -1112,6 +1134,34 @@ PQSeedMap DescriptorScriptPubKeyMan::GetPQSeeds() const
         return seeds;
     }
     return m_pq_seeds;
+}
+
+void DescriptorScriptPubKeyMan::LoadPQMnemonics(const PQMnemonicMap& mnemonics, const CryptedPQMnemonicMap& cmnemonics)
+{
+    LOCK(cs_desc_man);
+    if (!mnemonics.empty() && !cmnemonics.empty()) throw std::runtime_error("Wallet contains both unencrypted and encrypted recovery words");
+    m_pq_mnemonics = mnemonics;
+    m_crypted_pq_mnemonics = cmnemonics;
+}
+
+bool DescriptorScriptPubKeyMan::HasPQMnemonic() const
+{
+    LOCK(cs_desc_man);
+    return !m_pq_mnemonics.empty() || !m_crypted_pq_mnemonics.empty();
+}
+
+std::optional<std::pair<uint256, std::vector<unsigned char>>> DescriptorScriptPubKeyMan::GetPQMnemonic() const
+{
+    LOCK(cs_desc_man);
+    if (!m_pq_mnemonics.empty()) return *m_pq_mnemonics.begin();
+    if (m_crypted_pq_mnemonics.empty() || !m_storage.HasEncryptionKeys() || m_storage.IsLocked()) return std::nullopt;
+    const auto& [id, crypted] = *m_crypted_pq_mnemonics.begin();
+    CKeyingMaterial plain;
+    const bool ok{m_storage.WithEncryptionKey([&](const CKeyingMaterial& encryption_key) {
+        return DecryptSecret(encryption_key, crypted, PQMnemonicIV(id), plain);
+    })};
+    if (!ok || plain.size() != bip39::ENTROPY_SIZE) return std::nullopt;
+    return std::make_pair(id, std::vector<unsigned char>{plain.begin(), plain.end()});
 }
 
 void DescriptorScriptPubKeyMan::LoadPQSeeds(const PQSeedMap& seeds, const CryptedPQSeedMap& cseeds)
@@ -1307,6 +1357,27 @@ bool DescriptorScriptPubKeyMan::AddPQSeedWithDB(WalletBatch& batch, const p2mr::
     }
     m_pq_seeds.emplace(id, seed);
     return batch.WriteDescriptorPQSeed(GetID(), seed);
+}
+
+bool DescriptorScriptPubKeyMan::AddPQMnemonicWithDB(WalletBatch& batch, const uint256& seed_id, std::span<const unsigned char> entropy)
+{
+    AssertLockHeld(cs_desc_man);
+    if (entropy.size() != bip39::ENTROPY_SIZE) return false;
+    if (m_pq_mnemonics.contains(seed_id) || m_crypted_pq_mnemonics.contains(seed_id)) return true;
+    if (m_storage.HasEncryptionKeys()) {
+        if (m_storage.IsLocked()) return false;
+        std::vector<unsigned char> crypted;
+        CKeyingMaterial secret{entropy.begin(), entropy.end()};
+        if (!m_storage.WithEncryptionKey([&](const CKeyingMaterial& encryption_key) {
+                return EncryptSecret(encryption_key, secret, PQMnemonicIV(seed_id), crypted);
+            })) {
+            return false;
+        }
+        m_crypted_pq_mnemonics[seed_id] = crypted;
+        return batch.WriteCryptedDescriptorPQMnemonic(GetID(), seed_id, crypted);
+    }
+    m_pq_mnemonics.emplace(seed_id, std::vector<unsigned char>{entropy.begin(), entropy.end()});
+    return batch.WriteDescriptorPQMnemonic(GetID(), seed_id, entropy);
 }
 
 bool DescriptorScriptPubKeyMan::IsHDEnabled() const

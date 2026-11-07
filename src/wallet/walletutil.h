@@ -159,7 +159,8 @@ WalletDescriptor GenerateWalletDescriptor(const CExtPubKey& master_key, const Ou
 bool IsPQWalletChain();
 
 /** PQCH: the p2mr() descriptor (receive or change) of a wallet's post-quantum seed. */
-WalletDescriptor GenerateP2MRWalletDescriptor(const p2mr::PQSeed& seed, bool internal);
+//! PQCH: creation_time 0 makes the wallet rescan the whole chain (restoring from recovery words).
+WalletDescriptor GenerateP2MRWalletDescriptor(const p2mr::PQSeed& seed, bool internal, std::optional<int64_t> creation_time = std::nullopt);
 } // namespace wallet
 
 #endif // BITCOIN_WALLET_WALLETUTIL_H

@@ -172,6 +172,18 @@ using CryptedKeyMap = std::map<CKeyID, std::pair<CPubKey, std::vector<unsigned c
 //! PQCH: post-quantum wallet seeds (script/p2mr.h) by id, plain or encrypted
 using PQSeedMap = std::map<uint256, p2mr::PQSeed>;
 using CryptedPQSeedMap = std::map<uint256, std::vector<unsigned char>>;
+//! PQCH: BIP39 entropy (32 bytes = 24 words) of a post-quantum seed, by seed id
+using PQMnemonicMap = std::map<uint256, std::vector<unsigned char>>;
+using CryptedPQMnemonicMap = std::map<uint256, std::vector<unsigned char>>;
+
+//! PQCH: the secret a new wallet's P2MR descriptors are generated from
+struct PQWalletSecret {
+    p2mr::PQSeed seed;
+    //! BIP39 entropy the seed was made from (the 24 recovery words), or empty
+    std::vector<unsigned char> mnemonic_entropy;
+    //! Descriptor creation time; 0 makes the wallet rescan the whole chain (restore)
+    std::optional<int64_t> creation_time;
+};
 
 // Manages the minimum data needed to load and migrate a legacy wallet.
 class LegacyDataSPKM : public ScriptPubKeyMan, public FillableSigningProvider
@@ -288,6 +300,8 @@ private:
     CryptedKeyMap m_map_crypted_keys GUARDED_BY(cs_desc_man);
     PQSeedMap m_pq_seeds GUARDED_BY(cs_desc_man);                //!< PQCH
     CryptedPQSeedMap m_crypted_pq_seeds GUARDED_BY(cs_desc_man); //!< PQCH
+    PQMnemonicMap m_pq_mnemonics GUARDED_BY(cs_desc_man);                 //!< PQCH
+    CryptedPQMnemonicMap m_crypted_pq_mnemonics GUARDED_BY(cs_desc_man);  //!< PQCH
     //! PQCH: addresses could not be generated because the wallet was locked (see TopUpBlockedByLock).
     std::atomic<bool> m_topup_blocked_by_lock{false};
 
@@ -315,6 +329,8 @@ private:
     bool AddDescriptorKeyWithDB(WalletBatch& batch, const CKey& key, const CPubKey &pubkey) EXCLUSIVE_LOCKS_REQUIRED(cs_desc_man);
     //! PQCH: store a post-quantum seed (encrypted if the wallet is)
     bool AddPQSeedWithDB(WalletBatch& batch, const p2mr::PQSeed& seed) EXCLUSIVE_LOCKS_REQUIRED(cs_desc_man);
+    //! PQCH: store the BIP39 entropy of a seed (encrypted if the wallet is)
+    bool AddPQMnemonicWithDB(WalletBatch& batch, const uint256& seed_id, std::span<const unsigned char> entropy) EXCLUSIVE_LOCKS_REQUIRED(cs_desc_man);
 
     KeyMap GetKeys() const EXCLUSIVE_LOCKS_REQUIRED(cs_desc_man);
     //! PQCH: the post-quantum seeds, decrypted if the wallet is encrypted and unlocked
@@ -355,9 +371,15 @@ public:
     static std::unique_ptr<DescriptorScriptPubKeyMan> LoadFromStorage(WalletStorage& storage, const uint256& id, WalletDescriptor& descriptor, int64_t keypool_size, const KeyMap& keys, const CryptedKeyMap& ckeys);
     //! PQCH: post-quantum seeds read from the database (during loading)
     void LoadPQSeeds(const PQSeedMap& seeds, const CryptedPQSeedMap& cseeds);
+    //! PQCH: recovery-word entropy read from the database (during loading)
+    void LoadPQMnemonics(const PQMnemonicMap& mnemonics, const CryptedPQMnemonicMap& cmnemonics);
+    //! PQCH: whether this descriptor's seed came from recovery words
+    bool HasPQMnemonic() const;
+    //! PQCH: the BIP39 entropy and seed id; nullopt if there is none or the wallet is locked
+    std::optional<std::pair<uint256, std::vector<unsigned char>>> GetPQMnemonic() const;
     static std::unique_ptr<DescriptorScriptPubKeyMan> CreateFromImport(WalletStorage& storage, WalletDescriptor& descriptor, int64_t keypool_size, const FlatSigningProvider& provider);
     static std::unique_ptr<DescriptorScriptPubKeyMan> CreateFromMigration(WalletStorage& storage, WalletBatch& batch, WalletDescriptor& descriptor, int64_t keypool_size, const FlatSigningProvider& provider);
-    static std::unique_ptr<DescriptorScriptPubKeyMan> GenerateNewSingleSig(WalletStorage& storage, WalletBatch& batch, int64_t keypool_size, const CExtKey& master_key, OutputType addr_type, bool internal);
+    static std::unique_ptr<DescriptorScriptPubKeyMan> GenerateNewSingleSig(WalletStorage& storage, WalletBatch& batch, int64_t keypool_size, const CExtKey& master_key, OutputType addr_type, bool internal, const PQWalletSecret* pq_secret = nullptr);
 
     mutable RecursiveMutex cs_desc_man;
 

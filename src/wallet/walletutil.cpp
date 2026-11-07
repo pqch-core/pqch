@@ -34,7 +34,7 @@ fs::path GetWalletDir()
     return path;
 }
 
-WalletDescriptor GenerateP2MRWalletDescriptor(const p2mr::PQSeed& seed, bool internal)
+WalletDescriptor GenerateP2MRWalletDescriptor(const p2mr::PQSeed& seed, bool internal, std::optional<int64_t> creation_time)
 {
     // m/360h/coin_typeh/0h/{0h receive, 1h change}/*h (whitepaper, section 21.5); every step
     // hardened. Mainnet uses coin type 0h until a SLIP-0044 number is registered.
@@ -44,7 +44,7 @@ WalletDescriptor GenerateP2MRWalletDescriptor(const p2mr::PQSeed& seed, bool int
     std::string error;
     std::vector<std::unique_ptr<Descriptor>> desc = Parse(desc_str, keys, error, false);
     Assert(desc.size() == 1);
-    return WalletDescriptor(std::move(desc.at(0)), GetTime(), 0, 0, 0);
+    return WalletDescriptor(std::move(desc.at(0)), creation_time.value_or(GetTime()), 0, 0, 0);
 }
 
 bool IsPQWalletChain()

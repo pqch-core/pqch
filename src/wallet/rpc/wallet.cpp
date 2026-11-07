@@ -369,6 +369,8 @@ static RPCMethod createwallet()
             {"descriptors", RPCArg::Type::BOOL, RPCArg::Default{true}, "If set, must be \"true\""},
             {"load_on_startup", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED, "Save wallet name to persistent settings and load on startup. True to add wallet to startup list, false to remove, null to leave unchanged."},
             {"external_signer", RPCArg::Type::BOOL, RPCArg::Default{false}, "Use an external signer such as a hardware wallet. Requires -signer to be configured. Wallet creation will fail if keys cannot be fetched. Requires disable_private_keys and descriptors set to true."},
+            {"recovery_words", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "PQCH: restore the wallet from these 24 BIP39 recovery words (English list), then rescan the whole chain. Without it, a new wallet gets new recovery words: show them with getrecoverywords and write them down."},
+            {"recovery_passphrase", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "PQCH: the optional BIP39 passphrase used together with recovery_words. It is not stored: without it, the same words give a different, empty wallet."},
         },
         RPCResult{
             RPCResult::Type::OBJ, "", "",
@@ -429,6 +431,12 @@ static RPCMethod createwallet()
     options.require_create = true;
     options.create_flags = flags;
     options.create_passphrase = passphrase;
+    if (!request.params[8].isNull()) {
+        options.create_pq_mnemonic = SecureString{std::string_view{request.params[8].get_str()}};
+        if (!request.params[9].isNull()) options.create_pq_mnemonic_passphrase = std::string_view{request.params[9].get_str()};
+    } else if (!request.params[9].isNull()) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "recovery_passphrase requires recovery_words");
+    }
     bilingual_str error;
     std::optional<bool> load_on_start = request.params[6].isNull() ? std::nullopt : std::optional<bool>(request.params[6].get_bool());
     const std::shared_ptr<CWallet> wallet = CreateWallet(context, request.params[0].get_str(), load_on_start, options, status, error, warnings);
@@ -438,6 +446,39 @@ static RPCMethod createwallet()
     obj.pushKV("name", wallet->GetName());
     PushWarnings(warnings, obj);
 
+    return obj;
+},
+    };
+}
+
+static RPCMethod getrecoverywords()
+{
+    return RPCMethod{
+        "getrecoverywords",
+        "PQCH: returns the 24 BIP39 recovery words of the wallet's active receiving addresses.\n"
+        "Write them on paper and keep them offline: anyone with the words (and the recovery passphrase, if one was used) can spend the coins.\n"
+        "Requires the wallet to be unlocked if it is encrypted. Note: encryptwallet on an unencrypted wallet creates new addresses with new words.\n",
+        {},
+        RPCResult{
+            RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::STR, "words", "The 24 recovery words, separated by spaces"},
+            }
+        },
+        RPCExamples{
+            HelpExampleCli("getrecoverywords", "")
+            + HelpExampleRpc("getrecoverywords", "")
+        },
+        [](const RPCMethod& self, const JSONRPCRequest& request) -> UniValue
+{
+    const std::shared_ptr<const CWallet> pwallet = GetWalletForJSONRPCRequest(request);
+    if (!pwallet) return UniValue::VNULL;
+    LOCK(pwallet->cs_wallet);
+    EnsureWalletIsUnlocked(*pwallet);
+    auto words{pwallet->GetPQMnemonic()};
+    if (!words) throw JSONRPCError(RPC_WALLET_ERROR, util::ErrorString(words).original);
+    UniValue obj(UniValue::VOBJ);
+    obj.pushKV("words", *words);
     return obj;
 },
     };
@@ -1151,6 +1192,7 @@ std::span<const CRPCCommand> GetWalletRPCCommands()
         {"wallet", &bumpfee},
         {"wallet", &psbtbumpfee},
         {"wallet", &createwallet},
+        {"wallet", &getrecoverywords},
         {"wallet", &createwalletdescriptor},
         {"wallet", &derivehdkey},
         {"wallet", &restorewallet},

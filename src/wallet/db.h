@@ -171,6 +171,9 @@ struct DatabaseOptions {
     std::optional<DatabaseFormat> require_format;
     uint64_t create_flags = 0;
     SecureString create_passphrase;
+    //! PQCH: create the wallet from these 24 recovery words (restore), with an optional BIP39 passphrase
+    std::optional<SecureString> create_pq_mnemonic;
+    SecureString create_pq_mnemonic_passphrase;
 
     // Specialized options. Not every option is supported by every backend.
     bool verify = true;             //!< Check data integrity on load.

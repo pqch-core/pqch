@@ -38,6 +38,8 @@
 #include <psbt.h>
 #include <pubkey.h>
 #include <random.h>
+#include <script/bip39.h>
+#include <script/p2mr.h>
 #include <script/descriptor.h>
 #include <script/interpreter.h>
 #include <script/script.h>
@@ -386,6 +388,8 @@ std::shared_ptr<CWallet> LoadWallet(WalletContext& context, const std::string& n
     return wallet;
 }
 
+static SecureString LowerCaseWords(const SecureString& words);
+
 std::shared_ptr<CWallet> CreateWallet(WalletContext& context, const std::string& name, std::optional<bool> load_on_start, DatabaseOptions& options, DatabaseStatus& status, bilingual_str& error, std::vector<bilingual_str>& warnings)
 {
     // Wallet must have a non-empty name
@@ -398,6 +402,28 @@ std::shared_ptr<CWallet> CreateWallet(WalletContext& context, const std::string&
     uint64_t wallet_creation_flags = options.create_flags;
     const SecureString& passphrase = options.create_passphrase;
     bool born_encrypted = !passphrase.empty();
+
+    // PQCH: a wallet restored from recovery words is created blank, and its descriptors are made
+    // from the words below.
+    if (options.create_pq_mnemonic) {
+        if (!IsPQWalletChain()) {
+            error = Untranslated("Recovery words are only supported on PQCH networks");
+            status = DatabaseStatus::FAILED_CREATE;
+            return nullptr;
+        }
+        if (wallet_creation_flags & (WALLET_FLAG_DISABLE_PRIVATE_KEYS | WALLET_FLAG_BLANK_WALLET | WALLET_FLAG_EXTERNAL_SIGNER)) {
+            error = Untranslated("Recovery words cannot be used with disable_private_keys, blank or external_signer");
+            status = DatabaseStatus::FAILED_CREATE;
+            return nullptr;
+        }
+        const SecureString lower{LowerCaseWords(*options.create_pq_mnemonic)};
+        if (!bip39::NormalizeMnemonic(std::string_view{lower.data(), lower.size()})) {
+            error = _("Invalid recovery words: they must be 24 words from the BIP39 English list, with a valid checksum");
+            status = DatabaseStatus::FAILED_CREATE;
+            return nullptr;
+        }
+        wallet_creation_flags |= WALLET_FLAG_BLANK_WALLET;
+    }
 
     // Only descriptor wallets can be created
     Assert(wallet_creation_flags & WALLET_FLAG_DESCRIPTORS);
@@ -441,6 +467,32 @@ std::shared_ptr<CWallet> CreateWallet(WalletContext& context, const std::string&
             error = Untranslated("Error: Wallet created but failed to encrypt.");
             status = DatabaseStatus::FAILED_ENCRYPT;
             return nullptr;
+        }
+    }
+
+    // PQCH: restore from recovery words (the wallet was created blank above), then rescan
+    if (options.create_pq_mnemonic) {
+        bilingual_str restore_error;
+        {
+            LOCK(wallet->cs_wallet);
+            if (born_encrypted && !wallet->Unlock(passphrase)) {
+                restore_error = Untranslated("Error: Wallet created but could not be unlocked to restore the recovery words.");
+            } else if (auto res{wallet->SetupFromPQMnemonic(*options.create_pq_mnemonic, options.create_pq_mnemonic_passphrase)}; !res) {
+                restore_error = util::ErrorString(res);
+            }
+            if (born_encrypted) wallet->Lock();
+        }
+        if (!restore_error.empty()) {
+            error = restore_error;
+            status = DatabaseStatus::FAILED_CREATE;
+            wallet->Close();
+            return nullptr;
+        }
+        WalletRescanReserver reserver(*wallet);
+        if (reserver.reserve()) {
+            wallet->RescanFromTime(0, reserver);
+        } else {
+            warnings.emplace_back(Untranslated("Wallet restored, but the rescan could not start; run rescanblockchain."));
         }
     }
 
@@ -3707,7 +3759,7 @@ void CWallet::LoadDescriptorScriptPubKeyMan(uint256 id, WalletDescriptor& desc, 
     AddScriptPubKeyMan(id, std::move(spk_manager));
 }
 
-DescriptorScriptPubKeyMan& CWallet::SetupDescriptorScriptPubKeyMan(WalletBatch& batch, const CExtKey& master_key, const OutputType& output_type, bool internal)
+DescriptorScriptPubKeyMan& CWallet::SetupDescriptorScriptPubKeyMan(WalletBatch& batch, const CExtKey& master_key, const OutputType& output_type, bool internal, const PQWalletSecret* pq_secret)
 {
     AssertLockHeld(cs_wallet);
     if (IsLocked()) {
@@ -3717,7 +3769,7 @@ DescriptorScriptPubKeyMan& CWallet::SetupDescriptorScriptPubKeyMan(WalletBatch& 
     if (IsPQWalletChain() && output_type != OutputType::BECH32M) {
         throw std::runtime_error(std::string(__func__) + ": only bech32m (post-quantum P2MR) descriptors can be created on this network");
     }
-    auto spk_manager = DescriptorScriptPubKeyMan::GenerateNewSingleSig(*this, batch, m_keypool_size, master_key, output_type, internal);
+    auto spk_manager = DescriptorScriptPubKeyMan::GenerateNewSingleSig(*this, batch, m_keypool_size, master_key, output_type, internal, pq_secret);
     DescriptorScriptPubKeyMan* out = spk_manager.get();
     uint256 id = spk_manager->GetID();
     AddScriptPubKeyMan(id, std::move(spk_manager));
@@ -3725,14 +3777,14 @@ DescriptorScriptPubKeyMan& CWallet::SetupDescriptorScriptPubKeyMan(WalletBatch& 
     return *out;
 }
 
-void CWallet::SetupDescriptorScriptPubKeyMans(WalletBatch& batch, const CExtKey& master_key)
+void CWallet::SetupDescriptorScriptPubKeyMans(WalletBatch& batch, const CExtKey& master_key, const PQWalletSecret* pq_secret)
 {
     AssertLockHeld(cs_wallet);
     for (bool internal : {false, true}) {
         for (OutputType t : OUTPUT_TYPES) {
             // PQCH: only P2MR (bech32m) outputs on PQCH chains.
             if (IsPQWalletChain() && t != OutputType::BECH32M) continue;
-            SetupDescriptorScriptPubKeyMan(batch, master_key, t, internal);
+            SetupDescriptorScriptPubKeyMan(batch, master_key, t, internal, pq_secret);
         }
     }
 }
@@ -3750,7 +3802,68 @@ void CWallet::SetupOwnDescriptorScriptPubKeyMans(WalletBatch& batch)
     CExtKey master_key;
     master_key.SetSeed(seed_key);
 
+    // PQCH: the post-quantum seed comes from 24 new BIP39 recovery words, kept in the wallet
+    // (encrypted if it is) so that they can be shown to the user (getmnemonic).
+    if (IsPQWalletChain()) {
+        std::array<unsigned char, bip39::ENTROPY_SIZE> entropy;
+        GetStrongRandBytes(entropy);
+        const std::string words{bip39::MnemonicFromEntropy(entropy)};
+        auto seed{p2mr::SeedFromMnemonic(words, "")};
+        Assert(seed);
+        PQWalletSecret secret{*seed, {entropy.begin(), entropy.end()}, std::nullopt};
+        memory_cleanse(entropy.data(), entropy.size());
+        SetupDescriptorScriptPubKeyMans(batch, master_key, &secret);
+        memory_cleanse(secret.mnemonic_entropy.data(), secret.mnemonic_entropy.size());
+        return;
+    }
+
     SetupDescriptorScriptPubKeyMans(batch, master_key);
+}
+
+//! PQCH: recovery words as typed by a person (any case); the BIP39 list is lower case
+static SecureString LowerCaseWords(const SecureString& words)
+{
+    SecureString out{words};
+    for (char& c : out) c = ToLower(c);
+    return out;
+}
+
+util::Result<void> CWallet::SetupFromPQMnemonic(const SecureString& words, const SecureString& passphrase)
+{
+    AssertLockHeld(cs_wallet);
+    if (!IsPQWalletChain()) return util::Error{Untranslated("Recovery words are only supported on PQCH networks")};
+    if (IsWalletFlagSet(WALLET_FLAG_DISABLE_PRIVATE_KEYS)) return util::Error{Untranslated("Cannot restore recovery words into a wallet without private keys")};
+    if (IsLocked()) return util::Error{Untranslated("Wallet is locked")};
+    const SecureString lower{LowerCaseWords(words)};
+    const auto normalized{bip39::NormalizeMnemonic(std::string_view{lower.data(), lower.size()})};
+    if (!normalized) return util::Error{_("Invalid recovery words: they must be 24 words from the BIP39 English list, with a valid checksum")};
+    const auto entropy{bip39::EntropyFromMnemonic(*normalized)};
+    const auto seed{p2mr::SeedFromMnemonic(*normalized, std::string_view{passphrase.data(), passphrase.size()})};
+    if (!entropy || !seed) return util::Error{Untranslated("Invalid recovery words")};
+    // Dated 0: the wallet rescans the whole chain for the restored addresses.
+    PQWalletSecret secret{*seed, {entropy->begin(), entropy->end()}, int64_t{0}};
+    const bool ok{RunWithinTxn(GetDatabase(), /*process_desc=*/"setup descriptors from recovery words", [&](WalletBatch& batch) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet) {
+        SetupDescriptorScriptPubKeyMans(batch, CExtKey{}, &secret);
+        return true;
+    })};
+    memory_cleanse(secret.mnemonic_entropy.data(), secret.mnemonic_entropy.size());
+    if (!ok) return util::Error{Untranslated("Error: cannot process db transaction for descriptors setup")};
+    return {};
+}
+
+util::Result<std::string> CWallet::GetPQMnemonic() const
+{
+    const auto* spkm{dynamic_cast<const DescriptorScriptPubKeyMan*>(GetScriptPubKeyMan(OutputType::BECH32M, /*internal=*/false))};
+    if (!spkm || !spkm->HasPQMnemonic()) {
+        return util::Error{Untranslated("This wallet has no recovery words (it was created before they existed, or its keys were imported). Back it up with backupwallet or listdescriptors true.")};
+    }
+    const auto mnemonic{spkm->GetPQMnemonic()};
+    if (!mnemonic) return util::Error{Untranslated("Please enter the wallet passphrase with walletpassphrase first.")};
+    std::array<unsigned char, bip39::ENTROPY_SIZE> entropy;
+    std::copy(mnemonic->second.begin(), mnemonic->second.end(), entropy.begin());
+    std::string words{bip39::MnemonicFromEntropy(entropy)};
+    memory_cleanse(entropy.data(), entropy.size());
+    return words;
 }
 
 void CWallet::SetupDescriptorScriptPubKeyMans()
