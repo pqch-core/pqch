@@ -55,7 +55,7 @@ jobs:
           - name: win64
             host: x86_64-w64-mingw32
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Version
         id: version
@@ -150,7 +150,7 @@ jobs:
           (cd stage && zip -X -r "../out/${NAME}-win64.zip" "${NAME}")
           unzip -l "out/${NAME}-win64.zip"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: pqch-${{ steps.version.outputs.version }}-${{ matrix.name }}
           path: out/*
@@ -164,11 +164,11 @@ jobs:
     permissions:
       contents: write  # draft release on tags
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           sparse-checkout: CMakeLists.txt
           sparse-checkout-cone-mode: false
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: dl
           pattern: pqch-*
@@ -178,7 +178,7 @@ jobs:
           cd dl
           sha256sum pqch-* | sort -k2 > SHA256SUMS
           cat SHA256SUMS
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: pqch-release-${{ github.ref_name }}-${{ github.run_number }}
           path: dl/*
