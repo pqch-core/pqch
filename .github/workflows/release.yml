@@ -188,6 +188,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          command -v gh >/dev/null || { echo "::error::gh is missing on the runner (sudo apt-get install gh; contrib/pqch/instalar_runner.sh)"; exit 1; }
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
             TAG="${GITHUB_REF_NAME}"
           else
