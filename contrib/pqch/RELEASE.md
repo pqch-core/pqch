@@ -45,7 +45,10 @@ gpg --armor --export releases@pqch.org > pqch-releases.asc
 gpg --armor --export-secret-keys releases@pqch.org > CHAVE-PRIVADA-pqch-releases.asc
 ```
 
-- `pqch-releases.asc` (pública) vai para o site, com a impressão digital escrita na página de downloads.
+- `pqch-releases.asc` (pública) vai para o site, com a impressão digital escrita na página de downloads, e
+  para `contrib/pqch/pqch-releases.asc` neste repositório: o workflow junta-a a cada Release.
+- Chave atual (8 nov. 2026): impressão digital `1CDF A6A8 4A35 AA6D 7B52  4D1C FB6E 21DF 0D38 B5DA`, válida até 7 nov. 2028.
+- O texto das Releases sai de `contrib/pqch/release-notes.md`; antes de publicar, preenche a lista "Changes".
 - `CHAVE-PRIVADA-…` vai para uma pen USB guardada offline, e apaga-se do disco. Sem ela não há
   assinaturas novas; se alguém a obtiver, pode assinar em nome do projeto.
 - O GnuPG cria também um certificado de revogação (pasta `openpgp-revocs.d`). Guarda-o com a cópia offline.

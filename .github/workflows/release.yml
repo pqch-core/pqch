@@ -166,7 +166,10 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          sparse-checkout: CMakeLists.txt
+          sparse-checkout: |
+            CMakeLists.txt
+            contrib/pqch/release-notes.md
+            contrib/pqch/pqch-releases.asc
           sparse-checkout-cone-mode: false
       - uses: actions/download-artifact@v8
         with:
@@ -195,6 +198,9 @@ jobs:
             v() { sed -n "s/^set(CLIENT_VERSION_$1 \([0-9]*\)).*/\1/p" CMakeLists.txt; }
             TAG="v$(v MAJOR).$(v MINOR).$(v BUILD)"
           fi
-          gh release create "${TAG}" dl/* --repo "${GITHUB_REPOSITORY}" --draft --target "${GITHUB_SHA}" \
-            --title "PQCH ${TAG}" \
-            --notes "Draft. Before publishing: check SHA256SUMS, sign it (contrib/pqch/RELEASE.md) and add SHA256SUMS.asc."
+          # The public release key travels with every release once it is in the repository.
+          EXTRA=()
+          [[ -f contrib/pqch/pqch-releases.asc ]] && EXTRA+=(contrib/pqch/pqch-releases.asc)
+          sed "s/{{VERSION}}/${TAG#v}/g" contrib/pqch/release-notes.md > notes.md
+          gh release create "${TAG}" dl/* "${EXTRA[@]}" --repo "${GITHUB_REPOSITORY}" --draft --target "${GITHUB_SHA}" \
+            --title "PQCH ${TAG}" --notes-file notes.md
