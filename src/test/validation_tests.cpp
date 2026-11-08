@@ -24,7 +24,7 @@ BOOST_FIXTURE_TEST_SUITE(validation_tests, BasicTestingSetup)
 static void TestBlockSubsidyHalvings(const Consensus::Params& consensusParams)
 {
     int maxHalvings = 64;
-    CAmount nInitialSubsidy = 1'250'000'000; // PQCH: 12.5 PQCH
+    CAmount nInitialSubsidy = consensusParams.nInitialSubsidy; // PQCH: 7 PQCH on mainnet, 12.5 on regtest
 
     CAmount nPreviousSubsidy = nInitialSubsidy * 2; // for height == 0
     BOOST_CHECK_EQUAL(nPreviousSubsidy, nInitialSubsidy * 2);
@@ -57,15 +57,16 @@ BOOST_AUTO_TEST_CASE(subsidy_limit_test)
 {
     const auto chainParams = CreateChainParams(*m_node.args, ChainType::MAIN);
     CAmount nSum = 0;
-    // PQCH: 2,356,000-block halvings; the subsidy reaches zero after 31 halvings (~73 million blocks).
-    for (int nHeight = 0; nHeight < 80'000'000; nHeight += 1000) {
+    // PQCH: 4,207,000-block halvings of 7 PQCH; the subsidy reaches zero after 30 halvings (~126 million blocks).
+    BOOST_CHECK_EQUAL(chainParams->GetConsensus().nInitialSubsidy, 7 * COIN);
+    for (int nHeight = 0; nHeight < 140'000'000; nHeight += 1000) {
         CAmount nSubsidy = GetBlockSubsidy(nHeight, chainParams->GetConsensus());
-        BOOST_CHECK(nSubsidy <= 1'250'000'000);
+        BOOST_CHECK(nSubsidy <= 7 * COIN);
         nSum += nSubsidy * 1000;
         BOOST_CHECK(MoneyRange(nSum));
     }
-    // PQCH: total issuance is 58,899,999.74084000 PQCH, just under MAX_MONEY.
-    BOOST_CHECK_EQUAL(nSum, CAmount{5889999974084000});
+    // PQCH: total issuance is 58,897,999.49516000 PQCH, just under MAX_MONEY.
+    BOOST_CHECK_EQUAL(nSum, CAmount{5889799949516000});
     BOOST_CHECK(nSum <= MAX_MONEY);
 }
 

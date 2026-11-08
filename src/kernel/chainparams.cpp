@@ -125,8 +125,10 @@ public:
         m_chain_type = ChainType::MAIN;
         consensus.signet_blocks = false;
         consensus.signet_challenge.clear();
-        // PQCH: 2,356,000 blocks per halving (~4.5 years at 1 block per minute).
-        consensus.nSubsidyHalvingInterval = 2356000;
+        // PQCH: 7 PQCH per block, halved every 4,207,000 blocks (~8 years at 1 block per minute):
+        // 58,897,999.50 PQCH in total, under MAX_MONEY (whitepaper, section 26.1).
+        consensus.nSubsidyHalvingInterval = 4207000;
+        consensus.nInitialSubsidy = 7 * COIN;
         // PQCH: new chain, so no historical script flag exceptions and all soft forks active from the start.
         consensus.BIP34Height = 1;
         consensus.BIP34Hash = uint256();
@@ -251,7 +253,8 @@ public:
         consensus.signet_challenge.clear();
         // PQCH: the main network's consensus rules (see CMainParams), so that what is tested here is
         // what will run there.
-        consensus.nSubsidyHalvingInterval = 2356000;
+        consensus.nSubsidyHalvingInterval = 4207000;
+        consensus.nInitialSubsidy = 7 * COIN;
         consensus.BIP34Height = 1;
         consensus.BIP34Hash = uint256();
         consensus.BIP65Height = 1;

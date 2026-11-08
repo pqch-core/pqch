@@ -7,12 +7,12 @@ Base: Bitcoin Core v32.1 (licença MIT; avisos de copyright mantidos).
 | Área | Ficheiro | Alteração |
 | --- | --- | --- |
 | Oferta máxima | `src/consensus/amount.h` | `MAX_MONEY` = 58.900.000 PQCH |
-| Emissão | `src/validation.cpp` | `GetBlockSubsidy`: 12,5 PQCH iniciais |
-| Rede principal | `src/kernel/chainparams.cpp` | Halving a cada 2.356.000 blocos; blocos de 60 s; soft forks ativos desde o início; sem dados da cadeia Bitcoin (trabalho mínimo, assumevalid, assumeutxo, seeds); bytes mágicos `a7cadcbf`; porta P2P 29333; prefixo `pqc` |
+| Emissão | `src/validation.cpp` | `GetBlockSubsidy`: subsídio inicial dos parâmetros da rede (`nInitialSubsidy`): 7 PQCH na rede principal e na testnet, 12,5 no regtest (desde 8 nov. 2026; antes 12,5 em todas) |
+| Rede principal | `src/kernel/chainparams.cpp` | Halving a cada 4.207.000 blocos (~8 anos; antes 2.356.000); blocos de 60 s; soft forks ativos desde o início; sem dados da cadeia Bitcoin (trabalho mínimo, assumevalid, assumeutxo, seeds); bytes mágicos `a7cadcbf`; porta P2P 29333; prefixo `pqc` |
 | Regtest | `src/kernel/chainparams.cpp` | Blocos de 60 s; bytes mágicos `a2f492d4`; porta P2P 49444; prefixo `pqcrt`; novo génesis com saída `OP_RETURN "PQCH"` |
 | Portas RPC | `src/chainparamsbase.cpp` | 29332 (principal), 49443 (regtest) |
 | Unidades | `src/policy/feerate.h` | `PQCH` e `quantum` |
-| Testes | `src/test/validation_tests.cpp` | Subsídio inicial 12,5 e emissão total 58.899.999,74084 PQCH |
+| Testes | `src/test/validation_tests.cpp` | Subsídio inicial 7 e emissão total 58.897.999,49516 PQCH na rede principal |
 | Validação | `contrib/pqch/validar_fase1.sh` | Curva de emissão completa em regtest |
 
 ## Génesis da regtest

@@ -6,6 +6,7 @@
 #ifndef BITCOIN_CONSENSUS_PARAMS_H
 #define BITCOIN_CONSENSUS_PARAMS_H
 
+#include <consensus/amount.h>
 #include <script/verify_flags.h>
 #include <uint256.h>
 
@@ -91,6 +92,10 @@ struct BIP9Deployment {
 struct Params {
     uint256 hashGenesisBlock;
     int nSubsidyHalvingInterval;
+    /** PQCH: block subsidy before the first halving, in quanta. 7 PQCH on the main network and the
+     *  testnet (58,897,999.50 PQCH in total with 4,207,000-block halvings, ~8 years); regtest keeps
+     *  12.5 PQCH so that the inherited functional tests keep their amounts. */
+    CAmount nInitialSubsidy{1'250'000'000};
     /**
      * Hashes of blocks that
      * - are known to be consensus valid, and
