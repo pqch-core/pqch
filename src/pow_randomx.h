@@ -10,6 +10,7 @@
 
 #include <atomic>
 #include <string>
+#include <functional>
 #include <memory>
 #include <span>
 
@@ -92,6 +93,15 @@ public:
 
     uint256 Hash(const CBlockHeader& header, const uint256& seed);
 
+    /**
+     * PQCH: searches nonces from header.nNonce on, with `threads` threads (each with its own VM,
+     * sharing the cache, or the dataset in fast mode). Stops when a hash passes `ok`, when
+     * max_tries hashes were done, at the last nonce, or on interrupt. On success header.nNonce
+     * is the winning nonce. max_tries is decreased by the hashes done.
+     */
+    bool Search(CBlockHeader& header, const uint256& seed, unsigned threads, uint64_t& max_tries,
+                const std::function<bool(const uint256&)>& ok, const std::function<bool()>& interrupted);
+
 private:
     struct Impl;
     std::unique_ptr<Impl> m_impl;
@@ -99,5 +109,7 @@ private:
 
 /** Set from -randomxfastmining: whether the built-in miner (generate* RPCs) uses fast mode. */
 extern std::atomic<bool> g_randomx_fast_mining;
+/** Set from -randomxminingthreads: threads of the built-in miner (0 = one per CPU core). */
+extern std::atomic<unsigned> g_randomx_mining_threads;
 
 #endif // BITCOIN_POW_RANDOMX_H

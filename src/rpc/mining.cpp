@@ -70,6 +70,7 @@
 #include <limits>
 #include <map>
 #include <memory>
+#include <thread>
 #include <optional>
 #include <set>
 #include <span>
@@ -198,14 +199,21 @@ static bool GenerateBlock(ChainstateManager& chainman, CBlock&& block, uint64_t&
             g_rx_miner_fast = g_randomx_fast_mining.load();
             g_rx_miner = std::make_unique<RandomXMiner>(g_rx_miner_fast);
         }
-        const auto pow_ok = [&]() EXCLUSIVE_LOCKS_REQUIRED(g_rx_miner_mutex) {
-            if (rx_seed) return CheckProofOfWork(g_rx_miner->Hash(block, *rx_seed), block.nBits, consensus);
-            return CheckProofOfWork(block.GetHash(), block.nBits, consensus);
-        };
-
-        while (max_tries > 0 && block.nNonce < std::numeric_limits<uint32_t>::max() && !pow_ok() && !chainman.m_interrupt) {
-            ++block.nNonce;
-            --max_tries;
+        if (rx_seed) {
+            // PQCH: all -randomxminingthreads threads search the nonce space together.
+            const unsigned threads{g_randomx_mining_threads.load() == 0 ? std::max(1u, std::thread::hardware_concurrency())
+                                                                         : g_randomx_mining_threads.load()};
+            const uint32_t nbits{block.nBits};
+            CBlockHeader header = block;
+            g_rx_miner->Search(header, *rx_seed, threads, max_tries,
+                               [&](const uint256& hash) { return CheckProofOfWork(hash, nbits, consensus); },
+                               [&] { return bool{chainman.m_interrupt}; });
+            block.nNonce = header.nNonce;
+        } else {
+            while (max_tries > 0 && block.nNonce < std::numeric_limits<uint32_t>::max() && !CheckProofOfWork(block.GetHash(), block.nBits, consensus) && !chainman.m_interrupt) {
+                ++block.nNonce;
+                --max_tries;
+            }
         }
     }
     if (max_tries == 0 || chainman.m_interrupt) {

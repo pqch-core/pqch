@@ -12,6 +12,7 @@
 #include <primitives/block.h>
 #include <span.h>
 #include <streams.h>
+#include <sync.h>
 #include <util/time.h>
 
 #include <randomx.h>
@@ -19,12 +20,14 @@
 #include <algorithm>
 #include <cassert>
 #include <deque>
+#include <limits>
 #include <mutex>
 #include <stdexcept>
 #include <thread>
 #include <vector>
 
 std::atomic<bool> g_randomx_fast_mining{false};
+std::atomic<unsigned> g_randomx_mining_threads{1};
 
 namespace {
 
@@ -270,6 +273,110 @@ struct RandomXMiner::Impl {
     }
 };
 
+namespace {
+/** PQCH: one VM per mining thread, over a shared cache (light) or dataset (fast). */
+struct SearchVMs {
+    randomx_cache* cache{nullptr};
+    randomx_dataset* dataset{nullptr};
+    std::vector<randomx_vm*> vms;
+    uint256 seed;
+    bool fast{false};
+
+    void Release()
+    {
+        for (auto* vm : vms) randomx_destroy_vm(vm);
+        vms.clear();
+        if (dataset) randomx_release_dataset(dataset);
+        if (cache) randomx_release_cache(cache);
+        dataset = nullptr;
+        cache = nullptr;
+    }
+    ~SearchVMs() { Release(); }
+
+    void Init(const uint256& new_seed, bool fast_mode, unsigned threads)
+    {
+        Release();
+        const auto start{SteadyClock::now()};
+        for (bool jit : {true, false}) {
+            cache = randomx_alloc_cache(CacheFlags(jit));
+            if (!cache) continue;
+            randomx_init_cache(cache, new_seed.data(), new_seed.size());
+            if (fast_mode) {
+                dataset = randomx_alloc_dataset(RANDOMX_FLAG_DEFAULT);
+                if (!dataset) throw std::runtime_error("RandomX: could not allocate the 2 GiB dataset for fast mining");
+                const unsigned long items{randomx_dataset_item_count()};
+                const unsigned init_threads{std::max(1u, std::thread::hardware_concurrency())};
+                std::vector<std::thread> workers;
+                for (unsigned t = 0; t < init_threads; ++t) {
+                    const unsigned long begin{items * t / init_threads};
+                    const unsigned long end{items * (t + 1) / init_threads};
+                    workers.emplace_back([this, begin, end] { randomx_init_dataset(dataset, cache, begin, end - begin); });
+                }
+                for (auto& w : workers) w.join();
+            }
+            bool ok{true};
+            for (unsigned t = 0; t < threads && ok; ++t) {
+                randomx_vm* vm{fast_mode ? randomx_create_vm(VmFlags(jit, /*full_mem=*/true), nullptr, dataset)
+                                         : randomx_create_vm(VmFlags(jit, /*full_mem=*/false), cache, nullptr)};
+                if (vm) vms.push_back(vm); else ok = false;
+            }
+            if (ok) break;
+            Release();
+        }
+        if (vms.size() != threads) throw std::runtime_error("RandomX: could not create the mining virtual machines");
+        seed = new_seed;
+        fast = fast_mode;
+        LogInfo("RandomX: %s-mode miner ready with %u thread(s) in %d s\n", fast_mode ? "fast" : "light", threads,
+                Ticks<std::chrono::seconds>(SteadyClock::now() - start));
+    }
+};
+} // namespace
+
+static Mutex g_search_mutex;
+static SearchVMs g_search_vms GUARDED_BY(g_search_mutex);
+
+bool RandomXMiner::Search(CBlockHeader& header, const uint256& seed, unsigned threads, uint64_t& max_tries,
+                          const std::function<bool(const uint256&)>& ok, const std::function<bool()>& interrupted)
+{
+    threads = std::max(1u, threads);
+    LOCK(g_search_mutex);
+    if (g_search_vms.vms.size() != threads || g_search_vms.seed != seed || g_search_vms.fast != m_impl->fast) {
+        m_impl->Release(); // never two fast-mode datasets in memory at once
+        g_search_vms.Init(seed, m_impl->fast, threads);
+    }
+    const uint32_t first{header.nNonce};
+    const uint64_t room{uint64_t{std::numeric_limits<uint32_t>::max()} - first};
+    const uint64_t budget{std::min<uint64_t>(max_tries, room)};
+    std::atomic<uint64_t> done{0};
+    std::atomic<bool> found{false};
+    std::atomic<uint32_t> winner{0};
+    std::vector<std::thread> workers;
+    for (unsigned t = 0; t < threads; ++t) {
+        workers.emplace_back([&, t] {
+            CBlockHeader h{header};
+            randomx_vm* vm{g_search_vms.vms[t]};
+            uint256 out;
+            for (uint64_t i = t; i < budget && !found.load(std::memory_order_relaxed) && !(i % 64 < threads && interrupted()); i += threads) {
+                h.nNonce = first + static_cast<uint32_t>(i);
+                const auto input{SerializeHeader(h)};
+                randomx_calculate_hash(vm, input.data(), input.size(), out.data());
+                done.fetch_add(1, std::memory_order_relaxed);
+                if (ok(out) && !found.exchange(true)) {
+                    winner = h.nNonce;
+                }
+            }
+        });
+    }
+    for (auto& w : workers) w.join();
+    max_tries -= std::min<uint64_t>(max_tries, done.load());
+    if (found) {
+        header.nNonce = winner;
+        return true;
+    }
+    header.nNonce = first + static_cast<uint32_t>(std::min(budget, room));
+    return false;
+}
+
 RandomXMiner::RandomXMiner(bool fast_mode) : m_impl{std::make_unique<Impl>()}
 {
     m_impl->fast = fast_mode;
@@ -279,6 +386,7 @@ RandomXMiner::~RandomXMiner()
 {
     m_impl->Release();
 }
+
 
 uint256 RandomXMiner::Hash(const CBlockHeader& header, const uint256& seed)
 {
