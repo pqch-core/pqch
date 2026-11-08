@@ -15,8 +15,9 @@ Os alvos do CMake mantêm os nomes do Bitcoin Core (por exemplo `cmake --build b
 test_bitcoin`); só os ficheiros gerados mudam de nome. Assim os ficheiros de compilação herdados e as
 futuras fusões com o Bitcoin Core ficam simples.
 
-O agente de utilizador na rede é `/PQCH:<versão>/` (Bitcoin Core: `/Satoshi:<versão>/`). A versão
-ainda é a do Bitcoin Core em que o PQCH se baseia (32.1.0); a numeração própria fica para o lançamento.
+O agente de utilizador na rede é `/PQCH:<versão>/` (Bitcoin Core: `/Satoshi:<versão>/`). Desde 8 nov. 2026
+o PQCH tem numeração própria: 0.x durante a testnet (a primeira é a 0.1.0) e 1.0.0 no lançamento da
+rede principal. A base continua a ser o Bitcoin Core 32.1.
 
 ## Pasta de dados e configuração
 
