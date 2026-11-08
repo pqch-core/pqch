@@ -57,6 +57,9 @@ gpg --armor --export-secret-keys releases@pqch.org > CHAVE-PRIVADA-pqch-releases
    ```bash
    git tag v1.0.0 && git push origin v1.0.0
    ```
+   Sem acesso ao git pela linha de comandos: no GitHub, **Actions → PQCH Release → Run workflow**,
+   ramo `main`, com a caixa **release** marcada. O rascunho fica com a tag `v<versão>` apontada a esse
+   commit; o GitHub só cria a tag quando o rascunho for publicado.
 3. Quando o workflow acabar, há um **rascunho** em **Releases** com os ficheiros e o `SHA256SUMS`.
    Descarrega tudo para uma pasta e confere:
    ```bash
