@@ -55,6 +55,11 @@ jobs:
           - name: win64
             host: x86_64-w64-mingw32
     steps:
+      # The runner keeps its workspace between runs. A sparse checkout from an earlier job stays in
+      # .git/config and actions/checkout does not undo it, so the build saw only three files
+      # ("make: *** depends: No such file or directory"). Undo it before checking out.
+      - name: Undo a sparse checkout left in the workspace
+        run: if [[ -d .git ]]; then git sparse-checkout disable || true; fi
       - uses: actions/checkout@v6
 
       - name: Version
@@ -164,8 +169,10 @@ jobs:
     permissions:
       contents: write  # draft release on tags
     steps:
+      # Its own folder ("meta"), so the sparse checkout never touches the build jobs' workspace.
       - uses: actions/checkout@v6
         with:
+          path: meta
           sparse-checkout: |
             CMakeLists.txt
             contrib/pqch/release-notes.md
@@ -195,12 +202,17 @@ jobs:
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
             TAG="${GITHUB_REF_NAME}"
           else
-            v() { sed -n "s/^set(CLIENT_VERSION_$1 \([0-9]*\)).*/\1/p" CMakeLists.txt; }
+            v() { sed -n "s/^set(CLIENT_VERSION_$1 \([0-9]*\)).*/\1/p" meta/CMakeLists.txt; }
             TAG="v$(v MAJOR).$(v MINOR).$(v BUILD)"
+          fi
+          # Publishing a draft creates its tag, which starts this workflow again: leave that release alone.
+          if gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            echo "Release ${TAG} already exists (published from a draft); nothing to do."
+            exit 0
           fi
           # The public release key travels with every release once it is in the repository.
           EXTRA=()
-          [[ -f contrib/pqch/pqch-releases.asc ]] && EXTRA+=(contrib/pqch/pqch-releases.asc)
-          sed "s/{{VERSION}}/${TAG#v}/g" contrib/pqch/release-notes.md > notes.md
+          [[ -f meta/contrib/pqch/pqch-releases.asc ]] && EXTRA+=(meta/contrib/pqch/pqch-releases.asc)
+          sed "s/{{VERSION}}/${TAG#v}/g" meta/contrib/pqch/release-notes.md > notes.md
           gh release create "${TAG}" dl/* "${EXTRA[@]}" --repo "${GITHUB_REPOSITORY}" --draft --target "${GITHUB_SHA}" \
             --title "PQCH ${TAG}" --notes-file notes.md
