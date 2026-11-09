@@ -55,12 +55,20 @@ jobs:
           - name: win64
             host: x86_64-w64-mingw32
     steps:
-      # The runner keeps its workspace between runs. A sparse checkout from an earlier job stays in
-      # .git/config and actions/checkout does not undo it, so the build saw only three files
-      # ("make: *** depends: No such file or directory"). Undo it before checking out.
-      - name: Undo a sparse checkout left in the workspace
-        run: if [[ -d .git ]]; then git sparse-checkout disable || true; fi
+      # The runner keeps its workspace between runs. A sparse checkout from an earlier job stayed in
+      # it and the build saw only three files ("make: *** depends: No such file or directory"), even
+      # after "git sparse-checkout disable". Start from an empty folder: a depth-1 clone is quick, and
+      # the depends and ccache caches live in the runner's home, not here.
+      - name: Empty the workspace (self-hosted runner)
+        run: find . -mindepth 1 -maxdepth 1 -exec rm -rf {} +
       - uses: actions/checkout@v6
+      - name: Check the checkout is complete
+        run: |
+          if [[ ! -f depends/Makefile ]]; then
+            echo "::error::Incomplete checkout: depends/Makefile is missing"
+            git config --list --show-origin | grep -i -E "sparse|worktree" || true
+            exit 1
+          fi
 
       - name: Version
         id: version
