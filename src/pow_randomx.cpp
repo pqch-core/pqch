@@ -40,19 +40,23 @@ randomx_flags CacheFlags(bool allow_jit)
     return randomx_flags(f);
 }
 
-/** Flags for a virtual machine running RandomX v2. */
-randomx_flags VmFlags(bool allow_jit, bool full_mem)
+/** Flags for a virtual machine running RandomX v2 (PQCH's own proof of work) or, with v2 false, the
+ *  original RandomX that Monero uses before its hard fork 17 (merged mining). */
+randomx_flags VmFlags(bool allow_jit, bool full_mem, bool v2 = true)
 {
-    int f = CacheFlags(allow_jit) | RANDOMX_FLAG_V2;
+    int f = CacheFlags(allow_jit);
+    if (v2) f |= RANDOMX_FLAG_V2;
     if (full_mem) f |= RANDOMX_FLAG_FULL_MEM;
     return randomx_flags(f);
 }
 
-/** A light-mode cache and VM for one key. The VM is not thread-safe, hence the mutex. */
+/** A light-mode cache and two VMs for one key: RandomX v2 and the original RandomX (v1). The cache
+ *  does not depend on the version, so both VMs share it. The VMs are not thread-safe, hence the mutex. */
 struct RxContext {
     std::vector<unsigned char> key;
     randomx_cache* cache{nullptr};
-    randomx_vm* vm{nullptr};
+    randomx_vm* vm{nullptr};    //!< RandomX v2
+    randomx_vm* vm_v1{nullptr}; //!< original RandomX (Monero blocks before hard fork 17)
     std::mutex vm_mutex;
 
     explicit RxContext(std::span<const unsigned char> k) : key(k.begin(), k.end())
@@ -62,7 +66,11 @@ struct RxContext {
             if (!cache) continue;
             randomx_init_cache(cache, key.data(), key.size());
             vm = randomx_create_vm(VmFlags(jit, /*full_mem=*/false), cache, nullptr);
-            if (vm) return;
+            vm_v1 = randomx_create_vm(VmFlags(jit, /*full_mem=*/false, /*v2=*/false), cache, nullptr);
+            if (vm && vm_v1) return;
+            if (vm) randomx_destroy_vm(vm);
+            if (vm_v1) randomx_destroy_vm(vm_v1);
+            vm = vm_v1 = nullptr;
             randomx_release_cache(cache);
             cache = nullptr;
         }
@@ -71,6 +79,7 @@ struct RxContext {
     ~RxContext()
     {
         if (vm) randomx_destroy_vm(vm);
+        if (vm_v1) randomx_destroy_vm(vm_v1);
         if (cache) randomx_release_cache(cache);
     }
 };
@@ -130,13 +139,33 @@ uint256 GetRandomXSeedHash(const CBlockIndex* pindexPrev, const Consensus::Param
     return seed_block->GetBlockHash();
 }
 
-uint256 RandomXHash(std::span<const unsigned char> key, std::span<const unsigned char> input)
+namespace {
+uint256 RandomXHashVersion(std::span<const unsigned char> key, std::span<const unsigned char> input, bool v2)
 {
     auto ctx{GetContext(key)};
     uint256 out;
     std::lock_guard<std::mutex> lock(ctx->vm_mutex);
-    randomx_calculate_hash(ctx->vm, input.data(), input.size(), out.data());
+    randomx_calculate_hash(v2 ? ctx->vm : ctx->vm_v1, input.data(), input.size(), out.data());
     return out;
+}
+} // namespace
+
+uint256 RandomXHash(std::span<const unsigned char> key, std::span<const unsigned char> input)
+{
+    return RandomXHashVersion(key, input, /*v2=*/true);
+}
+
+uint256 RandomXHashV1(std::span<const unsigned char> key, std::span<const unsigned char> input)
+{
+    return RandomXHashVersion(key, input, /*v2=*/false);
+}
+
+uint256 MoneroPowHash(const uint256& seed, std::span<const unsigned char> blob)
+{
+    // The hashing blob starts with the Monero major version (a varint; every value from 17 on, in one
+    // byte or more, starts with a byte >= 17). Same rule as P2Pool (HARDFORK_VERSION_RANDOMX_V2).
+    const bool v2{!blob.empty() && blob[0] >= MONERO_HF_RANDOMX_V2};
+    return RandomXHashVersion(std::span<const unsigned char>{seed.data(), seed.size()}, blob, v2);
 }
 
 uint256 GetRandomXPowHash(const CBlockHeader& header, const uint256& seed)
@@ -170,8 +199,8 @@ bool CheckHeaderProofOfWork(const CBlockHeader& header, int height, const uint25
             error = "bad-auxpow (" + detail + ")";
             return false;
         }
-        const uint256& aux_seed{header.auxpow->seed_hash};
-        if (CheckProofOfWork(RandomXHash(std::span<const unsigned char>{aux_seed.data(), aux_seed.size()}, blob), header.nBits, params)) return true;
+        // Monero's own proof of work: original RandomX before Monero hard fork 17, RandomX v2 from it.
+        if (CheckProofOfWork(MoneroPowHash(header.auxpow->seed_hash, blob), header.nBits, params)) return true;
         error = "high-hash";
         return false;
     }

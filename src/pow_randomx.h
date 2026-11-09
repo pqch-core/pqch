@@ -44,6 +44,18 @@ uint256 GetRandomXSeedHash(const CBlockIndex* pindexPrev, const Consensus::Param
 /** RandomX v2 hash of arbitrary data under a key, in light mode (256 MiB cache). Thread-safe. */
 uint256 RandomXHash(std::span<const unsigned char> key, std::span<const unsigned char> input);
 
+/** Original RandomX (v1, Monero's proof of work before hard fork 17) of data under a key. Light mode, thread-safe. */
+uint256 RandomXHashV1(std::span<const unsigned char> key, std::span<const unsigned char> input);
+
+/** Monero hard-fork version from which Monero's proof of work is RandomX v2 (P2Pool: HARDFORK_VERSION_RANDOMX_V2). */
+inline constexpr unsigned char MONERO_HF_RANDOMX_V2{17};
+
+/**
+ * Monero's proof-of-work hash of a Monero hashing blob, as merged mining needs it: the original
+ * RandomX for blocks with major version below 17, RandomX v2 from 17 on. Light mode, thread-safe.
+ */
+uint256 MoneroPowHash(const uint256& seed, std::span<const unsigned char> blob);
+
 /** RandomX v2 proof-of-work hash of a block header under the given seed. Light mode, thread-safe. */
 uint256 GetRandomXPowHash(const CBlockHeader& header, const uint256& seed);
 

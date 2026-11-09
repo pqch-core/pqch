@@ -122,11 +122,26 @@ um share cumpre `aux_diff`, submete a solução e regista
   bloco normal. Sem a cabeça, ou com outra prova, o bloco é recusado sem ficar marcado inválido.
 - A API do P2Pool completa: `get_chain_id`, `get_aux_block`, `submit_solution` e `accepted`.
 
+## Versão do RandomX na prova do Monero (0.2.1)
+
+A prova de trabalho própria do PQCH é RandomX v2. A prova de um bloco minerado em conjunto é a do
+**Monero**, que usa o RandomX original (v1) até ao seu hard fork 17 e o RandomX v2 a partir dele.
+`MoneroPowHash` escolhe a versão pelo primeiro byte do hashing blob (a versão principal do bloco
+Monero): v1 abaixo de 17, v2 de 17 em diante, a mesma regra do P2Pool (`HARDFORK_VERSION_RANDOMX_V2`).
+
+Descoberto no primeiro teste real (9 nov. 2026, P2Pool v4.18.1, testnet Monero, versão 16): a 0.2.0
+calculava sempre v2 e recusava todos os blocos com `high-hash`. Testes: vetores oficiais do RandomX
+v1 (incluindo um hashing blob Monero) e `monero_pow_hash_version`.
+
 ## Ainda por fazer
 
-- **Testar com o P2Pool e o Monero reais**, no testnet ou stagenet, na tua máquina. Os formatos
-  foram copiados do código do P2Pool v4, mas só um teste real os confirma. Os pontos mais
-  sensíveis são a ordem dos hashes no `merkle_proof` e o `blob` completo.
+- **Teste real com o P2Pool e o Monero** (testnet Monero offline, `--fixed-difficulty`): repetir com
+  a 0.2.1 e confirmar `accepted` no portátil e a mesma altura na âncora.
+- **Hard fork 17 do Monero (FCMP++, Carrot, RandomX v2):** a árvore de transações passa a ter, logo a
+  seguir à coinbase, dois valores da árvore FCMP++ (número de camadas e raiz), e as saídas da coinbase
+  mudam de formato (P2Pool v5.0-beta, `merge_mining_client.cpp`). `BuildFromMoneroBlock` e a contagem
+  de transações têm de suportar esse formato antes de o Monero ativar o fork na rede principal (ainda
+  sem data). Testar no stressnet com o P2Pool v5.
 - `getblockheader` e `getblock` ainda não mostram os campos da prova.
 - A framework de testes em Python não lê cabeçalhos com prova. Não faz falta enquanto os testes
   funcionais não minerarem em conjunto.

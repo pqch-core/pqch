@@ -508,7 +508,7 @@ BOOST_AUTO_TEST_CASE(merged_mined_block_accepted)
     for (;; ++mb.nonce) {
         BOOST_REQUIRE(BuildFromMoneroBlock(mb.Serialize(), seed, tree.Branch(), *a, block.m_auxpow_head, error));
         const auto blob{a->HashingBlob()};
-        if (UintToArith256(RandomXHash(seed, blob)) <= target) break;
+        if (UintToArith256(MoneroPowHash(seed, blob)) <= target) break;
     }
     block.auxpow = a;
     const CBlockIndex* tip{WITH_LOCK(cs_main, return chainman.ActiveChain().Tip())};
@@ -639,7 +639,7 @@ BOOST_AUTO_TEST_CASE(p2pool_merge_mining_api)
         CAuxPowCoinbaseHead h;
         std::string error;
         BOOST_REQUIRE(BuildFromMoneroBlock(mb.Serialize(), seed, tree.Branch(), a, h, error));
-        if (UintToArith256(RandomXHash(seed, a.HashingBlob())) <= target) break;
+        if (UintToArith256(MoneroPowHash(seed, a.HashingBlob())) <= target) break;
     }
     std::string proof{"["};
     for (const auto& h : tree.Branch()) proof += (proof.size() > 1 ? ",\"" : "\"") + HexStr(h) + "\"";

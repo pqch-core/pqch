@@ -46,6 +46,52 @@ BOOST_AUTO_TEST_CASE(randomx_v2_official_vectors)
                       "22ec6b861b3eb23686b2efbad69513c967ecfce80983df66c9c5b4fbfb4cdb6f");
 }
 
+// Official vectors of the original RandomX (v1), Monero's proof of work before its hard fork 17
+// (tevador/RandomX src/tests/tests.cpp, same tests as above without RANDOMX_FLAG_V2). Merged mining
+// must hash Monero blocks with the version Monero itself uses.
+BOOST_AUTO_TEST_CASE(randomx_v1_official_vectors)
+{
+    auto v1{[](const std::string& key, const std::vector<unsigned char>& input) {
+        const uint256 h{RandomXHashV1(MakeUCharSpan(key), input)};
+        return HexStr(std::span<const unsigned char>{h.data(), h.size()});
+    }};
+    auto str{[](const std::string& s) { return std::vector<unsigned char>(s.begin(), s.end()); }};
+    BOOST_CHECK_EQUAL(v1("test key 000", str("This is a test")),
+                      "639183aae1bf4c9a35884cb46b09cad9175f04efd7684e7262a0ac1c2f0b4e3f");
+    BOOST_CHECK_EQUAL(v1("test key 000", str("Lorem ipsum dolor sit amet")),
+                      "300a0adb47603dedb42228ccb2b211104f4da45af709cd7547cd049e9489c969");
+    BOOST_CHECK_EQUAL(v1("test key 000", str("sed do eiusmod tempor incididunt ut labore et dolore magna aliqua")),
+                      "c36d4ed4191e617309867ed66a443be4075014e2b061bcdaf9ce7b721d2b77a8");
+    BOOST_CHECK_EQUAL(v1("test key 001", str("sed do eiusmod tempor incididunt ut labore et dolore magna aliqua")),
+                      "e9ff4503201c0c2cca26d285c93ae883f9b1d30c9eb240b820756f2d5a7905fc");
+    // A Monero hashing blob (major version 11).
+    const auto blob{ParseHex("0b0b98bea7e805e0010a2126d287a2a0cc833d312cb786385a7c2f9de69d25537f584a9bc9977b00000000666fd8753bf61a8631f12984e3fd44f4014eca629276817b56f32e9b68bd82f416")};
+    BOOST_CHECK_EQUAL(v1("test key 001", blob), "c56414121acda1713c2f2a819d8ae38aed7c80c35c2a769298d34f03833cd5f1");
+    // The v2 hash of the same blob differs (official v2 vector): mixing them up rejects every block.
+    BOOST_CHECK_EQUAL(HexStr(RandomXHash(MakeUCharSpan(std::string{"test key 001"}), blob)),
+                      "c8e92c5f7c1946fecf06bc382b92e3111da38ee3e6a5ad90704e1a9d8aaf6e76");
+}
+
+// Merged mining hashes a Monero blob with RandomX v1 below Monero major version 17 and v2 from 17 on,
+// like P2Pool (HARDFORK_VERSION_RANDOMX_V2). Found in the first real test with P2Pool v4.18.1 on the
+// Monero testnet (major version 16): hashing with v2 made every merged-mined block "high-hash".
+BOOST_AUTO_TEST_CASE(monero_pow_hash_version)
+{
+    const uint256 seed{uint256::ONE};
+    const std::span<const unsigned char> key{seed.data(), seed.size()};
+    std::vector<unsigned char> blob(76, 0x5a);
+    for (unsigned char major : {1, 11, 16}) {
+        blob[0] = major;
+        BOOST_CHECK(MoneroPowHash(seed, blob) == RandomXHashV1(key, blob));
+        BOOST_CHECK(MoneroPowHash(seed, blob) != RandomXHash(key, blob));
+    }
+    for (unsigned char major : {17, 18, 0x80}) {
+        blob[0] = major;
+        BOOST_CHECK(MoneroPowHash(seed, blob) == RandomXHash(key, blob));
+        BOOST_CHECK(MoneroPowHash(seed, blob) != RandomXHashV1(key, blob));
+    }
+}
+
 BOOST_AUTO_TEST_CASE(randomx_mainnet_params)
 {
     const auto chainParams = CreateChainParams(*m_node.args, ChainType::MAIN);
