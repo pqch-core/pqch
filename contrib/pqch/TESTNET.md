@@ -184,6 +184,23 @@ sudo ufw allow 51820/udp                       # WireGuard
 sudo ufw allow in on pqch to any port 39333    # testnet, só pela VPN
 ```
 
+### Minerar num membro (serviço)
+
+Um membro que mina na testnet corre dois serviços: o nó (`pqchd-testnet`) e o minerador
+(`pqch-minerar-testnet`, um ciclo de `generatetoaddress 1 <endereço>`). Para o minerador nunca ficar
+parado sem se dar por isso depois de reiniciar o nó (aconteceu a 9 nov. 2026), os dois ficam ligados:
+
+```
+sudo mkdir -p /etc/systemd/system/pqchd-testnet.service.d /etc/systemd/system/pqch-minerar-testnet.service.d
+printf '[Unit]\nWants=pqch-minerar-testnet.service\n' | sudo tee /etc/systemd/system/pqchd-testnet.service.d/minerador.conf
+printf '[Unit]\nPartOf=pqchd-testnet.service\nAfter=pqchd-testnet.service\n' | sudo tee /etc/systemd/system/pqch-minerar-testnet.service.d/seguir-no.conf
+sudo systemctl daemon-reload
+```
+
+O nó arranca o minerador; parar ou reiniciar o nó para e reinicia o minerador. Para um teste com o
+minerador parado (merged mining, por exemplo), pará-lo depois de arrancar o nó:
+`sudo systemctl stop pqch-minerar-testnet`.
+
 ### Cuidados
 
 - O runner da integração contínua corre código de pull requests: não deve ser o nó âncora.
