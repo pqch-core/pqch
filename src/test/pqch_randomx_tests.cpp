@@ -87,7 +87,10 @@ BOOST_AUTO_TEST_CASE(monero_pow_hash_version)
     }
     for (unsigned char major : {17, 18, 0x80}) {
         blob[0] = major;
-        BOOST_CHECK(MoneroPowHash(seed, blob) == RandomXHash(key, blob));
+        // From 17: the RandomX v2 commitment, Blake2b(blob || RandomX v2 hash), as in Monero and P2Pool v5.
+        const uint256 v2{RandomXHash(key, blob)};
+        BOOST_CHECK(MoneroPowHash(seed, blob) == RandomXCommitment(blob, v2));
+        BOOST_CHECK(MoneroPowHash(seed, blob) != v2);
         BOOST_CHECK(MoneroPowHash(seed, blob) != RandomXHashV1(key, blob));
     }
 }

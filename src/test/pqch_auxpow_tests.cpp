@@ -446,6 +446,37 @@ BOOST_AUTO_TEST_CASE(monero_fcmp_pp_block_layout)
     }
 }
 
+// A real Monero block from the FCMP++/Carrot stressnet (major version 18, height 3128295), mined
+// locally with P2Pool v5.0-beta and monerod v0.19.0.0-beta.3.0 on 9 Nov. 2026. monerod reported its id
+// and proof-of-work hash (get_last_block_header with fill_pow_hash). The parser must rebuild the same
+// hashing blob (same block id), and the proof of work from hard fork 17 is the RandomX v2 commitment,
+// Blake2b(hashing blob || RandomX v2 hash): plain RandomX v2 made every block "high-hash".
+BOOST_AUTO_TEST_CASE(monero_stressnet_real_block)
+{
+    const auto blob{ParseHex(
+        "1212a4c8c8d7066d671cbc5b2e270b9b7b152d78bbc6a0f82c9bb78ec203bea5b8750f03acee9ac6f2ffff02a3f8be0101ff"
+        "e7f7be010180e0a596bb11017669c0d166007e57e7927b62f28bed8c6483381e35a20f8d9d34f17f718af4f3409af1282f2f"
+        "1dc6e378470b0db3f6a307383a4a0155256841ae186972be0eb54af6f5b92036640e785140b76a585613a9a3f1913302042c"
+        "935d7e0321088b8360bc4e4c2e611fc892751037f5f27136013a6b17eba90f39a53cfed77dc6000005683ab832ab6c0221ff"
+        "80239b9e305eac5c53809b653c3bdcd29742ea32aeb582")};
+    const auto seed_bytes{ParseHex("48afc8fad68ef07ae567a18ea65f2bbd945c80d833a03e7e7546c340444f2b4d")}; // block 3127296
+    uint256 seed;
+    std::copy(seed_bytes.begin(), seed_bytes.end(), seed.begin());
+    CAuxPow a;
+    CAuxPowCoinbaseHead head;
+    std::string error;
+    BOOST_REQUIRE_MESSAGE(BuildFromMoneroBlock(blob, seed, {}, a, head, error), error);
+    BOOST_CHECK_EQUAL(a.tx_count, 1U);
+    BOOST_CHECK_EQUAL(a.TreeLeafCount(), 3U);
+    BOOST_CHECK_MESSAGE(CheckAuxPowCoinbase(a, head, error), error);
+    const auto hashing_blob{a.HashingBlob()};
+    std::vector<unsigned char> id_data;
+    WriteMoneroVarInt(id_data, hashing_blob.size());
+    id_data.insert(id_data.end(), hashing_blob.begin(), hashing_blob.end());
+    BOOST_CHECK_EQUAL(HexStr(Keccak256(id_data)), "50a510000ad827d877aa74488b968c4ff5626e9a125c04bd743db8765c27818f");
+    BOOST_CHECK_EQUAL(HexStr(MoneroPowHash(seed, hashing_blob)), "5a3aa367f7530c98c1813f5ffc1b6e1c36d46a61c53705bdf7eb25a1764f0000");
+}
+
 BOOST_AUTO_TEST_CASE(auxpow_coinbase_head)
 {
     // A P2Pool-like coinbase with many outputs: most of the prefix goes into the midstate.
@@ -741,7 +772,6 @@ BOOST_AUTO_TEST_CASE(merged_mined_block_monero_hf17)
         BOOST_REQUIRE(BuildFromMoneroBlock(mb.Serialize(), seed, tree.Branch(), *a, block.m_auxpow_head, error));
         if (UintToArith256(MoneroPowHash(seed, a->HashingBlob())) <= target) break;
     }
-    BOOST_CHECK(MoneroPowHash(seed, a->HashingBlob()) == RandomXHash(std::span<const unsigned char>{seed.data(), seed.size()}, a->HashingBlob()));
     block.auxpow = a;
     const CBlockIndex* tip{WITH_LOCK(cs_main, return chainman.ActiveChain().Tip())};
     BOOST_REQUIRE_MESSAGE(CheckBlockProofOfWork(block, tip, params, error), error);

@@ -47,6 +47,9 @@ uint256 RandomXHash(std::span<const unsigned char> key, std::span<const unsigned
 /** Original RandomX (v1, Monero's proof of work before hard fork 17) of data under a key. Light mode, thread-safe. */
 uint256 RandomXHashV1(std::span<const unsigned char> key, std::span<const unsigned char> input);
 
+/** RandomX commitment: Blake2b-256(input || hash), Monero's proof of work from hard fork 17 (with a RandomX v2 hash). */
+uint256 RandomXCommitment(std::span<const unsigned char> input, const uint256& hash);
+
 /** Monero hard-fork version from which Monero's proof of work is RandomX v2 (P2Pool: HARDFORK_VERSION_RANDOMX_V2). */
 inline constexpr unsigned char MONERO_HF_RANDOMX_V2{17};
 

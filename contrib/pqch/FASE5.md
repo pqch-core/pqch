@@ -151,9 +151,12 @@ v1 (incluindo um hashing blob Monero) e `monero_pow_hash_version`.
   altura 3.126.706); testnet PQCH devolvida ao bloco 118 (`b974cb14…6498441`) com `invalidateblock`
   do bloco 119 (`e95cdf7b…cda2ed6b`) nos dois nós, para as 4 chaves de teste saírem da janela;
   `mergemining=1` retirado e mineração normal retomada (âncora e portátil de acordo no bloco 120).
-- **Hard fork 17 do Monero (FCMP++, Carrot, RandomX v2): suportado no código desde a 0.2.2.** Falta o
-  teste real no stressnet do Monero (v0.19 beta) com o P2Pool v5.0-beta, antes de o Monero ativar o
-  fork na rede principal (ainda sem data).
+- **Hard fork 17 do Monero (FCMP++, Carrot, RandomX v2): suportado desde a 0.2.3.** Primeiro teste real
+  no stressnet (9 nov. 2026, versão 18, P2Pool v5.0-beta, monerod v0.19.0.0-beta.3.0): a reconstrução do
+  bloco estava certa (o id do bloco bate com o do monerod), mas a 0.2.2 usava o hash RandomX v2 sem o
+  **compromisso** (`randomx_calculate_commitment`), por isso todos os blocos davam `high-hash`.
+  Corrigido na 0.2.3, com o bloco real como teste (`monero_stressnet_real_block`: id e hash de prova de
+  trabalho iguais aos do monerod). Falta repetir o teste real com a 0.2.3.
 
 ## Hard fork 17 do Monero (0.2.2)
 
@@ -162,7 +165,7 @@ Monero. A partir da versão principal 17 de um bloco Monero:
 
 | O quê | Até à versão 16 | A partir da 17 |
 | --- | --- | --- |
-| Prova de trabalho | RandomX v1 | RandomX v2 (0.2.1) |
+| Prova de trabalho | RandomX v1 | compromisso RandomX v2: Blake2b-256(hashing blob ‖ hash RandomX v2) (0.2.3) |
 | Saídas da coinbase | `txout_to_key` (0x02), `txout_to_tagged_key` (0x03) | também `txout_to_carrot_v1` (0x01): chave de 32 B, view tag de 3 B, âncora Janus cifrada de 16 B |
 | Fim do blob do bloco | hashes das transações | hashes das transações, depois 1 byte (camadas da árvore FCMP++) e 32 B (raiz FCMP++) |
 | Folhas da árvore de transações | coinbase, transações | coinbase, camadas (hash de zeros com a contagem no 1.º byte), raiz FCMP++, transações |

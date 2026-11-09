@@ -160,12 +160,22 @@ uint256 RandomXHashV1(std::span<const unsigned char> key, std::span<const unsign
     return RandomXHashVersion(key, input, /*v2=*/false);
 }
 
+uint256 RandomXCommitment(std::span<const unsigned char> input, const uint256& hash)
+{
+    uint256 out;
+    randomx_calculate_commitment(input.data(), input.size(), hash.data(), out.data());
+    return out;
+}
+
 uint256 MoneroPowHash(const uint256& seed, std::span<const unsigned char> blob)
 {
     // The hashing blob starts with the Monero major version (a varint; every value from 17 on, in one
     // byte or more, starts with a byte >= 17). Same rule as P2Pool (HARDFORK_VERSION_RANDOMX_V2).
     const bool v2{!blob.empty() && blob[0] >= MONERO_HF_RANDOMX_V2};
-    return RandomXHashVersion(std::span<const unsigned char>{seed.data(), seed.size()}, blob, v2);
+    uint256 hash{RandomXHashVersion(std::span<const unsigned char>{seed.data(), seed.size()}, blob, v2)};
+    // From hard fork 17 Monero's proof of work is the RandomX v2 commitment:
+    // Blake2b-256(hashing blob || RandomX v2 hash), as in Monero and P2Pool v5 (randomx_calculate_commitment).
+    return v2 ? RandomXCommitment(blob, hash) : hash;
 }
 
 uint256 GetRandomXPowHash(const CBlockHeader& header, const uint256& seed)
