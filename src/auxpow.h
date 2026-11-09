@@ -43,6 +43,24 @@ namespace auxpow {
 /** nVersion bit that marks a header followed by a CAuxPow. */
 inline constexpr int32_t VERSION_AUXPOW{0x100};
 
+/**
+ * Monero hard fork 17 (FCMP++ and Carrot; RandomX v2 from the same version, see pow_randomx.h).
+ * From this Monero major version on, the transaction tree has two more leaves right after the
+ * coinbase (the FCMP++ tree layer count, as a 32-byte value with the count in its first byte, and
+ * the FCMP++ tree root), the block blob ends with those two values, and coinbase outputs are Carrot
+ * outputs. The hashing blob still counts only real transactions (coinbase included). Same layout as
+ * P2Pool v5 (block_template.cpp, merge_mining_client.cpp).
+ */
+inline constexpr uint64_t MONERO_HF_FCMP_PP{17};
+/** Extra leaves in the Monero transaction tree from MONERO_HF_FCMP_PP on. */
+inline constexpr uint64_t FCMP_PP_TREE_LEAVES{2};
+/** Carrot coinbase output (txout_to_carrot_v1): one-time address, 3-byte view tag, 16-byte encrypted Janus anchor. */
+inline constexpr unsigned char TXOUT_TO_CARROT_V1{0x01};
+inline constexpr size_t CARROT_OUTPUT_SIZE{32 + 3 + 16};
+
+/** Monero major version: the first varint of a Monero block header. Returns false if unreadable. */
+bool MoneroMajorVersion(std::span<const unsigned char> parent_header, uint64_t& major_version);
+
 /** Size limits (consensus). */
 inline constexpr size_t MAX_PARENT_HEADER_SIZE{96};     //!< Monero header: 2 varints, timestamp varint, 32-byte prev id, 4-byte nonce
 inline constexpr uint64_t MAX_PARENT_TX_COUNT{1 << 20};  //!< transactions in the Monero block, coinbase included
@@ -145,6 +163,8 @@ struct CAuxPow {
 
     /** Monero coinbase transaction hash (v2, RingCT type null), from the midstate. */
     uint256 CoinbaseHash() const;
+    /** Leaves in the Monero transaction tree: tx_count, plus the two FCMP++ leaves from hard fork 17. 0 if the header is unreadable. */
+    uint64_t TreeLeafCount() const;
     /** Monero block hashing blob: header || tree root || varint(tx count). Empty if the branch is invalid. */
     std::vector<unsigned char> HashingBlob() const;
 };
@@ -165,7 +185,8 @@ struct CAuxPowCoinbaseHead {
 
 /**
  * Block-level check: `head` hashes to the header's midstate and head || tail is a canonical
- * Monero v2 coinbase prefix (version 2, unlock time, one gen input, outputs to keys), ending right
+ * Monero v2 coinbase prefix (version 2, unlock time, one gen input, outputs to keys; Carrot outputs
+ * from Monero hard fork 17 on), ending right
  * where tx_extra starts. Without it the split between midstate and tail would be free.
  */
 bool CheckAuxPowCoinbase(const CAuxPow& auxpow, const CAuxPowCoinbaseHead& head, std::string& error);

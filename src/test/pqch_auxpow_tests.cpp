@@ -25,6 +25,7 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include <cstring>
 #include <deque>
 #include <memory>
 
@@ -52,40 +53,69 @@ uint256 Tagged(uint8_t tag)
 
 /** A synthetic Monero block (template) as P2Pool would submit it. */
 struct MoneroBlock {
+    uint64_t major{16};             //!< 17 and later: FCMP++ tree values and Carrot outputs (hard fork 17)
     uint32_t nonce{0};
     uint64_t height{3'000'000};
     size_t outputs{1};
     std::vector<unsigned char> extra;
     std::vector<uint256> tx_hashes; //!< other transactions (not the coinbase)
+    unsigned char fcmp_pp_layers{7};
+    uint256 fcmp_pp_root{Tagged(0x77)};
+    bool carrot_outputs{false};     //!< false: by the version (Carrot from 17); true: force Carrot outputs
 
-    std::vector<unsigned char> Serialize() const
+    std::vector<unsigned char> Header() const
     {
         std::vector<unsigned char> b;
-        WriteMoneroVarInt(b, 16);           // major version
-        WriteMoneroVarInt(b, 16);           // minor version
+        WriteMoneroVarInt(b, major);         // major version
+        WriteMoneroVarInt(b, major);         // minor version
         WriteMoneroVarInt(b, 1'790'000'000); // timestamp
         const uint256 prev{Tagged(0x50)};
         b.insert(b.end(), prev.begin(), prev.end());
         for (int i = 0; i < 4; ++i) b.push_back(static_cast<unsigned char>(nonce >> (8 * i)));
-        // Miner transaction.
+        return b;
+    }
+
+    /** Miner transaction prefix: everything before the RingCT type byte (tx_extra included). */
+    std::vector<unsigned char> MinerTxPrefix() const
+    {
+        std::vector<unsigned char> b;
         WriteMoneroVarInt(b, 2);          // version
         WriteMoneroVarInt(b, height + 60); // unlock time
         WriteMoneroVarInt(b, 1);          // one input
         b.push_back(0xff);                // txin_gen
         WriteMoneroVarInt(b, height);
         WriteMoneroVarInt(b, outputs);
+        const bool carrot{carrot_outputs || major >= MONERO_HF_FCMP_PP};
         for (size_t i = 0; i < outputs; ++i) {
             WriteMoneroVarInt(b, 600'000'000'000ULL / outputs + i);
-            b.push_back(0x03); // txout_to_tagged_key: key and view tag
             const uint256 key{Tagged(static_cast<uint8_t>(i))};
-            b.insert(b.end(), key.begin(), key.end());
-            b.push_back(static_cast<unsigned char>(i));
+            if (carrot) {
+                b.push_back(TXOUT_TO_CARROT_V1); // one-time address, 3-byte view tag, 16-byte encrypted anchor
+                b.insert(b.end(), key.begin(), key.end());
+                for (int j = 0; j < 3 + 16; ++j) b.push_back(static_cast<unsigned char>(i + j));
+            } else {
+                b.push_back(0x03); // txout_to_tagged_key: key and view tag
+                b.insert(b.end(), key.begin(), key.end());
+                b.push_back(static_cast<unsigned char>(i));
+            }
         }
         WriteMoneroVarInt(b, extra.size());
         b.insert(b.end(), extra.begin(), extra.end());
+        return b;
+    }
+
+    std::vector<unsigned char> Serialize() const
+    {
+        std::vector<unsigned char> b{Header()};
+        const auto tx{MinerTxPrefix()};
+        b.insert(b.end(), tx.begin(), tx.end());
         b.push_back(0x00); // RingCT type null
         WriteMoneroVarInt(b, tx_hashes.size());
         for (const auto& h : tx_hashes) b.insert(b.end(), h.begin(), h.end());
+        if (major >= MONERO_HF_FCMP_PP) {
+            b.push_back(fcmp_pp_layers);
+            b.insert(b.end(), fcmp_pp_root.begin(), fcmp_pp_root.end());
+        }
         return b;
     }
 };
@@ -312,6 +342,108 @@ BOOST_AUTO_TEST_CASE(auxpow_header_binding)
     std::vector<unsigned char> blob;
     BOOST_CHECK(!CheckAuxPowHeader(a, pqch_hash, chain_id, blob, error));
     BOOST_CHECK_EQUAL(error, "more than one merge mining tag");
+}
+
+// Monero hard fork 17 (FCMP++, Carrot): Carrot coinbase outputs, two FCMP++ values at the end of the
+// block blob that are leaves 1 and 2 of the transaction tree, and a hashing blob that still counts
+// only the real transactions. The expected values are computed here independently of the parser,
+// from the layout in P2Pool v5 (block_template.cpp: m_transactionHashes, get_hashing_blob).
+BOOST_AUTO_TEST_CASE(monero_fcmp_pp_block_layout)
+{
+    const uint256 chain_id{Tagged(0xc1)};
+    const uint256 pqch_hash{Tagged(0xb1)};
+    const uint32_t n_chains{2}, mm_nonce{777};
+    AuxTree tree{chain_id, pqch_hash, n_chains, mm_nonce};
+    for (size_t n_txs : {0, 1, 2, 5, 6}) {
+        MoneroBlock mb;
+        mb.major = 17;
+        mb.outputs = 3;
+        mb.extra = MakeExtra(n_chains, mm_nonce, tree.Root());
+        for (size_t i = 0; i < n_txs; ++i) mb.tx_hashes.push_back(Tagged(0x40 + i));
+
+        CAuxPow a;
+        CAuxPowCoinbaseHead head;
+        std::string error;
+        BOOST_REQUIRE_MESSAGE(BuildFromMoneroBlock(mb.Serialize(), Tagged(0x5e), tree.Branch(), a, head, error), error);
+        BOOST_CHECK_EQUAL(a.tx_count, n_txs + 1);
+        BOOST_CHECK_EQUAL(a.TreeLeafCount(), n_txs + 3);
+
+        // Coinbase hash: H(H(prefix) || H(0x00) || zero), the Monero v2 hash with RingCT type null.
+        const auto prefix{mb.MinerTxPrefix()};
+        unsigned char parts[96]{};
+        const uint256 prefix_hash{Keccak256(prefix)};
+        const uint256 rct_base{Keccak256(std::array<unsigned char, 1>{0x00})};
+        std::memcpy(parts, prefix_hash.begin(), 32);
+        std::memcpy(parts + 32, rct_base.begin(), 32);
+        const uint256 coinbase_hash{Keccak256(parts)};
+        BOOST_CHECK(a.CoinbaseHash() == coinbase_hash);
+
+        // Tree: coinbase, layer count (first byte of a zero hash), FCMP++ root, then the transactions.
+        uint256 layers;
+        layers.begin()[0] = mb.fcmp_pp_layers;
+        std::vector<uint256> leaves{coinbase_hash, layers, mb.fcmp_pp_root};
+        leaves.insert(leaves.end(), mb.tx_hashes.begin(), mb.tx_hashes.end());
+        std::vector<unsigned char> expected{mb.Header()};
+        const uint256 root{MoneroTreeHash(leaves)};
+        expected.insert(expected.end(), root.begin(), root.end());
+        WriteMoneroVarInt(expected, n_txs + 1); // real transactions only
+        BOOST_CHECK(a.HashingBlob() == expected);
+
+        std::vector<unsigned char> blob;
+        BOOST_CHECK_MESSAGE(CheckAuxPowHeader(a, pqch_hash, chain_id, blob, error), error);
+        BOOST_CHECK(blob == expected);
+        BOOST_CHECK_MESSAGE(CheckAuxPowCoinbase(a, head, error), error);
+
+        // A changed FCMP++ value changes the work: the proof is bound to it.
+        MoneroBlock other{mb};
+        other.fcmp_pp_root = Tagged(0x78);
+        CAuxPow b;
+        CAuxPowCoinbaseHead hb;
+        BOOST_REQUIRE(BuildFromMoneroBlock(other.Serialize(), Tagged(0x5e), tree.Branch(), b, hb, error));
+        BOOST_CHECK(b.HashingBlob() != expected);
+
+        // Read as a pre-fork block (major version 16) the same proof no longer fits the tree.
+        CAuxPow old{a};
+        old.parent_header[0] = 16;
+        BOOST_CHECK(old.HashingBlob().empty() || old.HashingBlob() != expected);
+    }
+
+    std::string error;
+    CAuxPow a;
+    CAuxPowCoinbaseHead head;
+    // Hard fork 17 block blob without the FCMP++ values: refused.
+    {
+        MoneroBlock mb;
+        mb.major = 17;
+        mb.extra = MakeExtra(1, 0, Tagged(0x01));
+        auto blob{mb.Serialize()};
+        blob.resize(blob.size() - 33);
+        BOOST_CHECK(!BuildFromMoneroBlock(blob, Tagged(0x5e), {}, a, head, error));
+        BOOST_CHECK_EQUAL(error, "bad Monero transaction list");
+    }
+    // Pre-fork block with the FCMP++ values or with Carrot outputs: refused.
+    {
+        MoneroBlock mb;
+        mb.extra = MakeExtra(1, 0, Tagged(0x01));
+        auto blob{mb.Serialize()};
+        blob.push_back(7);
+        BOOST_CHECK(!BuildFromMoneroBlock(blob, Tagged(0x5e), {}, a, head, error));
+        mb.carrot_outputs = true;
+        BOOST_CHECK(!BuildFromMoneroBlock(mb.Serialize(), Tagged(0x5e), {}, a, head, error));
+        BOOST_CHECK_EQUAL(error, "bad Monero output");
+    }
+    // Carrot outputs checked against the header's version at block level too.
+    {
+        MoneroBlock mb;
+        mb.major = 17;
+        mb.extra = MakeExtra(1, 0, Tagged(0x01));
+        BOOST_REQUIRE(BuildFromMoneroBlock(mb.Serialize(), Tagged(0x5e), {}, a, head, error));
+        BOOST_CHECK_MESSAGE(CheckAuxPowCoinbase(a, head, error), error);
+        CAuxPow old{a};
+        old.parent_header[0] = 16;
+        BOOST_CHECK(!CheckAuxPowCoinbase(old, head, error));
+        BOOST_CHECK_EQUAL(error, "unsupported coinbase output type");
+    }
 }
 
 BOOST_AUTO_TEST_CASE(auxpow_coinbase_head)
@@ -579,6 +711,42 @@ BOOST_AUTO_TEST_CASE(merged_mined_block_accepted)
     // A normal block can follow.
     CreateAndProcessBlock({}, m_coinbase_script);
     BOOST_CHECK_EQUAL(WITH_LOCK(cs_main, return chainman.ActiveChain().Height()), 102);
+}
+
+// A PQCH block merge mined with a Monero block after hard fork 17: Carrot coinbase, FCMP++ tree
+// leaves, RandomX v2. Full validation through ProcessNewBlock.
+BOOST_AUTO_TEST_CASE(merged_mined_block_monero_hf17)
+{
+    ChainstateManager& chainman{*Assert(m_node.chainman)};
+    const Consensus::Params& params{chainman.GetConsensus()};
+    const uint256 chain_id{params.hashGenesisBlock};
+    const uint256 seed{Tagged(0x5f)};
+
+    CBlock block{CreateBlock({}, m_coinbase_script)};
+    block.nVersion |= VERSION_AUXPOW;
+    block.nNonce = 0;
+    const uint256 id{block.GetHash()};
+
+    const uint32_t n_chains{2}, mm_nonce{9};
+    AuxTree tree{chain_id, id, n_chains, mm_nonce};
+    MoneroBlock mb;
+    mb.major = 17;
+    mb.outputs = 12;
+    mb.extra = MakeExtra(n_chains, mm_nonce, tree.Root());
+    mb.tx_hashes = {Tagged(0x61), Tagged(0x62), Tagged(0x63)};
+    auto a{std::make_shared<CAuxPow>()};
+    std::string error;
+    const arith_uint256 target{arith_uint256{}.SetCompact(block.nBits)};
+    for (;; ++mb.nonce) {
+        BOOST_REQUIRE(BuildFromMoneroBlock(mb.Serialize(), seed, tree.Branch(), *a, block.m_auxpow_head, error));
+        if (UintToArith256(MoneroPowHash(seed, a->HashingBlob())) <= target) break;
+    }
+    BOOST_CHECK(MoneroPowHash(seed, a->HashingBlob()) == RandomXHash(std::span<const unsigned char>{seed.data(), seed.size()}, a->HashingBlob()));
+    block.auxpow = a;
+    const CBlockIndex* tip{WITH_LOCK(cs_main, return chainman.ActiveChain().Tip())};
+    BOOST_REQUIRE_MESSAGE(CheckBlockProofOfWork(block, tip, params, error), error);
+    BOOST_CHECK(chainman.ProcessNewBlock(std::make_shared<const CBlock>(block), true, true, nullptr));
+    BOOST_CHECK(WITH_LOCK(cs_main, return chainman.ActiveChain().Tip()->GetBlockHash()) == id);
 }
 
 BOOST_AUTO_TEST_CASE(p2pool_merge_mining_api)

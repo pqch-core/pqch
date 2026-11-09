@@ -151,11 +151,29 @@ v1 (incluindo um hashing blob Monero) e `monero_pow_hash_version`.
   altura 3.126.706); testnet PQCH devolvida ao bloco 118 (`b974cb14…6498441`) com `invalidateblock`
   do bloco 119 (`e95cdf7b…cda2ed6b`) nos dois nós, para as 4 chaves de teste saírem da janela;
   `mergemining=1` retirado e mineração normal retomada (âncora e portátil de acordo no bloco 120).
-- **Hard fork 17 do Monero (FCMP++, Carrot, RandomX v2):** a árvore de transações passa a ter, logo a
-  seguir à coinbase, dois valores da árvore FCMP++ (número de camadas e raiz), e as saídas da coinbase
-  mudam de formato (P2Pool v5.0-beta, `merge_mining_client.cpp`). `BuildFromMoneroBlock` e a contagem
-  de transações têm de suportar esse formato antes de o Monero ativar o fork na rede principal (ainda
-  sem data). Testar no stressnet com o P2Pool v5.
+- **Hard fork 17 do Monero (FCMP++, Carrot, RandomX v2): suportado no código desde a 0.2.2.** Falta o
+  teste real no stressnet do Monero (v0.19 beta) com o P2Pool v5.0-beta, antes de o Monero ativar o
+  fork na rede principal (ainda sem data).
+
+## Hard fork 17 do Monero (0.2.2)
+
+Formato do P2Pool v5.0-beta (`block_template.cpp`, `merge_mining_client.cpp`), que segue o código do
+Monero. A partir da versão principal 17 de um bloco Monero:
+
+| O quê | Até à versão 16 | A partir da 17 |
+| --- | --- | --- |
+| Prova de trabalho | RandomX v1 | RandomX v2 (0.2.1) |
+| Saídas da coinbase | `txout_to_key` (0x02), `txout_to_tagged_key` (0x03) | também `txout_to_carrot_v1` (0x01): chave de 32 B, view tag de 3 B, âncora Janus cifrada de 16 B |
+| Fim do blob do bloco | hashes das transações | hashes das transações, depois 1 byte (camadas da árvore FCMP++) e 32 B (raiz FCMP++) |
+| Folhas da árvore de transações | coinbase, transações | coinbase, camadas (hash de zeros com a contagem no 1.º byte), raiz FCMP++, transações |
+| Contagem no hashing blob | transações + 1 | transações + 1 (as duas folhas FCMP++ não contam) |
+
+O `CAuxPow` não muda de formato: `tx_count` continua a ser a contagem do hashing blob, e
+`TreeLeafCount()` soma as duas folhas FCMP++ quando a versão do cabeçalho Monero é 17 ou mais. Os
+valores FCMP++ ficam dentro do `coinbase_branch`. As saídas Carrot só são aceites com cabeçalho 17
+ou mais, tanto em `BuildFromMoneroBlock` como em `CheckAuxPowCoinbase`. Testes:
+`monero_fcmp_pp_block_layout` (valores esperados calculados à parte do parser) e
+`merged_mined_block_monero_hf17` (bloco PQCH aceite com um pai Monero 17, RandomX v2).
 - `getblockheader` e `getblock` ainda não mostram os campos da prova.
 - A framework de testes em Python não lê cabeçalhos com prova. Não faz falta enquanto os testes
   funcionais não minerarem em conjunto.

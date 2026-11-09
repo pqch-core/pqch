@@ -314,6 +314,29 @@ bool ParseCoinbaseExtra(std::span<const unsigned char> extra, MergeMiningTag& ta
 // ---------------------------------------------------------------------------------------------
 // CAuxPow
 
+bool MoneroMajorVersion(std::span<const unsigned char> parent_header, uint64_t& major_version)
+{
+    return ReadMoneroVarInt(parent_header, major_version);
+}
+
+namespace {
+/** Bytes of a coinbase output body after its type tag, or 0 if the type is not allowed at this Monero version. */
+size_t CoinbaseOutputSize(unsigned char tag, uint64_t major_version)
+{
+    if (tag == 0x02) return 32; // txout_to_key
+    if (tag == 0x03) return 33; // txout_to_tagged_key: key and view tag
+    if (tag == TXOUT_TO_CARROT_V1 && major_version >= MONERO_HF_FCMP_PP) return CARROT_OUTPUT_SIZE;
+    return 0;
+}
+} // namespace
+
+uint64_t CAuxPow::TreeLeafCount() const
+{
+    uint64_t major;
+    if (!MoneroMajorVersion(parent_header, major)) return 0;
+    return tx_count + (major >= MONERO_HF_FCMP_PP ? FCMP_PP_TREE_LEAVES : 0);
+}
+
 uint256 CAuxPow::CoinbaseHash() const
 {
     CKeccak256 prefix{coinbase_midstate, head_size};
@@ -334,7 +357,8 @@ uint256 CAuxPow::CoinbaseHash() const
 std::vector<unsigned char> CAuxPow::HashingBlob() const
 {
     uint256 root;
-    if (!MoneroRootFromProof(CoinbaseHash(), coinbase_branch, 0, tx_count, root)) return {};
+    const uint64_t leaves{TreeLeafCount()};
+    if (leaves == 0 || !MoneroRootFromProof(CoinbaseHash(), coinbase_branch, 0, leaves, root)) return {};
     std::vector<unsigned char> blob{parent_header};
     blob.insert(blob.end(), root.begin(), root.end());
     WriteMoneroVarInt(blob, tx_count);
@@ -379,6 +403,8 @@ bool CheckAuxPowCoinbase(const CAuxPow& a, const CAuxPowCoinbaseHead& h, std::st
     std::vector<unsigned char> prefix{h.head};
     prefix.insert(prefix.end(), a.coinbase_tail.begin(), a.coinbase_tail.end());
     std::span<const unsigned char> in{prefix};
+    uint64_t major;
+    if (!MoneroMajorVersion(a.parent_header, major)) { error = "bad Monero block header"; return false; }
     uint64_t version, unlock_time, vin_count, height, vout_count;
     if (!ReadMoneroVarInt(in, version) || version != 2) { error = "coinbase is not a version 2 transaction"; return false; }
     if (!ReadMoneroVarInt(in, unlock_time)) { error = "bad coinbase unlock time"; return false; }
@@ -392,14 +418,9 @@ bool CheckAuxPowCoinbase(const CAuxPow& a, const CAuxPowCoinbaseHead& h, std::st
         if (!ReadMoneroVarInt(in, amount) || in.empty()) { error = "bad coinbase output"; return false; }
         const unsigned char tag{in[0]};
         in = in.subspan(1);
-        if (tag == 0x02) { // txout_to_key
-            if (!Take(in, 32)) { error = "bad coinbase output key"; return false; }
-        } else if (tag == 0x03) { // txout_to_tagged_key
-            if (!Take(in, 33)) { error = "bad coinbase output key"; return false; }
-        } else {
-            error = "unsupported coinbase output type";
-            return false;
-        }
+        const size_t size{CoinbaseOutputSize(tag, major)};
+        if (size == 0) { error = "unsupported coinbase output type"; return false; }
+        if (!Take(in, size)) { error = "bad coinbase output key"; return false; }
     }
     if (!in.empty()) { error = "coinbase prefix does not end at tx_extra"; return false; }
     return true;
@@ -410,9 +431,9 @@ bool BuildFromMoneroBlock(std::span<const unsigned char> block, const uint256& s
 {
     std::span<const unsigned char> in{block};
     const auto start{in.data()};
-    uint64_t v;
+    uint64_t v, major;
     // Header: major version, minor version, timestamp, previous id, nonce.
-    if (!ReadMoneroVarInt(in, v) || !ReadMoneroVarInt(in, v) || !ReadMoneroVarInt(in, v) || !Take(in, 32 + 4)) {
+    if (!ReadMoneroVarInt(in, major) || !ReadMoneroVarInt(in, v) || !ReadMoneroVarInt(in, v) || !Take(in, 32 + 4)) {
         error = "bad Monero block header";
         return false;
     }
@@ -434,7 +455,8 @@ bool BuildFromMoneroBlock(std::span<const unsigned char> block, const uint256& s
         if (!ReadMoneroVarInt(in, v) || in.empty()) { error = "bad Monero output"; return false; }
         const unsigned char tag{in[0]};
         in = in.subspan(1);
-        if (!Take(in, tag == 0x02 ? 32 : tag == 0x03 ? 33 : SIZE_MAX)) { error = "bad Monero output"; return false; }
+        const size_t size{CoinbaseOutputSize(tag, major)};
+        if (size == 0 || !Take(in, size)) { error = "bad Monero output"; return false; }
     }
     const std::span<const unsigned char> prefix{tx_start, size_t(in.data() - tx_start)};
     uint64_t extra_len;
@@ -445,9 +467,10 @@ bool BuildFromMoneroBlock(std::span<const unsigned char> block, const uint256& s
     }
     if (in.empty() || in[0] != 0x00) { error = "Monero miner transaction RingCT type is not null"; return false; }
     in = in.subspan(1);
-    // Transaction hashes.
+    // Transaction hashes, then (from hard fork 17) the FCMP++ tree layer count and root.
+    const bool fcmp_pp{major >= MONERO_HF_FCMP_PP};
     uint64_t n_hashes;
-    if (!ReadMoneroVarInt(in, n_hashes) || n_hashes >= MAX_PARENT_TX_COUNT || in.size() != n_hashes * 32) {
+    if (!ReadMoneroVarInt(in, n_hashes) || n_hashes >= MAX_PARENT_TX_COUNT || in.size() != n_hashes * 32 + (fcmp_pp ? 1 + 32 : 0)) {
         error = "bad Monero transaction list";
         return false;
     }
@@ -461,6 +484,14 @@ bool BuildFromMoneroBlock(std::span<const unsigned char> block, const uint256& s
     a.coinbase_tail.assign(prefix.begin() + a.head_size, prefix.end());
     a.coinbase_extra.assign(extra.begin(), extra.end());
     std::vector<uint256> tx_hashes{a.CoinbaseHash()};
+    if (fcmp_pp) {
+        // Tree leaves 1 and 2: the layer count (first byte of a zero hash) and the tree root.
+        uint256 layers, tree_root;
+        layers.begin()[0] = in[n_hashes * 32];
+        std::memcpy(tree_root.begin(), in.data() + n_hashes * 32 + 1, 32);
+        tx_hashes.push_back(layers);
+        tx_hashes.push_back(tree_root);
+    }
     for (uint64_t i = 0; i < n_hashes; ++i) {
         uint256 hh;
         std::memcpy(hh.begin(), in.data() + 32 * i, 32);
