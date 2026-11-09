@@ -156,7 +156,10 @@ v1 (incluindo um hashing blob Monero) e `monero_pow_hash_version`.
   bloco estava certa (o id do bloco bate com o do monerod), mas a 0.2.2 usava o hash RandomX v2 sem o
   **compromisso** (`randomx_calculate_commitment`), por isso todos os blocos davam `high-hash`.
   Corrigido na 0.2.3, com o bloco real como teste (`monero_stressnet_real_block`: id e hash de prova de
-  trabalho iguais aos do monerod). Falta repetir o teste real com a 0.2.3.
+  trabalho iguais aos do monerod). **Teste real com a 0.2.3 passou (9 nov. 2026):** P2Pool v5.0-beta com
+  o minerador interno sobre o stressnet offline (`--fixed-difficulty 20000`, versão 18); todas as
+  submissões `accepted`, 20 blocos PQCH (331 → 351) com a chave Monero `48afc8fa…f2b4d`; a âncora
+  (0.2.3) chegou ao mesmo bloco 350 (`ee05ddf0…820fca1a`) sem nenhum `bad-auxpow` nem `high-hash`.
 
 ## Hard fork 17 do Monero (0.2.2)
 
