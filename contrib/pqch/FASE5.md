@@ -147,6 +147,10 @@ v1 (incluindo um hashing blob Monero) e `monero_pow_hash_version`.
   5.ª foi recusada com `auxpow-too-many-seeds`. A âncora ficou no mesmo bloco (altura 249,
   `016c387e…a8a10a2`) sem nenhuma recusa: os blocos recusados nunca saíram do portátil. Nota: o
   P2Pool prepara um bloco Monero por segundo no máximo, mesmo com dificuldade mais baixa.
+- Arrumação do teste (9 nov. 2026): 38.264 blocos Monero de teste removidos (`pop_blocks`, de volta à
+  altura 3.126.706); testnet PQCH devolvida ao bloco 118 (`b974cb14…6498441`) com `invalidateblock`
+  do bloco 119 (`e95cdf7b…cda2ed6b`) nos dois nós, para as 4 chaves de teste saírem da janela;
+  `mergemining=1` retirado e mineração normal retomada (âncora e portátil de acordo no bloco 120).
 - **Hard fork 17 do Monero (FCMP++, Carrot, RandomX v2):** a árvore de transações passa a ter, logo a
   seguir à coinbase, dois valores da árvore FCMP++ (número de camadas e raiz), e as saídas da coinbase
   mudam de formato (P2Pool v5.0-beta, `merge_mining_client.cpp`). `BuildFromMoneroBlock` e a contagem
