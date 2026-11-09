@@ -135,8 +135,14 @@ v1 (incluindo um hashing blob Monero) e `monero_pow_hash_version`.
 
 ## Ainda por fazer
 
-- **Teste real com o P2Pool e o Monero** (testnet Monero offline, `--fixed-difficulty`): repetir com
-  a 0.2.1 e confirmar `accepted` no portátil e a mesma altura na âncora.
+- ~~Teste real com o P2Pool e o Monero~~ **Feito a 9 nov. 2026 (0.2.1).** Portátil com `monerod`
+  v0.18.5.1 no testnet Monero (offline, `--fixed-difficulty 20000`, versão 16, RandomX v1), P2Pool
+  v4.18.1 com o minerador interno e `--merge-mine` para o `pqchd` do portátil. Resultado: todos os
+  `merge_mining_submit_solution` com `accepted`; blocos PQCH com `version` 536871168 (bit `0x100`);
+  a âncora (VPS, nó independente) chegou ao mesmo bloco (altura 118, `b974cb14…6498441`) sem nenhum
+  `bad-auxpow` nem `high-hash`. Os formatos copiados do P2Pool v4 (`merkle_proof`, `blob`) estão certos.
+- Testar a regra das chaves Monero (`auxpow-too-many-seeds`) com uma cadeia Monero local que mude de
+  chave mais de 4 vezes em 4.320 blocos PQCH.
 - **Hard fork 17 do Monero (FCMP++, Carrot, RandomX v2):** a árvore de transações passa a ter, logo a
   seguir à coinbase, dois valores da árvore FCMP++ (número de camadas e raiz), e as saídas da coinbase
   mudam de formato (P2Pool v5.0-beta, `merge_mining_client.cpp`). `BuildFromMoneroBlock` e a contagem
