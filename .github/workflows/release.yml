@@ -5,7 +5,8 @@
 # PQCH release builds: PQCH Core (GUI + node) for Linux x86_64 and Windows x64, built with the
 # depends system (pinned, hash-checked sources) on the project's own runner.
 #
-#   tag vX.Y.Z  ->  build, SHA256SUMS, and a *draft* GitHub release with the files
+#   tag vX.Y.Z  ->  build, SHA256SUMS, and a *draft* GitHub release with the files (nothing at all when
+#                   that release already exists: publishing a draft creates its tag)
 #   Run workflow (by hand)  ->  build and SHA256SUMS as an Actions artifact only (version dev-<commit>)
 #   Run workflow with "release" ticked  ->  as a tag: version from CMakeLists.txt and a *draft* release
 #     v<version> on this commit. GitHub creates the tag only when the draft is published.
@@ -41,8 +42,31 @@ defaults:
     shell: bash
 
 jobs:
+  # Publishing a draft creates its tag, and the tag starts this workflow again. When that release
+  # already exists there is nothing to build: stop here instead of compiling for an hour.
+  precheck:
+    name: 'Release already published?'
+    runs-on: ${{ fromJSON(vars.PQCH_RUNS_ON || '"ubuntu-24.04"') }}
+    timeout-minutes: 5
+    outputs:
+      skip: ${{ steps.check.outputs.skip }}
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          skip=false
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]] && command -v gh >/dev/null \
+             && gh release view "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            echo "Release ${GITHUB_REF_NAME} already exists (published from a draft); nothing to build."
+            skip=true
+          fi
+          echo "skip=${skip}" >> "${GITHUB_OUTPUT}"
+
   build:
     name: 'Build ${{ matrix.name }}'
+    needs: precheck
+    if: needs.precheck.outputs.skip != 'true'
     runs-on: ${{ fromJSON(vars.PQCH_RUNS_ON || '"ubuntu-24.04"') }}
     timeout-minutes: 600
     strategy:
