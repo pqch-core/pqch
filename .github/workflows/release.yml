@@ -57,7 +57,7 @@ jobs:
         run: |
           skip=false
           if [[ "${GITHUB_REF}" == refs/tags/v* ]] && command -v gh >/dev/null \
-             && gh release view "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+             && gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${GITHUB_REF_NAME}" >/dev/null 2>&1; then
             echo "Release ${GITHUB_REF_NAME} already exists (published from a draft); nothing to build."
             skip=true
           fi
@@ -238,7 +238,7 @@ jobs:
             TAG="v$(v MAJOR).$(v MINOR).$(v BUILD)"
           fi
           # Publishing a draft creates its tag, which starts this workflow again: leave that release alone.
-          if gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+          if gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" >/dev/null 2>&1; then
             echo "Release ${TAG} already exists (published from a draft); nothing to do."
             exit 0
           fi
