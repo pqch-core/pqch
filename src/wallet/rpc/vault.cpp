@@ -68,7 +68,8 @@ struct VaultCoin {
 std::vector<VaultCoin> ListVaultCoins(const CWallet& wallet, const DescriptorScriptPubKeyMan* only = nullptr) EXCLUSIVE_LOCKS_REQUIRED(wallet.cs_wallet)
 {
     CCoinControl cc;
-    cc.m_p2mr_recovery = true; // so that the owner's copies are listed too
+    cc.m_p2mr_recovery = true;         // so that the owner's copies are listed too
+    cc.m_include_unsafe_inputs = true; // and coins not yet confirmed that someone else sent
     CoinFilterParams params;
     params.skip_locked = false;
     std::vector<VaultCoin> out;
@@ -233,7 +234,8 @@ RPCMethod listvaults()
                     {RPCResult::Type::BOOL, "internal", "Whether these are change addresses"},
                     {RPCResult::Type::BOOL, "active", "Whether it gives this wallet's new addresses"},
                     {RPCResult::Type::NUM, "older", "Confirmations a coin needs before the owner can recover it"},
-                    {RPCResult::Type::STR_AMOUNT, "amount", "Value of its coins"},
+                    {RPCResult::Type::STR_AMOUNT, "amount", "Value of its coins, confirmed or not"},
+                    {RPCResult::Type::STR_AMOUNT, "unconfirmed", "Part of the amount not yet confirmed"},
                     {RPCResult::Type::STR_AMOUNT, "recoverable", "Value the owner can recover now"},
                     {RPCResult::Type::NUM, "next_recoverable_in", /*optional=*/true, "Blocks until the next coin can be recovered, if any is waiting"},
                 }},
@@ -255,14 +257,15 @@ RPCMethod listvaults()
         if (!desc) continue;
         const auto [vault, desc_str]{WITH_LOCK(desc->cs_desc_man, return std::pair(desc->GetWalletDescriptor().descriptor->GetP2MRVault(), desc->GetWalletDescriptor().descriptor->ToString()))};
         if (!vault) continue;
-        CAmount amount{0}, recoverable{0};
+        CAmount amount{0}, unconfirmed{0}, recoverable{0};
         std::optional<int> next;
         for (const VaultCoin& vc : ListVaultCoins(*pwallet, desc)) {
             amount += vc.coin.txout.nValue;
-            if (vc.coin.depth >= static_cast<int>(vc.older)) {
+            if (vc.coin.depth == 0) unconfirmed += vc.coin.txout.nValue;
+            if (vc.coin.depth > 0 && vc.coin.depth >= static_cast<int>(vc.older)) {
                 recoverable += vc.coin.txout.nValue;
             } else {
-                const int left{static_cast<int>(vc.older) - vc.coin.depth};
+                const int left{std::max(1, static_cast<int>(vc.older) - vc.coin.depth)};
                 if (!next || left < *next) next = left;
             }
         }
@@ -275,6 +278,7 @@ RPCMethod listvaults()
         item.pushKV("active", active.contains(spkm));
         item.pushKV("older", vault->second);
         item.pushKV("amount", ValueFromAmount(amount));
+        item.pushKV("unconfirmed", ValueFromAmount(unconfirmed));
         item.pushKV("recoverable", ValueFromAmount(recoverable));
         if (next) item.pushKV("next_recoverable_in", *next);
         out.push_back(item);
@@ -290,7 +294,7 @@ RPCMethod recovervault()
         "recovervault",
         "PQCH: the OWNER takes back the coins of the agents' vaults this wallet owns (listvaults, role owner): every coin with enough\n"
         "confirmations is sent to `address` in one transaction, spent through the recovery leaf (SLH-DSA-128s).\n"
-        "Coins that are still too young are left and listed under `waiting`. Requires the wallet to be unlocked if it is encrypted.\n"
+        "Coins that are still too young, or not yet confirmed, are left and listed under `waiting`. Requires the wallet to be unlocked if it is encrypted.\n"
         "If the agent's keys were stolen, recover at once and stop using the vault: the thief can spend through the hot leaf too.\n",
         {
             {"address", RPCArg::Type::STR, RPCArg::DefaultHint{"a new address of this wallet"}, "Where the coins go"},
@@ -359,12 +363,14 @@ RPCMethod recovervault()
     UniValue waiting(UniValue::VARR);
     for (const VaultCoin& vc : ListVaultCoins(*pwallet)) {
         if (!pwallet->IsP2MRVaultOwnerScript(vc.coin.txout.scriptPubKey)) continue;
-        if (vc.coin.depth < static_cast<int>(vc.older) || pwallet->IsLockedCoin(vc.coin.outpoint)) {
+        // Never a coin without a confirmation: with a timelock the consensus would refuse it, and with
+        // older(0) whoever sent it can still replace it.
+        if (vc.coin.depth == 0 || vc.coin.depth < static_cast<int>(vc.older) || pwallet->IsLockedCoin(vc.coin.outpoint)) {
             UniValue w(UniValue::VOBJ);
             w.pushKV("txid", vc.coin.outpoint.hash.GetHex());
             w.pushKV("vout", vc.coin.outpoint.n);
             w.pushKV("amount", ValueFromAmount(vc.coin.txout.nValue));
-            w.pushKV("blocks_left", std::max(0, static_cast<int>(vc.older) - vc.coin.depth));
+            w.pushKV("blocks_left", std::max(vc.coin.depth == 0 ? 1 : 0, static_cast<int>(vc.older) - vc.coin.depth));
             waiting.push_back(w);
             continue;
         }

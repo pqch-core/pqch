@@ -212,7 +212,11 @@ void VaultDialog::refresh()
         if (v["active"].get_bool()) addresses += tr(", in use");
         set(1, addresses);
         set(2, Delay(v["older"].getInt<int>()));
-        set(3, QString::fromStdString(v["amount"].getValStr()) + " PQCH");
+        QString amount{QString::fromStdString(v["amount"].getValStr()) + " PQCH"};
+        if (v.exists("unconfirmed") && v["unconfirmed"].getValStr() != "0.00000000") {
+            amount += " " + tr("(%1 not yet confirmed)").arg(QString::fromStdString(v["unconfirmed"].getValStr()));
+        }
+        set(3, amount);
         set(4, is_owner ? QString::fromStdString(v["recoverable"].getValStr()) + " PQCH" : QString("-"));
         set(5, is_owner && v.exists("next_recoverable_in") ? Delay(v["next_recoverable_in"].getInt<int>()) : QString("-"));
     }

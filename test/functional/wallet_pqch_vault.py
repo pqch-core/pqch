@@ -74,7 +74,15 @@ class PQCHWalletVaultTest(BitcoinTestFramework):
             assert agent.getaddressinfo(a)["ismine"]
             assert owner.getaddressinfo(a)["ismine"]
         funder.send({addr: 5}, fee_rate=FEE_RATE)
+
+        self.log.info("A coin not yet confirmed shows in listvaults (both sides) and waits in recovervault")
+        for wallet, role in ((owner, "owner"), (agent, "agent")):
+            [v] = [v for v in wallet.listvaults() if not v["internal"]]
+            assert_equal((v["role"], v["amount"], v["unconfirmed"], v["recoverable"]), (role, 5, 5, 0))
+        assert_raises_rpc_error(-6, "No vault coin can be recovered yet (1 waiting", owner.recovervault)
         self.generatetoaddress(node, 1, funder.getnewaddress())
+        [v] = [v for v in owner.listvaults() if not v["internal"]]
+        assert_equal((v["amount"], v["unconfirmed"]), (5, 0))
 
         self.log.info("The agent spends through the hot leaf; the change stays in the vault")
         pay = funder.getnewaddress()

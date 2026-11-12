@@ -110,8 +110,9 @@ Antes de começar:
    pqch-cli -testnet -rpcwallet=dono listvaults
    ```
 
-   Mostra o papel (`agent` ou `owner`), o prazo, o valor, o valor que já se pode recuperar e quantos
-   blocos faltam para a próxima moeda.
+   Mostra o papel (`agent` ou `owner`), o prazo, o valor (`amount`, com as moedas por confirmar, que
+   aparecem também à parte em `unconfirmed`), o valor que já se pode recuperar e quantos blocos faltam
+   para a próxima moeda. Uma moeda sem confirmação nunca é recuperada: espera em `waiting`.
 
 5. **Recuperar**, na carteira do dono:
 
