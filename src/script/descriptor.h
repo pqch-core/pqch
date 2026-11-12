@@ -203,6 +203,10 @@ struct Descriptor {
      *  recovery leaf (SLH-DSA, script/p2mr.h) instead of the hybrid leaf; nullopt otherwise. */
     virtual std::optional<std::pair<int64_t, int64_t>> MaxP2MRRecoverySatisfaction() const { return std::nullopt; }
 
+    /** PQCH: for a p2mr_vault() descriptor, the id of the recovery key's seed (the owner's; null if
+     *  the descriptor does not say) and the recovery timelock in blocks; nullopt otherwise. */
+    virtual std::optional<std::pair<uint256, uint32_t>> GetP2MRVault() const { return std::nullopt; }
+
     /** Return all (extended) public keys for this descriptor, including any from subdescriptors.
      *
      * @param[out] pubkeys Any public keys

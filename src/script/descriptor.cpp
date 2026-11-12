@@ -1205,6 +1205,7 @@ public:
 class SolvedP2MRDescriptor final : public DescriptorImpl
 {
     const CScript m_script;
+    const uint32_t m_older; //!< vault recovery timelock (changes leaf B's size)
 protected:
     std::string ToStringExtra() const override
     {
@@ -1214,7 +1215,7 @@ protected:
     }
     std::vector<CScript> MakeScripts(const std::vector<CPubKey>&, std::span<const CScript>, FlatSigningProvider&) const override { return Vector(m_script); }
 public:
-    explicit SolvedP2MRDescriptor(CScript script) : DescriptorImpl({}, "addr"), m_script(std::move(script)) {}
+    explicit SolvedP2MRDescriptor(CScript script, uint32_t older = 0) : DescriptorImpl({}, "addr"), m_script(std::move(script)), m_older(older) {}
     bool IsSolvable() const final { return true; }
     std::optional<OutputType> GetOutputType() const override { return OutputType::BECH32M; }
     bool IsSingleType() const final { return true; }
@@ -1223,8 +1224,8 @@ public:
     std::optional<int64_t> MaxSatSize(bool) const override { return p2mr::HybridWitnessSize(/*explicit_hashtype=*/true) - GetSizeOfCompactSize(4); }
     std::optional<int64_t> MaxSatisfactionWeight(bool use_max_sig) const override { return MaxSatSize(use_max_sig); }
     std::optional<int64_t> MaxSatisfactionElems() const override { return 4; }
-    std::optional<std::pair<int64_t, int64_t>> MaxP2MRRecoverySatisfaction() const override { return std::pair<int64_t, int64_t>{p2mr::RecoveryWitnessSize(/*explicit_hashtype=*/true) - GetSizeOfCompactSize(3), 3}; }
-    std::unique_ptr<DescriptorImpl> Clone() const override { return std::make_unique<SolvedP2MRDescriptor>(m_script); }
+    std::optional<std::pair<int64_t, int64_t>> MaxP2MRRecoverySatisfaction() const override { return std::pair<int64_t, int64_t>{p2mr::RecoveryWitnessSize(/*explicit_hashtype=*/true, m_older) - GetSizeOfCompactSize(3), 3}; }
+    std::unique_ptr<DescriptorImpl> Clone() const override { return std::make_unique<SolvedP2MRDescriptor>(m_script, m_older); }
 };
 
 /** A parsed raw(H) descriptor. */
@@ -1604,7 +1605,7 @@ protected:
     {
         if (pos < 0 || (m_range && static_cast<uint32_t>(pos) >= p2mr::RECOVERY_KEY_INDEX)) return std::vector<CScript>{};
         const uint32_t index{m_range ? static_cast<uint32_t>(pos) : 0};
-        p2mr::SpendData spend{.keys = {}, .seed_id = m_seed_id, .path = AddressPath(pos), .recovery_path = RecoveryPath()};
+        p2mr::SpendData spend{.keys = {}, .seed_id = m_seed_id, .path = AddressPath(pos), .recovery_path = RecoveryPath(), .recovery_seed_id = {}, .older = 0};
         if (!read_cache || !read_cache->GetCachedP2MRKeys(index, spend.keys)) {
             // The keys need the seed: there is no public derivation.
             p2mr::PQSeed seed;
@@ -1668,6 +1669,117 @@ public:
     std::unique_ptr<DescriptorImpl> Clone() const override
     {
         return std::make_unique<P2MRDescriptor>(m_seed_id, m_path, m_range);
+    }
+};
+
+/**
+ * PQCH: a parsed p2mr_vault(pqseed(ID)/PATH, slh([OWNER/KEYPATH]PUB), older(N)) descriptor: an
+ * agent's vault (contrib/pqch/COFRE.md). Leaf A is the hybrid leaf of the vault seed's address, as in
+ * p2mr(); leaf B is <N> OP_CHECKSEQUENCEVERIFY OP_DROP <salt> OP_DROP <PUB> OP_CHECKSIGSLHDSA (no
+ * timelock when N is 0), PUB being the owner's SLH-DSA-128s key, from the owner's seed OWNER at
+ * KEYPATH. The vault seed signs leaf A, the owner's seed leaf B, so a wallet with the vault seed
+ * (the agent's) spends through leaf A, and a wallet with the owner's seed recovers through leaf B.
+ */
+class P2MRVaultDescriptor final : public DescriptorImpl
+{
+    const uint256 m_seed_id;
+    const p2mr::Path m_path; //!< prefix (hardened steps)
+    const bool m_range;
+    const std::vector<unsigned char> m_slhdsa; //!< the owner's recovery key
+    const uint256 m_owner_id;                  //!< its seed's id (null: unknown)
+    const p2mr::Path m_key_path;               //!< its path in that seed
+    const uint32_t m_older;
+
+    p2mr::Path AddressPath(int pos) const
+    {
+        p2mr::Path path{m_path};
+        if (m_range) path.push_back(static_cast<uint32_t>(pos) | p2mr::HARDENED);
+        return path;
+    }
+
+protected:
+    std::optional<std::vector<CScript>> ExpandScriptsAt(int pos, const SigningProvider& arg, const DescriptorCache* read_cache, DescriptorCache* write_cache, FlatSigningProvider& out) const override
+    {
+        if (pos < 0 || (m_range && static_cast<uint32_t>(pos) >= p2mr::RECOVERY_KEY_INDEX)) return std::vector<CScript>{};
+        const uint32_t index{m_range ? static_cast<uint32_t>(pos) : 0};
+        p2mr::SpendData spend{.keys = {}, .seed_id = m_seed_id, .path = AddressPath(pos), .recovery_path = m_key_path, .recovery_seed_id = m_owner_id, .older = m_older};
+        if (!read_cache || !read_cache->GetCachedP2MRKeys(index, spend.keys)) {
+            p2mr::PQSeed seed;
+            if (!arg.GetPQSeed(m_seed_id, seed)) return std::vector<CScript>{};
+            p2mr::LeafAKeys a;
+            if (!p2mr::DeriveLeafAKeys(seed, spend.path, a)) return std::vector<CScript>{};
+            spend.keys.schnorr = XOnlyPubKey{a.schnorr.GetPubKey()};
+            spend.keys.mldsa = a.mldsa.pubkey;
+            spend.keys.salt = a.salt;
+            spend.keys.slhdsa = m_slhdsa;
+            if (!spend.keys.IsValid()) return std::vector<CScript>{};
+        }
+        if (spend.keys.slhdsa != m_slhdsa) return std::vector<CScript>{};
+        if (write_cache) write_cache->CacheP2MRKeys(index, spend.keys);
+        CScript spk{spend.ScriptPubKey()};
+        out.p2mr_spenddata[spend.Root()] = std::move(spend);
+        return Vector(std::move(spk));
+    }
+
+    void ExpandPrivateExtra(int, const SigningProvider& provider, FlatSigningProvider& out) const override
+    {
+        p2mr::PQSeed seed;
+        if (provider.GetPQSeed(m_seed_id, seed)) out.pq_seeds.emplace(m_seed_id, seed);
+        if (!m_owner_id.IsNull() && provider.GetPQSeed(m_owner_id, seed)) out.pq_seeds.emplace(m_owner_id, seed);
+    }
+
+    std::vector<CScript> MakeScripts(const std::vector<CPubKey>&, std::span<const CScript>, FlatSigningProvider&) const override { return {}; }
+
+    bool ToStringHelper(const SigningProvider* arg, std::string& out, const StringType type, const DescriptorCache*) const override
+    {
+        // The private form gives the vault seed only: the owner's seed never leaves its wallet.
+        std::string key;
+        if (type == StringType::PRIVATE) {
+            p2mr::PQSeed seed;
+            if (!arg || !arg->GetPQSeed(m_seed_id, seed)) return false;
+            key = "pqprv(" + HexStr(seed.bytes) + ")";
+        } else {
+            key = "pqseed(" + HexStr(m_seed_id) + ")";
+        }
+        for (uint32_t step : m_path) key += strprintf("/%uh", step & ~p2mr::HARDENED);
+        if (m_range) key += "/*h";
+        std::string slh{"slh("};
+        if (!m_owner_id.IsNull()) {
+            slh += "[" + HexStr(m_owner_id);
+            for (uint32_t step : m_key_path) slh += strprintf("/%uh", step & ~p2mr::HARDENED);
+            slh += "]";
+        }
+        slh += HexStr(m_slhdsa) + ")";
+        out = strprintf("p2mr_vault(%s,%s,older(%u))", key, slh, m_older);
+        return true;
+    }
+
+public:
+    P2MRVaultDescriptor(const uint256& seed_id, p2mr::Path path, bool range, std::vector<unsigned char> slhdsa, const uint256& owner_id, p2mr::Path key_path, uint32_t older)
+        : DescriptorImpl({}, "p2mr_vault"), m_seed_id(seed_id), m_path(std::move(path)), m_range(range), m_slhdsa(std::move(slhdsa)),
+          m_owner_id(owner_id), m_key_path(std::move(key_path)), m_older(older) {}
+
+    bool IsRange() const override { return m_range; }
+    bool IsSolvable() const override { return true; }
+    bool CanSelfExpand() const override { return false; }
+    bool HavePrivateKeys(const SigningProvider& arg) const override
+    {
+        p2mr::PQSeed seed;
+        return arg.GetPQSeed(m_seed_id, seed);
+    }
+    std::optional<OutputType> GetOutputType() const override { return OutputType::BECH32M; }
+    bool IsSingleType() const final { return true; }
+
+    std::optional<int64_t> ScriptSize() const override { return 1 + 1 + 32; }
+    std::optional<int64_t> MaxSatSize(bool) const override { return p2mr::HybridWitnessSize(/*explicit_hashtype=*/true) - GetSizeOfCompactSize(4); }
+    std::optional<int64_t> MaxSatisfactionWeight(bool use_max_sig) const override { return MaxSatSize(use_max_sig); }
+    std::optional<int64_t> MaxSatisfactionElems() const override { return 4; }
+    std::optional<std::pair<int64_t, int64_t>> MaxP2MRRecoverySatisfaction() const override { return std::pair<int64_t, int64_t>{p2mr::RecoveryWitnessSize(/*explicit_hashtype=*/true, m_older) - GetSizeOfCompactSize(3), 3}; }
+    std::optional<std::pair<uint256, uint32_t>> GetP2MRVault() const override { return std::pair{m_owner_id, m_older}; }
+
+    std::unique_ptr<DescriptorImpl> Clone() const override
+    {
+        return std::make_unique<P2MRVaultDescriptor>(m_seed_id, m_path, m_range, m_slhdsa, m_owner_id, m_key_path, m_older);
     }
 };
 
@@ -2513,6 +2625,68 @@ struct KeyParser {
 };
 
 /** Parse a script in a particular context. */
+
+/** PQCH: parse "/STEP/STEP..." where every step is hardened and only the last may be *h. */
+[[nodiscard]] static bool ParseP2MRPath(const std::string& rest, const char* fn, p2mr::Path& path, bool& range, std::string& error)
+{
+    range = false;
+    if (rest.empty()) return true;
+    if (rest[0] != '/') {
+        error = strprintf("%s(): expected a path after the seed", fn);
+        return false;
+    }
+    const std::vector<std::string> steps{util::SplitString(rest.substr(1), '/')};
+    for (size_t i = 0; i < steps.size(); ++i) {
+        std::string step{steps[i]};
+        if (step.size() < 2 || (step.back() != 'h' && step.back() != '\'')) {
+            error = strprintf("%s(): every derivation step must be hardened (h)", fn);
+            return false;
+        }
+        step.pop_back();
+        if (step == "*") {
+            if (i + 1 != steps.size()) {
+                error = strprintf("%s(): * can only be the last step", fn);
+                return false;
+            }
+            range = true;
+            break;
+        }
+        const auto n{ToIntegral<uint32_t>(step)};
+        if (!n || *n >= p2mr::HARDENED) {
+            error = strprintf("%s(): bad derivation step %s", fn, steps[i]);
+            return false;
+        }
+        path.push_back(*n | p2mr::HARDENED);
+    }
+    return true;
+}
+
+/** PQCH: parse "pqseed(ID)/PATH" or "pqprv(SEED)/PATH"; a seed goes into `out`. */
+[[nodiscard]] static bool ParseP2MRSeedPath(const std::string& str, const char* fn, FlatSigningProvider& out, uint256& seed_id, p2mr::Path& path, bool& range, std::string& error)
+{
+    const auto close{str.find(')')};
+    const bool priv{str.starts_with("pqprv(")};
+    if ((!priv && !str.starts_with("pqseed(")) || close == std::string::npos) {
+        error = strprintf("%s(): expected pqseed(ID) or pqprv(SEED) (post-quantum seed, not an elliptic curve key)", fn);
+        return false;
+    }
+    const std::string hex{str.substr(priv ? 6 : 7, close - (priv ? 6 : 7))};
+    const auto bytes{TryParseHex<unsigned char>(hex)};
+    if (!bytes || bytes->size() != 32) {
+        error = strprintf("%s(): the seed and its id are 32 bytes in hex", fn);
+        return false;
+    }
+    if (priv) {
+        const p2mr::PQSeed seed{*bytes};
+        seed_id = seed.Id();
+        out.pq_seeds.emplace(seed_id, seed);
+        memory_cleanse(const_cast<unsigned char*>(bytes->data()), bytes->size());
+    } else {
+        seed_id = uint256{std::span<const unsigned char>{*bytes}};
+    }
+    return ParseP2MRPath(str.substr(close + 1), fn, path, range, error);
+}
+
 // NOLINTNEXTLINE(misc-no-recursion)
 std::vector<std::unique_ptr<DescriptorImpl>> ParseScript(uint32_t& key_exp_index, std::span<const char>& sp, ParseScriptContext ctx, FlatSigningProvider& out, std::string& error)
 {
@@ -2664,62 +2838,78 @@ std::vector<std::unique_ptr<DescriptorImpl>> ParseScript(uint32_t& key_exp_index
         error = "Can only have wpkh() at top level or inside sh()";
         return {};
     }
-    if (ctx == ParseScriptContext::TOP && Func("p2mr", expr)) {
-        // PQCH: p2mr(pqseed(ID)/PATH) or p2mr(pqprv(SEED)/PATH) (script/p2mr.h).
-        const std::string str(expr.begin(), expr.end());
-        const auto close{str.find(')')};
-        const bool priv{str.starts_with("pqprv(")};
-        if ((!priv && !str.starts_with("pqseed(")) || close == std::string::npos) {
-            error = "p2mr(): expected pqseed(ID) or pqprv(SEED) (post-quantum seed, not an elliptic curve key)";
-            return {};
-        }
-        const std::string hex{str.substr(priv ? 6 : 7, close - (priv ? 6 : 7))};
-        const auto bytes{TryParseHex<unsigned char>(hex)};
-        if (!bytes || bytes->size() != 32) {
-            error = "p2mr(): the seed and its id are 32 bytes in hex";
+    if (ctx == ParseScriptContext::TOP && Func("p2mr_vault", expr)) {
+        // PQCH: p2mr_vault(pqseed(ID)/PATH, slh([OWNER/KEYPATH]PUB), older(N)) (contrib/pqch/COFRE.md).
+        const std::vector<std::string> args{util::SplitString(std::string(expr.begin(), expr.end()), ',')};
+        if (args.size() != 3) {
+            error = "p2mr_vault(): expected three arguments: the vault seed and path, slh(KEY) and older(N)";
             return {};
         }
         uint256 seed_id;
-        if (priv) {
-            const p2mr::PQSeed seed{*bytes};
-            seed_id = seed.Id();
-            out.pq_seeds.emplace(seed_id, seed);
-            memory_cleanse(const_cast<unsigned char*>(bytes->data()), bytes->size());
-        } else {
-            seed_id = uint256{std::span<const unsigned char>{*bytes}};
-        }
         p2mr::Path path;
         bool range{false};
-        const std::string rest{str.substr(close + 1)};
-        if (!rest.empty()) {
-            if (rest[0] != '/') {
-                error = "p2mr(): expected a path after the seed";
+        if (!ParseP2MRSeedPath(args[0], "p2mr_vault", out, seed_id, path, range, error)) return {};
+        if (!range && !path.empty() && path.back() == (p2mr::RECOVERY_KEY_INDEX | p2mr::HARDENED)) {
+            error = "p2mr_vault(): 2147483647h is not an address position";
+            return {};
+        }
+        // slh([OWNER/KEYPATH]PUB) or slh(PUB)
+        const std::string& slh{args[1]};
+        if (!slh.starts_with("slh(") || !slh.ends_with(")")) {
+            error = "p2mr_vault(): expected slh(KEY), the owner's SLH-DSA-128s recovery key";
+            return {};
+        }
+        std::string key{slh.substr(4, slh.size() - 5)};
+        uint256 owner_id;
+        p2mr::Path key_path;
+        if (key.starts_with("[")) {
+            const auto close{key.find(']')};
+            if (close == std::string::npos) {
+                error = "p2mr_vault(): slh(): missing ]";
                 return {};
             }
-            const std::vector<std::string> steps{util::SplitString(rest.substr(1), '/')};
-            for (size_t i = 0; i < steps.size(); ++i) {
-                std::string step{steps[i]};
-                if (step.size() < 2 || (step.back() != 'h' && step.back() != '\'')) {
-                    error = "p2mr(): every derivation step must be hardened (h)";
-                    return {};
-                }
-                step.pop_back();
-                if (step == "*") {
-                    if (i + 1 != steps.size()) {
-                        error = "p2mr(): * can only be the last step";
-                        return {};
-                    }
-                    range = true;
-                    break;
-                }
-                const auto n{ToIntegral<uint32_t>(step)};
-                if (!n || *n >= p2mr::HARDENED) {
-                    error = strprintf("p2mr(): bad derivation step %s", steps[i]);
-                    return {};
-                }
-                path.push_back(*n | p2mr::HARDENED);
+            const std::string origin{key.substr(1, close - 1)};
+            key = key.substr(close + 1);
+            const auto slash{origin.find('/')};
+            const auto id_bytes{TryParseHex<unsigned char>(origin.substr(0, slash))};
+            if (!id_bytes || id_bytes->size() != 32) {
+                error = "p2mr_vault(): slh(): the owner's seed id is 32 bytes in hex";
+                return {};
+            }
+            owner_id = uint256{std::span<const unsigned char>{*id_bytes}};
+            bool key_range{false};
+            if (slash == std::string::npos || !ParseP2MRPath(origin.substr(slash), "p2mr_vault", key_path, key_range, error)) {
+                if (error.empty()) error = "p2mr_vault(): slh(): expected the key's path after the owner's seed id";
+                return {};
+            }
+            if (key_range) {
+                error = "p2mr_vault(): slh(): the key's path cannot have *";
+                return {};
             }
         }
+        const auto pub{TryParseHex<unsigned char>(key)};
+        if (!pub || pub->size() != pqc::SLHDSA128S_PUBKEY_SIZE) {
+            error = strprintf("p2mr_vault(): slh(): the SLH-DSA-128s key is %u bytes in hex", pqc::SLHDSA128S_PUBKEY_SIZE);
+            return {};
+        }
+        const std::string& older_arg{args[2]};
+        const auto older{older_arg.starts_with("older(") && older_arg.ends_with(")") ? ToIntegral<uint32_t>(older_arg.substr(6, older_arg.size() - 7)) : std::nullopt};
+        if (!older || *older > p2mr::MAX_VAULT_OLDER) {
+            error = strprintf("p2mr_vault(): expected older(N), N from 0 to %u blocks", p2mr::MAX_VAULT_OLDER);
+            return {};
+        }
+        ret.emplace_back(std::make_unique<P2MRVaultDescriptor>(seed_id, std::move(path), range, std::move(*pub), owner_id, std::move(key_path), *older));
+        return ret;
+    } else if (Func("p2mr_vault", expr)) {
+        error = "Can only have p2mr_vault at top level";
+        return {};
+    }
+    if (ctx == ParseScriptContext::TOP && Func("p2mr", expr)) {
+        // PQCH: p2mr(pqseed(ID)/PATH) or p2mr(pqprv(SEED)/PATH) (script/p2mr.h).
+        uint256 seed_id;
+        p2mr::Path path;
+        bool range{false};
+        if (!ParseP2MRSeedPath(std::string(expr.begin(), expr.end()), "p2mr", out, seed_id, path, range, error)) return {};
         if (!range && !path.empty() && path.back() == (p2mr::RECOVERY_KEY_INDEX | p2mr::HARDENED)) {
             error = "p2mr(): 2147483647h is the recovery key's position, not an address";
             return {};
@@ -3096,7 +3286,7 @@ std::unique_ptr<DescriptorImpl> InferScript(const CScript& script, ParseScriptCo
         // witness v1 outputs are P2MR, not Taproot) any other witness v1 output as an address.
         p2mr::SpendData spend;
         if (provider.GetP2MRSpendData(uint256{std::span<const unsigned char>{data[0]}}, spend)) {
-            return std::make_unique<SolvedP2MRDescriptor>(script);
+            return std::make_unique<SolvedP2MRDescriptor>(script, spend.older);
         }
     }
     if (txntype == TxoutType::WITNESS_V1_TAPROOT && ctx == ParseScriptContext::TOP && Params().GetConsensus().PQRulesHeight != 0) {

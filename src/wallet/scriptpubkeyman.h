@@ -381,6 +381,11 @@ public:
     bool ForgetPQMnemonicWithDB(WalletBatch& batch);
     //! PQCH: ids of the post-quantum seeds this descriptor's keys come from
     std::set<uint256> GetPQSeedIds() const;
+    /** PQCH: whether this is a vault descriptor (p2mr_vault()) whose recovery key's seed this
+     *  descriptor holds: the owner's copy of an agent's vault. */
+    bool IsP2MRVaultOwner() const;
+    /** PQCH: the descriptor's only post-quantum seed (nullopt if it has none or several, or is locked). */
+    std::optional<p2mr::PQSeed> GetOnlyPQSeed() const;
     static std::unique_ptr<DescriptorScriptPubKeyMan> CreateFromImport(WalletStorage& storage, WalletDescriptor& descriptor, int64_t keypool_size, const FlatSigningProvider& provider);
     static std::unique_ptr<DescriptorScriptPubKeyMan> CreateFromMigration(WalletStorage& storage, WalletBatch& batch, WalletDescriptor& descriptor, int64_t keypool_size, const FlatSigningProvider& provider);
     static std::unique_ptr<DescriptorScriptPubKeyMan> GenerateNewSingleSig(WalletStorage& storage, WalletBatch& batch, int64_t keypool_size, const CExtKey& master_key, OutputType addr_type, bool internal, const PQWalletSecret* pq_secret = nullptr);

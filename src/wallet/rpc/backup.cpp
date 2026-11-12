@@ -285,7 +285,8 @@ static UniValue ProcessDescriptorImport(CWallet& wallet, const UniValue& data, c
             auto spk_manager_res = wallet.AddWalletDescriptor(w_desc, keys, label, desc_internal);
 
             if (!spk_manager_res) {
-                throw JSONRPCError(RPC_WALLET_ERROR, strprintf("Could not add descriptor '%s': %s", descriptor, util::ErrorString(spk_manager_res).original));
+                // PQCH: never quote the descriptor: it may be a private form (pqprv(), a vault's owner_import)
+                throw JSONRPCError(RPC_WALLET_ERROR, strprintf("Could not add descriptor: %s", util::ErrorString(spk_manager_res).original));
             }
 
             auto& spk_manager = spk_manager_res.value().get();

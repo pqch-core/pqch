@@ -52,6 +52,12 @@ inline constexpr size_t SALT_SIZE{16};
 inline constexpr uint32_t HARDENED{0x80000000};
 /** Last path step of a descriptor's recovery (SLH-DSA) key (hardened); never an address. */
 inline constexpr uint32_t RECOVERY_KEY_INDEX{0x7FFFFFFF};
+/** Largest relative timelock of a vault's recovery leaf: BIP68 counts blocks in 16 bits. */
+inline constexpr uint32_t MAX_VAULT_OLDER{0xFFFF};
+/** Account step of the vault paths: addresses at 360h/coin/VAULT_ACCOUNT/{0h,1h}/(index)h of a vault seed. */
+inline constexpr uint32_t VAULT_ACCOUNT{2};
+/** Account step of an owner's vault recovery keys: 360h/coin/VAULT_KEY_ACCOUNT/kh of the owner's seed. */
+inline constexpr uint32_t VAULT_KEY_ACCOUNT{3};
 
 using Path = std::vector<uint32_t>; //!< every step hardened (HARDENED bit set)
 
@@ -77,6 +83,16 @@ PQSeed SeedFromMasterKey(const CExtKey& master);
  * HMAC-SHA512("PQCH/P2MR/v2/bip39", BIP39 seed)[0:32]. Nullopt if the words or passphrase are invalid.
  */
 std::optional<PQSeed> SeedFromMnemonic(std::string_view mnemonic, std::string_view passphrase);
+
+/**
+ * The seed of a wallet's vault number `index` (contrib/pqch/COFRE.md):
+ * HMAC-SHA512(wallet seed, "PQCH/P2MR/v2/vault" || index as 32-bit big endian)[0:32]. The recovery
+ * words of the agent's wallet therefore restore its vaults; the owner gets a copy of this seed only,
+ * never the agent's wallet seed.
+ */
+PQSeed VaultSeed(const PQSeed& wallet_seed, uint32_t index);
+/** Path of an owner's vault recovery key number `index`: 360h/coin_typeh/3h/indexh. */
+Path VaultKeyPath(bool test_chain, uint32_t index);
 
 /** Public data of one address: what the descriptor cache keeps (no secrets). */
 struct AddressKeys {
@@ -106,14 +122,28 @@ struct LeafAKeys {
 [[nodiscard]] bool DeriveAddressKeys(const PQSeed& seed, const Path& path, const Path& recovery_path, AddressKeys& out);
 
 CScript HybridLeaf(const XOnlyPubKey& schnorr, const std::vector<unsigned char>& mldsa);
-CScript RecoveryLeaf(const std::array<unsigned char, SALT_SIZE>& salt, const std::vector<unsigned char>& slhdsa);
+/**
+ * Leaf B. With older > 0 (a vault, see below) it starts with <older> OP_CHECKSEQUENCEVERIFY OP_DROP:
+ * the recovery key can spend a coin only `older` blocks after the coin was confirmed.
+ */
+CScript RecoveryLeaf(const std::array<unsigned char, SALT_SIZE>& salt, const std::vector<unsigned char>& slhdsa, uint32_t older = 0);
 
-/** What a signer needs to spend a standard P2MR output (kept in signing providers by root). */
+/**
+ * What a signer needs to spend a standard P2MR output or a vault output (kept in signing providers
+ * by root).
+ *
+ * A vault (p2mr_vault() descriptor, contrib/pqch/COFRE.md) is the same two-leaf tree, but its
+ * recovery key belongs to another seed (the owner's), and its leaf B may carry a relative timelock.
+ */
 struct SpendData {
     AddressKeys keys;
-    uint256 seed_id;    //!< id of the seed the keys come from
-    Path path;          //!< the address's path
-    Path recovery_path; //!< the recovery key's path
+    uint256 seed_id;          //!< id of the seed the keys come from
+    Path path;                //!< the address's path
+    Path recovery_path;       //!< the recovery key's path
+    uint256 recovery_seed_id; //!< vault: id of the recovery key's seed (null: seed_id)
+    uint32_t older{0};        //!< vault: relative timelock of leaf B in blocks (0: none)
+
+    const uint256& RecoverySeedId() const { return recovery_seed_id.IsNull() ? seed_id : recovery_seed_id; }
 
     CScript Leaf(bool recovery) const;
     uint256 LeafHash(bool recovery) const;
@@ -125,7 +155,7 @@ struct SpendData {
 
 /** Witness sizes of the two spending paths, element count included (+1 byte per signature with an explicit sighash type). */
 int64_t HybridWitnessSize(bool explicit_hashtype);
-int64_t RecoveryWitnessSize(bool explicit_hashtype);
+int64_t RecoveryWitnessSize(bool explicit_hashtype, uint32_t older = 0);
 
 } // namespace p2mr
 

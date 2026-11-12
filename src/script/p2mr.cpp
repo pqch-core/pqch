@@ -100,6 +100,23 @@ std::optional<PQSeed> SeedFromMnemonic(std::string_view mnemonic, std::string_vi
     return seed;
 }
 
+PQSeed VaultSeed(const PQSeed& wallet_seed, uint32_t index)
+{
+    static constexpr std::string_view LABEL{"PQCH/P2MR/v2/vault"};
+    const unsigned char be[4]{static_cast<unsigned char>(index >> 24), static_cast<unsigned char>(index >> 16),
+                              static_cast<unsigned char>(index >> 8), static_cast<unsigned char>(index)};
+    unsigned char buf[CHMAC_SHA512::OUTPUT_SIZE];
+    CHMAC_SHA512{wallet_seed.bytes.data(), wallet_seed.bytes.size()}.Write(reinterpret_cast<const unsigned char*>(LABEL.data()), LABEL.size()).Write(be, 4).Finalize(buf);
+    PQSeed seed{std::span<const unsigned char>{buf, SEED_SIZE}};
+    memory_cleanse(buf, sizeof(buf));
+    return seed;
+}
+
+Path VaultKeyPath(bool test_chain, uint32_t index)
+{
+    return {360 | HARDENED, (test_chain ? 1U : 0U) | HARDENED, VAULT_KEY_ACCOUNT | HARDENED, index | HARDENED};
+}
+
 bool DeriveLeafAKeys(const PQSeed& seed, const Path& path, LeafAKeys& out)
 {
     Secret32 node;
@@ -175,14 +192,17 @@ CScript HybridLeaf(const XOnlyPubKey& schnorr, const std::vector<unsigned char>&
     return CScript() << ToByteVector(schnorr) << OP_CHECKSIGVERIFY << mldsa << OP_CHECKSIGMLDSA;
 }
 
-CScript RecoveryLeaf(const std::array<unsigned char, SALT_SIZE>& salt, const std::vector<unsigned char>& slhdsa)
+CScript RecoveryLeaf(const std::array<unsigned char, SALT_SIZE>& salt, const std::vector<unsigned char>& slhdsa, uint32_t older)
 {
-    return CScript() << std::vector<unsigned char>(salt.begin(), salt.end()) << OP_DROP << slhdsa << OP_CHECKSIGSLHDSA;
+    assert(older <= MAX_VAULT_OLDER);
+    CScript leaf;
+    if (older > 0) leaf << int64_t{older} << OP_CHECKSEQUENCEVERIFY << OP_DROP;
+    return leaf << std::vector<unsigned char>(salt.begin(), salt.end()) << OP_DROP << slhdsa << OP_CHECKSIGSLHDSA;
 }
 
 CScript SpendData::Leaf(bool recovery) const
 {
-    return recovery ? RecoveryLeaf(keys.salt, keys.slhdsa) : HybridLeaf(keys.schnorr, keys.mldsa);
+    return recovery ? RecoveryLeaf(keys.salt, keys.slhdsa, older) : HybridLeaf(keys.schnorr, keys.mldsa);
 }
 
 uint256 SpendData::LeafHash(bool recovery) const
@@ -228,9 +248,10 @@ int64_t HybridWitnessSize(bool explicit_hashtype)
     return GetSizeOfCompactSize(4) + Item(pqc::MLDSA44_SIG_SIZE + extra) + Item(64 + extra) + Item(t.Leaf(false).size()) + Item(t.Control(false).size());
 }
 
-int64_t RecoveryWitnessSize(bool explicit_hashtype)
+int64_t RecoveryWitnessSize(bool explicit_hashtype, uint32_t older)
 {
-    const SpendData t{SizeTemplate()};
+    SpendData t{SizeTemplate()};
+    t.older = older;
     const size_t extra{explicit_hashtype ? 1U : 0U};
     return GetSizeOfCompactSize(3) + Item(pqc::SLHDSA128S_SIG_SIZE + extra) + Item(t.Leaf(true).size()) + Item(t.Control(true).size());
 }

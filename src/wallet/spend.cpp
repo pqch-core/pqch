@@ -445,6 +445,12 @@ CoinsResult AvailableCoins(const CWallet& wallet,
             continue;
         }
 
+        // PQCH: the owner's copy of an agent's vault is not the owner's money to spend through the
+        // hot leaf; it is only recovered, through the recovery leaf.
+        if (!(coinControl && coinControl->m_p2mr_recovery) && wallet.IsP2MRVaultOwnerScript(output.scriptPubKey)) {
+            continue;
+        }
+
         bool tx_from_me = CachedTxIsFromMe(wallet, wtx);
 
         std::unique_ptr<SigningProvider> provider = wallet.GetSolvingProvider(output.scriptPubKey);

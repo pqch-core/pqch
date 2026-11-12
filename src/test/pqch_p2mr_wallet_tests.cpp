@@ -14,6 +14,7 @@
 #include <script/signingprovider.h>
 #include <test/util/setup_common.h>
 #include <util/strencodings.h>
+#include <util/string.h>
 
 #include <boost/test/unit_test.hpp>
 
@@ -320,6 +321,113 @@ BOOST_AUTO_TEST_CASE(p2mr_descriptor_expand_and_sign)
         CMutableTransaction tx{Spend(e0.scripts[0], prev)};
         SignatureData sigdata;
         BOOST_CHECK(!SignAndVerify(tx, prev, wrong, {}, sigdata));
+    }
+}
+
+BOOST_AUTO_TEST_CASE(p2mr_vault_descriptor)
+{
+    // The owner's recovery key (getvaultkey) and an agent's vault seed (createvault).
+    const p2mr::PQSeed owner{Seed(21)}, agent{Seed(22)};
+    const p2mr::PQSeed vault_seed{p2mr::VaultSeed(agent, 0)};
+    BOOST_CHECK(vault_seed.Id() != agent.Id());
+    BOOST_CHECK(p2mr::VaultSeed(agent, 1).Id() != vault_seed.Id());
+    const p2mr::Path key_path{p2mr::VaultKeyPath(/*test_chain=*/true, 0)};
+    std::vector<unsigned char> owner_pub;
+    BOOST_REQUIRE(p2mr::DeriveRecoveryPubKey(owner, key_path, owner_pub));
+    const std::string slh{"slh([" + HexStr(owner.Id()) + "/360h/1h/3h/0h]" + HexStr(owner_pub) + ")"};
+    const auto vault_desc{[&](const std::string& seed, uint32_t older) {
+        return "p2mr_vault(" + seed + "/360h/1h/2h/0h/*h," + slh + ",older(" + util::ToString(older) + "))";
+    }};
+    const std::string priv{vault_desc("pqprv(" + HexStr(vault_seed.bytes) + ")", 144)};
+
+    FlatSigningProvider keys;
+    std::string error;
+    auto descs{Parse(priv, keys, error, false)};
+    BOOST_REQUIRE_MESSAGE(descs.size() == 1, error);
+    const Descriptor& desc{*descs[0]};
+    BOOST_CHECK(desc.IsRange() && desc.IsSolvable());
+    BOOST_CHECK(desc.GetOutputType() == OutputType::BECH32M);
+    BOOST_REQUIRE(desc.GetP2MRVault());
+    BOOST_CHECK(desc.GetP2MRVault()->first == owner.Id());
+    BOOST_CHECK_EQUAL(desc.GetP2MRVault()->second, 144U);
+    // Public form: the vault seed's id, never a seed; it parses back to the same descriptor.
+    const std::string pub{desc.ToString()};
+    BOOST_CHECK(pub.starts_with(vault_desc("pqseed(" + HexStr(vault_seed.Id()) + ")", 144) + "#"));
+    std::string priv_out;
+    BOOST_REQUIRE(desc.ToPrivateString(keys, priv_out));
+    BOOST_CHECK(priv_out.starts_with(priv + "#"));
+    BOOST_CHECK(priv_out.find(HexStr(owner.bytes)) == std::string::npos);
+    FlatSigningProvider none;
+    BOOST_CHECK_EQUAL(Parse(pub, none, error, true).size(), 1U);
+
+    // Bad forms.
+    for (const std::string& bad : std::vector<std::string>{
+             vault_desc("pqprv(" + HexStr(vault_seed.bytes) + ")", p2mr::MAX_VAULT_OLDER + 1),
+             "p2mr_vault(pqprv(" + HexStr(vault_seed.bytes) + ")/360h/1h/2h/0h/*h," + slh + ")",
+             "p2mr_vault(pqprv(" + HexStr(vault_seed.bytes) + ")/360h/1h/2h/0h/*h,slh(00),older(1))",
+             "p2mr_vault(pqprv(" + HexStr(vault_seed.bytes) + ")/360h/1h/2/0h/*h," + slh + ",older(1))",
+             "p2mr_vault(pqprv(" + HexStr(vault_seed.bytes) + ")/360h/1h/2h/0h/*h,slh([" + HexStr(owner.Id()) + "/*h]" + HexStr(owner_pub) + "),older(1))",
+             "p2mr_vault(pqprv(" + HexStr(vault_seed.bytes) + ")/360h/1h/2h/0h/*h," + slh + ",after(1))",
+             "sh(" + priv + ")",
+         }) {
+        FlatSigningProvider k;
+        BOOST_CHECK_MESSAGE(Parse(bad, k, error, false).empty(), bad);
+    }
+
+    // Leaf A is the vault seed's hybrid leaf; leaf B the owner's key behind the timelock.
+    Expanded e;
+    BOOST_REQUIRE(desc.Expand(0, keys, e.scripts, e.out, &e.cache));
+    BOOST_REQUIRE_EQUAL(e.out.p2mr_spenddata.size(), 1U);
+    const p2mr::SpendData spend{e.out.p2mr_spenddata.begin()->second};
+    BOOST_CHECK(spend.keys.slhdsa == owner_pub);
+    BOOST_CHECK(spend.RecoverySeedId() == owner.Id());
+    BOOST_CHECK(spend.Leaf(true) == p2mr::RecoveryLeaf(spend.keys.salt, owner_pub, 144));
+    BOOST_CHECK(spend.Leaf(true) != p2mr::RecoveryLeaf(spend.keys.salt, owner_pub));
+    Expanded c;
+    BOOST_REQUIRE(desc.ExpandFromCache(0, e.cache, c.scripts, c.out));
+    BOOST_CHECK(c.scripts == e.scripts);
+    // older(0): leaf B without the timelock, another address.
+    {
+        FlatSigningProvider k0;
+        auto d0{Parse(vault_desc("pqprv(" + HexStr(vault_seed.bytes) + ")", 0), k0, error, false)};
+        BOOST_REQUIRE(d0.size() == 1);
+        Expanded e0;
+        BOOST_REQUIRE(d0[0]->Expand(0, k0, e0.scripts, e0.out));
+        BOOST_CHECK(e0.scripts != e.scripts);
+        BOOST_CHECK(e0.out.p2mr_spenddata.begin()->second.Leaf(true) == p2mr::RecoveryLeaf(spend.keys.salt, owner_pub));
+    }
+
+    // The agent (vault seed only) signs leaf A, not leaf B; the owner (with its seed) signs leaf B
+    // once the input's nSequence meets the timelock.
+    FlatSigningProvider agent_signer{c.out};
+    desc.ExpandPrivate(0, keys, agent_signer);
+    FlatSigningProvider owner_signer{agent_signer};
+    owner_signer.pq_seeds.emplace(owner.Id(), owner);
+    const auto try_sign{[&](const FlatSigningProvider& signer, bool recovery, uint32_t sequence) {
+        CTxOut prev;
+        CMutableTransaction tx{Spend(e.scripts[0], prev)};
+        tx.vin[0].nSequence = sequence;
+        SignatureData sigdata;
+        SignOptions options;
+        options.p2mr_recovery = recovery;
+        const bool ok{SignAndVerify(tx, prev, signer, options, sigdata)};
+        if (ok) {
+            BOOST_CHECK_EQUAL(int64_t(GetSerializeSize(tx.vin[0].scriptWitness.stack)),
+                              recovery ? p2mr::RecoveryWitnessSize(false, 144) : p2mr::HybridWitnessSize(false));
+        }
+        return ok;
+    }};
+    BOOST_CHECK(try_sign(agent_signer, /*recovery=*/false, CTxIn::SEQUENCE_FINAL));
+    BOOST_CHECK(!try_sign(agent_signer, /*recovery=*/true, 144));
+    BOOST_CHECK(try_sign(owner_signer, /*recovery=*/true, 144));
+    BOOST_CHECK(try_sign(owner_signer, /*recovery=*/true, 1000));
+    BOOST_CHECK(!try_sign(owner_signer, /*recovery=*/true, 143));
+    BOOST_CHECK(!try_sign(owner_signer, /*recovery=*/true, CTxIn::MAX_SEQUENCE_NONFINAL));
+    // A wrong owner key in the descriptor: the owner's seed does not sign for it.
+    {
+        std::vector<unsigned char> other_pub;
+        BOOST_REQUIRE(p2mr::DeriveRecoveryPubKey(owner, p2mr::VaultKeyPath(true, 1), other_pub));
+        BOOST_CHECK(other_pub != owner_pub);
     }
 }
 

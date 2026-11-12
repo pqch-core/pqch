@@ -684,7 +684,9 @@ static bool SignP2MR(const SigningProvider& provider, const BaseSignatureCreator
     const CScript leaf{spend.Leaf(recovery)};
     std::vector<valtype> stack;
     p2mr::PQSeed seed;
-    const bool have_seed{provider.GetPQSeed(spend.seed_id, seed)};
+    // Leaf A comes from the address's seed, leaf B from the recovery key's seed: the same seed for a
+    // standard address, the owner's seed for a vault.
+    const bool have_seed{provider.GetPQSeed(recovery ? spend.RecoverySeedId() : spend.seed_id, seed)};
     if (!recovery) {
         // Leaf A: <x-only> OP_CHECKSIGVERIFY <ML-DSA> OP_CHECKSIGMLDSA. Witness: ML-DSA sig, Schnorr sig.
         p2mr::LeafAKeys keys;
@@ -696,7 +698,9 @@ static bool SignP2MR(const SigningProvider& provider, const BaseSignatureCreator
         stack.push_back(std::move(pq_sig));
         stack.push_back(std::move(schnorr_sig));
     } else {
-        // Leaf B: <salt> OP_DROP <SLH-DSA> OP_CHECKSIGSLHDSA. Witness: SLH-DSA sig.
+        // Leaf B: [<older> OP_CHECKSEQUENCEVERIFY OP_DROP] <salt> OP_DROP <SLH-DSA> OP_CHECKSIGSLHDSA.
+        // Witness: SLH-DSA sig. A vault's timelock needs the input's nSequence, set by whoever built
+        // the transaction (the signature commits to it).
         pqc::KeyPair key;
         const bool have{have_seed && p2mr::DeriveRecoveryKey(seed, spend.recovery_path, key)};
         if (have && key.pubkey != spend.keys.slhdsa) return false;

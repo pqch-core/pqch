@@ -1188,6 +1188,20 @@ std::set<uint256> DescriptorScriptPubKeyMan::GetPQSeedIds() const
     return ids;
 }
 
+bool DescriptorScriptPubKeyMan::IsP2MRVaultOwner() const
+{
+    const auto vault{WITH_LOCK(cs_desc_man, return m_wallet_descriptor.descriptor->GetP2MRVault())};
+    return vault && !vault->first.IsNull() && GetPQSeedIds().contains(vault->first);
+}
+
+std::optional<p2mr::PQSeed> DescriptorScriptPubKeyMan::GetOnlyPQSeed() const
+{
+    LOCK(cs_desc_man);
+    const auto seeds{GetPQSeeds()};
+    if (seeds.size() != 1) return std::nullopt;
+    return seeds.begin()->second;
+}
+
 void DescriptorScriptPubKeyMan::LoadPQSeeds(const PQSeedMap& seeds, const CryptedPQSeedMap& cseeds)
 {
     LOCK(cs_desc_man);

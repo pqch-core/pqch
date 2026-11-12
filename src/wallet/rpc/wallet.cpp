@@ -1246,6 +1246,12 @@ RPCMethod abandontransaction();
 RPCMethod rescanblockchain();
 RPCMethod abortrescan();
 
+// vault (PQCH)
+RPCMethod getvaultkey();
+RPCMethod createvault();
+RPCMethod listvaults();
+RPCMethod recovervault();
+
 std::span<const CRPCCommand> GetWalletRPCCommands()
 {
     static const CRPCCommand commands[]{
@@ -1256,6 +1262,7 @@ std::span<const CRPCCommand> GetWalletRPCCommands()
         {"wallet", &backupwallet},
         {"wallet", &bumpfee},
         {"wallet", &psbtbumpfee},
+        {"wallet", &createvault},
         {"wallet", &createwallet},
         {"wallet", &getrecoverywords},
         {"wallet", &forgetrecoverywords},
@@ -1275,6 +1282,7 @@ std::span<const CRPCCommand> GetWalletRPCCommands()
         {"wallet", &getreceivedbylabel},
         {"wallet", &gettransaction},
         {"wallet", &getbalances},
+        {"wallet", &getvaultkey},
         {"wallet", &getwalletinfo},
         {"wallet", &importdescriptors},
         {"wallet", &importprunedfunds},
@@ -1288,11 +1296,13 @@ std::span<const CRPCCommand> GetWalletRPCCommands()
         {"wallet", &listsinceblock},
         {"wallet", &listtransactions},
         {"wallet", &listunspent},
+        {"wallet", &listvaults},
         {"wallet", &listwalletdir},
         {"wallet", &listwallets},
         {"wallet", &loadwallet},
         {"wallet", &lockunspent},
         {"wallet", &migratewallet},
+        {"wallet", &recovervault},
         {"wallet", &removeprunedfunds},
         {"wallet", &rescanblockchain},
         {"wallet", &send},

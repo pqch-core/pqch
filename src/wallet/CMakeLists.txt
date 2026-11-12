@@ -26,6 +26,7 @@ add_library(bitcoin_wallet STATIC EXCLUDE_FROM_ALL
   rpc/spend.cpp
   rpc/transactions.cpp
   rpc/util.cpp
+  rpc/vault.cpp
   rpc/wallet.cpp
   scriptpubkeyman.cpp
   spend.cpp

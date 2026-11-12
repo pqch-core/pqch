@@ -3305,8 +3305,8 @@ std::shared_ptr<CWallet> CWallet::LoadExisting(WalletContext& context, const std
             auto desc_spkm{dynamic_cast<DescriptorScriptPubKeyMan*>(spk_man)};
             if (!desc_spkm) continue;
             const std::string desc{WITH_LOCK(desc_spkm->cs_desc_man, return desc_spkm->GetWalletDescriptor().descriptor->ToString())};
-            if (!desc.starts_with("p2mr(")) {
-                error = strprintf(_("Wallet %s has an active %s descriptor, which cannot be used on this network (only p2mr()). Move the funds with another build, or remove the descriptor."), name, desc.substr(0, desc.find('(')));
+            if (!desc.starts_with("p2mr(") && !desc.starts_with("p2mr_vault(")) {
+                error = strprintf(_("Wallet %s has an active %s descriptor, which cannot be used on this network (only p2mr() and p2mr_vault()). Move the funds with another build, or remove the descriptor."), name, desc.substr(0, desc.find('(')));
                 return nullptr;
             }
         }
@@ -3863,7 +3863,7 @@ util::Result<void> CWallet::SetupFromPQMnemonic(const SecureString& words, const
 
 util::Result<std::string> CWallet::GetPQMnemonic() const
 {
-    const auto* spkm{dynamic_cast<const DescriptorScriptPubKeyMan*>(GetScriptPubKeyMan(OutputType::BECH32M, /*internal=*/false))};
+    const auto* spkm{GetPQMainScriptPubKeyMan()};
     if (!spkm || !spkm->HasPQMnemonic()) {
         return util::Error{Untranslated("This wallet has no stored recovery words: they are deleted once their backup is confirmed (forgetrecoverywords), and wallets with imported keys never had them. Check a paper copy with verifyrecoverywords.")};
     }
@@ -3876,9 +3876,46 @@ util::Result<std::string> CWallet::GetPQMnemonic() const
     return words;
 }
 
+const DescriptorScriptPubKeyMan* CWallet::GetPQMainScriptPubKeyMan() const
+{
+    const auto is_main{[](const DescriptorScriptPubKeyMan& spkm) {
+        LOCK(spkm.cs_desc_man);
+        const auto& desc{*spkm.GetWalletDescriptor().descriptor};
+        return desc.IsRange() && desc.GetOutputType() == OutputType::BECH32M && !desc.GetP2MRVault() && desc.ToString().starts_with("p2mr(");
+    }};
+    const auto* active{dynamic_cast<const DescriptorScriptPubKeyMan*>(GetScriptPubKeyMan(OutputType::BECH32M, /*internal=*/false))};
+    if (active && is_main(*active)) return active;
+    // A vault is the active receiving descriptor: the wallet's own one is among the others, the one
+    // with the recovery words if they are still stored.
+    const DescriptorScriptPubKeyMan* found{nullptr};
+    for (const ScriptPubKeyMan* spkm : GetAllScriptPubKeyMans()) {
+        const auto* desc{dynamic_cast<const DescriptorScriptPubKeyMan*>(spkm)};
+        if (!desc || !is_main(*desc) || desc->GetPQSeedIds().empty()) continue;
+        if (desc->HasPQMnemonic()) return desc;
+        if (!found) found = desc;
+    }
+    return found;
+}
+
+std::optional<p2mr::PQSeed> CWallet::GetPQWalletSeed() const
+{
+    const auto* spkm{GetPQMainScriptPubKeyMan()};
+    if (!spkm) return std::nullopt;
+    return spkm->GetOnlyPQSeed();
+}
+
+bool CWallet::IsP2MRVaultOwnerScript(const CScript& script) const
+{
+    for (const ScriptPubKeyMan* spkm : GetScriptPubKeyMans(script)) {
+        const auto* desc{dynamic_cast<const DescriptorScriptPubKeyMan*>(spkm)};
+        if (desc && desc->IsP2MRVaultOwner()) return true;
+    }
+    return false;
+}
+
 bool CWallet::HasPQMnemonic() const
 {
-    const auto* spkm{dynamic_cast<const DescriptorScriptPubKeyMan*>(GetScriptPubKeyMan(OutputType::BECH32M, /*internal=*/false))};
+    const auto* spkm{GetPQMainScriptPubKeyMan()};
     return spkm && spkm->HasPQMnemonic();
 }
 
@@ -3903,7 +3940,7 @@ util::Result<bool> CWallet::VerifyPQMnemonic(const SecureString& words, const Se
     if (!normalized) return util::Error{_("Invalid recovery words: they must be 24 words from the BIP39 English list, with a valid checksum")};
     const auto seed{p2mr::SeedFromMnemonic(*normalized, std::string_view{passphrase.data(), passphrase.size()})};
     if (!seed) return util::Error{Untranslated("Invalid recovery words")};
-    const auto* spkm{dynamic_cast<const DescriptorScriptPubKeyMan*>(GetScriptPubKeyMan(OutputType::BECH32M, /*internal=*/false))};
+    const auto* spkm{GetPQMainScriptPubKeyMan()};
     if (!spkm || spkm->GetPQSeedIds().empty()) return util::Error{Untranslated("This wallet has no post-quantum seed to compare with")};
     return spkm->GetPQSeedIds().contains(seed->Id());
 }
@@ -4057,9 +4094,16 @@ std::optional<bool> CWallet::IsInternalScriptPubKeyMan(ScriptPubKeyMan* spk_man)
     return GetScriptPubKeyMan(*type, /* internal= */ true) == desc_spk_man;
 }
 
-util::Result<std::reference_wrapper<DescriptorScriptPubKeyMan>> CWallet::AddWalletDescriptor(WalletDescriptor& desc, const FlatSigningProvider& signing_provider, const std::string& label, bool internal)
+util::Result<std::reference_wrapper<DescriptorScriptPubKeyMan>> CWallet::AddWalletDescriptor(WalletDescriptor& desc, const FlatSigningProvider& given_provider, const std::string& label, bool internal)
 {
     AssertLockHeld(cs_wallet);
+
+    // PQCH: a vault whose recovery key comes from this wallet's own seed (the owner's copy of an
+    // agent's vault) keeps that seed too, to sign the recovery leaf. Its private form never shows it.
+    FlatSigningProvider signing_provider{given_provider};
+    if (const auto vault{desc.descriptor->GetP2MRVault()}; vault && !vault->first.IsNull() && !signing_provider.pq_seeds.contains(vault->first)) {
+        if (const auto seed{GetPQWalletSeed()}; seed && seed->Id() == vault->first) signing_provider.pq_seeds.emplace(vault->first, *seed);
+    }
 
     Assert(IsWalletFlagSet(WALLET_FLAG_DESCRIPTORS));
 
@@ -4068,9 +4112,9 @@ util::Result<std::reference_wrapper<DescriptorScriptPubKeyMan>> CWallet::AddWall
     // would be read as a P2MR root nobody can spend, and the other Bitcoin types are invalid outputs.
     if (IsPQWalletChain()) {
         const std::string str{desc.descriptor->ToString()};
-        const bool p2mr{str.starts_with("p2mr(")};
+        const bool p2mr{str.starts_with("p2mr(") || str.starts_with("p2mr_vault(")};
         if (!p2mr && !str.starts_with("addr(") && !str.starts_with("raw(")) {
-            return util::Error{_("Only p2mr(), addr() and raw() descriptors can be used on this network (post-quantum outputs)")};
+            return util::Error{_("Only p2mr(), p2mr_vault(), addr() and raw() descriptors can be used on this network (post-quantum outputs)")};
         }
         if (!p2mr) {
             FlatSigningProvider out;

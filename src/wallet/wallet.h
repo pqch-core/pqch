@@ -1066,6 +1066,15 @@ public:
     bool CheckPassphrase(const SecureString& passphrase) const;
     //! PQCH: whether the recovery words are still stored (not yet deleted after the backup)
     bool HasPQMnemonic() const;
+    /** PQCH: the receiving p2mr() descriptor made from the wallet's own seed (the active one, or,
+     *  when a vault is the active receiving descriptor, the p2mr() one it replaced). */
+    const DescriptorScriptPubKeyMan* GetPQMainScriptPubKeyMan() const;
+    /** PQCH: the wallet's own post-quantum seed (from its recovery words); nullopt if it has none
+     *  or is locked. */
+    std::optional<p2mr::PQSeed> GetPQWalletSeed() const;
+    /** PQCH: whether `script` belongs to the owner's copy of a vault (contrib/pqch/COFRE.md). Such
+     *  coins are spent only through the recovery leaf (recovervault, or the p2mr_recovery option). */
+    bool IsP2MRVaultOwnerScript(const CScript& script) const;
     //! PQCH: delete the stored recovery words of every descriptor; the keys stay
     util::Result<void> ForgetPQMnemonic();
     //! PQCH: whether these words (and optional BIP39 passphrase) give this wallet's seed; never stores them
