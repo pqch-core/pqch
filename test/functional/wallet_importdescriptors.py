@@ -16,11 +16,13 @@ variants.
   and test the values returned."""
 
 import concurrent.futures
+from decimal import Decimal
 import threading
 import time
 
 from test_framework.address import key_to_p2sh_p2wpkh, key_to_p2wpkh, script_to_p2wsh
-from test_framework.blocktools import COINBASE_MATURITY
+from test_framework.blocktools import BLOCK_SUBSIDY, COINBASE_MATURITY
+from test_framework.messages import COIN
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.descriptors import descsum_create
 from test_framework.extendedkey import ExtendedPrivateKey
@@ -37,6 +39,9 @@ from test_framework.wallet_util import (
 )
 
 MISSING_KEYS_WARNING = "Not all private keys provided. Some wallet functionality may return unexpected errors"
+
+# PQCH: a regtest block pays 12.5 (Bitcoin: 50).
+SUBSIDY = Decimal(BLOCK_SUBSIDY) / COIN
 
 class ImportDescriptorsTest(BitcoinTestFramework):
     def set_test_params(self):
@@ -190,8 +195,11 @@ class ImportDescriptorsTest(BitcoinTestFramework):
             conflicting_desc = [{"desc": descsum_create("pkh(" + xpriv + "/1h/*h)"),
             "timestamp": 0, "range": [0, 10000]}]
             num_relevant_blocks = 1000
-            self.generatetoaddress(self.nodes[0], num_relevant_blocks, self.nodes[0].deriveaddresses(slow_desc[0]['desc'], [0, 0])[0])
-            self.generatetoaddress(self.nodes[0], num_relevant_blocks, self.nodes[0].deriveaddresses(conflicting_desc[0]['desc'], [0, 0])[0])
+            # PQCH: RandomX blocks are slower to mine; batches of 100 keep each call within the RPC timeout.
+            for desc in (slow_desc, conflicting_desc):
+                address = self.nodes[0].deriveaddresses(desc[0]['desc'], [0, 0])[0]
+                for _ in range(num_relevant_blocks // 100):
+                    self.generatetoaddress(self.nodes[0], 100, address)
 
             start = threading.Barrier(3)
 
@@ -700,9 +708,10 @@ class ImportDescriptorsTest(BitcoinTestFramework):
                      address,
                      solvable=True,
                      ismine=True)
-        txid = w0.sendtoaddress(address, 49.99995540)
+        # PQCH: the one mature block reward is 12.5 (Bitcoin: 50); send all of it but the fee, so no change.
+        txid = w0.sendtoaddress(address, SUBSIDY - Decimal("0.0000446"))
         self.generatetoaddress(self.nodes[0], 6, w0.getnewaddress())
-        tx = wpriv.createrawtransaction([{"txid": txid, "vout": 0}], {w0.getnewaddress(): 49.999})
+        tx = wpriv.createrawtransaction([{"txid": txid, "vout": 0}], {w0.getnewaddress(): SUBSIDY - Decimal("0.001")})
         signed_tx = wpriv.signrawtransactionwithwallet(tx)
         w1.sendrawtransaction(signed_tx['hex'])
 
