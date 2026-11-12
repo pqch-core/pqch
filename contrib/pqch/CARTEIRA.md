@@ -239,3 +239,8 @@ quânticos, mas depende de uma frase-passe forte.
 - **Carteiras de teste da primeira versão** (`p2mr(xprv…)`) já não carregam.
 - Carteiras de hardware com ML-DSA e SLH-DSA. Não são compatíveis com as carteiras BIP32 atuais.
 
+## Cofres para agentes
+
+Um programa que paga sozinho pode guardar as moedas num **cofre**: gasta-as como numa carteira
+normal, e o dono pode tirá-las de lá com a sua própria chave de recuperação, logo ou depois de um
+prazo. Ver [COFRE.md](COFRE.md).

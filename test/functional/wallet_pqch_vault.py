@@ -86,6 +86,15 @@ class PQCHWalletVaultTest(BitcoinTestFramework):
         assert owner.getaddressinfo(ca)["ismine"]
         self.generatetoaddress(node, 1, funder.getnewaddress())
 
+        self.log.info("After a restart, both wallets load with their vaults and roles")
+        self.restart_node(0)
+        for name in ("funder", "owner", "agent"):
+            node.loadwallet(name)
+        funder, owner, agent = (node.get_wallet_rpc(n) for n in ("funder", "owner", "agent"))
+        assert_equal({v["role"] for v in owner.listvaults()}, {"owner"})
+        assert_equal({(v["role"], v["active"]) for v in agent.listvaults()}, {("agent", True)})
+        assert agent.getaddressinfo(agent.getnewaddress())["parent_desc"].startswith("p2mr_vault(")
+
         self.log.info("The owner cannot spend the vault through the hot leaf, nor count it in its balance")
         assert_equal(owner.getbalance(), 0)
         assert_equal(owner.getbalances()["mine"]["untrusted_pending"], 0)
