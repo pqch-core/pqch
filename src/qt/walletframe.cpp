@@ -262,6 +262,13 @@ void WalletFrame::recoveryWords()
         walletView->recoveryWords();
 }
 
+void WalletFrame::vaults()
+{
+    WalletView *walletView = currentWalletView();
+    if (walletView)
+        walletView->vaults();
+}
+
 void WalletFrame::unlockWallet()
 {
     WalletView *walletView = currentWalletView();

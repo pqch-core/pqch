@@ -9,6 +9,7 @@
 #include <qt/clientmodel.h>
 #include <qt/guiutil.h>
 #include <qt/recoverywordsdialog.h>
+#include <qt/vaultdialog.h>
 #include <qt/optionsmodel.h>
 #include <qt/overviewpage.h>
 #include <qt/platformstyle.h>
@@ -273,6 +274,13 @@ void WalletView::recoveryWords()
             QMessageBox::warning(this, tr("Recovery words"), QString::fromStdString(util::ErrorString(res).translated));
         }
     }
+}
+
+void WalletView::vaults()
+{
+    if (!walletModel) return;
+    VaultDialog dlg(walletModel, this);
+    dlg.exec();
 }
 
 void WalletView::unlockWallet()

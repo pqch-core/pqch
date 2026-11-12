@@ -370,6 +370,8 @@ void BitcoinGUI::createActions()
     m_restore_words_action->setStatusTip(tr("Restore a wallet from its 24 recovery words"));
     m_show_words_action = new QAction(tr("&Recovery Words…"), this);
     m_show_words_action->setStatusTip(tr("Finish the backup of the 24 recovery words, or check your paper copy"));
+    m_vaults_action = new QAction(tr("Agent &Vaults…"), this);
+    m_vaults_action->setStatusTip(tr("Vaults for agents: coins an agent spends and the owner can recover with its own key"));
 
     m_close_all_wallets_action = new QAction(tr("Close All Wallets…"), this);
     m_close_all_wallets_action->setStatusTip(tr("Close all wallets"));
@@ -408,6 +410,7 @@ void BitcoinGUI::createActions()
         connect(backupWalletAction, &QAction::triggered, walletFrame, &WalletFrame::backupWallet);
         connect(changePassphraseAction, &QAction::triggered, walletFrame, &WalletFrame::changePassphrase);
         connect(m_show_words_action, &QAction::triggered, walletFrame, &WalletFrame::recoveryWords);
+        connect(m_vaults_action, &QAction::triggered, walletFrame, &WalletFrame::vaults);
         connect(signMessageAction, &QAction::triggered, [this]{ showNormalIfMinimized(); });
         connect(signMessageAction, &QAction::triggered, [this]{ gotoSignMessageTab(); });
         connect(m_load_psbt_action, &QAction::triggered, [this]{ gotoLoadPSBT(); });
@@ -604,6 +607,7 @@ void BitcoinGUI::createMenuBar()
         settings->addAction(encryptWalletAction);
         settings->addAction(changePassphraseAction);
         settings->addAction(m_show_words_action);
+        settings->addAction(m_vaults_action);
         settings->addSeparator();
         settings->addAction(m_mask_values_action);
         settings->addSeparator();
@@ -947,6 +951,7 @@ void BitcoinGUI::setWalletActionsEnabled(bool enabled)
     backupWalletAction->setEnabled(enabled);
     changePassphraseAction->setEnabled(enabled);
     m_show_words_action->setEnabled(enabled);
+    m_vaults_action->setEnabled(enabled);
     signMessageAction->setEnabled(enabled);
     verifyMessageAction->setEnabled(enabled);
     usedSendingAddressesAction->setEnabled(enabled);

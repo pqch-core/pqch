@@ -86,7 +86,9 @@ class PQCHWalletVaultTest(BitcoinTestFramework):
         assert owner.getaddressinfo(ca)["ismine"]
         self.generatetoaddress(node, 1, funder.getnewaddress())
 
-        self.log.info("The owner cannot spend the vault through the hot leaf")
+        self.log.info("The owner cannot spend the vault through the hot leaf, nor count it in its balance")
+        assert_equal(owner.getbalance(), 0)
+        assert_equal(owner.getbalances()["mine"]["untrusted_pending"], 0)
         assert_raises_rpc_error(-6, "Insufficient funds", owner.sendtoaddress, pay, 1)
 
         self.log.info("Before `older` confirmations, nothing can be recovered")

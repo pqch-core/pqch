@@ -98,6 +98,8 @@ public Q_SLOTS:
     void changePassphrase();
     //! PQCH: finish the backup of the 24 recovery words (shown once, then deleted), or check a paper copy
     void recoveryWords();
+    //! PQCH: agent vaults (contrib/pqch/COFRE.md)
+    void vaults();
     /** Ask for passphrase to unlock wallet temporarily */
     void unlockWallet();
 

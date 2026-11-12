@@ -276,6 +276,9 @@ Balance GetBalance(const CWallet& wallet, const int min_depth, bool avoid_reuse,
                 } else if (!is_trusted && wtx.InMempool()) {
                     bucket = &ret.m_mine_untrusted_pending;
                 }
+                // PQCH: the owner's copy of an agent's vault is not the owner's balance (it is only
+                // recovered, see recovervault and listvaults).
+                if (bucket && wallet.IsP2MRVaultOwnerScript(txo.GetTxOut().scriptPubKey)) bucket = nullptr;
                 if (bucket) {
                     // Get the amounts for mine
                     CAmount credit_mine = txo.GetTxOut().nValue;
