@@ -339,6 +339,92 @@ BOOST_AUTO_TEST_CASE(p2mr_two_leaves_slhdsa_recovery)
     CHECK_ERR(wrong.Verify(), SCRIPT_ERR_PQ_PUBKEY_SIZE);
 }
 
+// Timelocks work inside PQ-script leaves (they are ordinary tapscript opcodes there), so a P2MR
+// output can be a vault: a hot hybrid key for daily use, plus SLH-DSA recovery paths that only
+// open after a relative delay (CSV, BIP 112) or an absolute height (CLTV, BIP 65).
+BOOST_AUTO_TEST_CASE(p2mr_vault_timelocks)
+{
+    const auto hot_pq{MLDSAKey(7)};
+    const auto hot_ec{SchnorrKey(7)};
+    const auto recovery{SLHDSAKey(7)};
+    constexpr int64_t CSV_BLOCKS{144};
+    constexpr int64_t CLTV_HEIGHT{100000};
+    const CScript csv_leaf{CScript() << CSV_BLOCKS << OP_CHECKSEQUENCEVERIFY << OP_DROP << recovery.pubkey << OP_CHECKSIGSLHDSA};
+    const CScript cltv_leaf{CScript() << CLTV_HEIGHT << OP_CHECKLOCKTIMEVERIFY << OP_DROP << recovery.pubkey << OP_CHECKSIGSLHDSA};
+    // The hot key itself can also be delayed (a spending delay an owner can watch and react to).
+    const CScript delayed_hot{CScript() << 6 << OP_CHECKSEQUENCEVERIFY << OP_DROP
+                                        << XOnly(hot_ec) << OP_CHECKSIGVERIFY << hot_pq.pubkey << OP_CHECKSIGMLDSA};
+    const script_verify_flags flags{SCRIPT_VERIFY_P2SH | SCRIPT_VERIFY_WITNESS | SCRIPT_VERIFY_TAPROOT | SCRIPT_VERIFY_P2MR |
+                                    SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY | SCRIPT_VERIFY_CHECKSEQUENCEVERIFY};
+    // The test helper builds trees of one or two leaves, so the four paths live in two vaults:
+    // {hot, CSV recovery} and {CLTV recovery, delayed hot}; leaf indices below are per vault.
+    Spend v1{MakeTree({LeafHybrid(XOnly(hot_ec), hot_pq.pubkey), csv_leaf})};
+    Spend v2{MakeTree({cltv_leaf, delayed_hot})};
+    Spend* cur{&v1};
+    Spend& s{v1};
+
+    // The signatures commit to nSequence and nLockTime, so they are made after setting them.
+    const auto sign_hot = [&](size_t leaf) {
+        cur->SetWitness(leaf, {SignMLDSA(hot_pq.seckey, cur->SigHash(leaf, PQAlgorithm::ML_DSA_44)), SignSchnorr(hot_ec, cur->SchnorrSigHash(leaf))});
+    };
+    const auto sign_recovery = [&](size_t leaf) {
+        cur->SetWitness(leaf, {SignSLHDSA(recovery.seckey, cur->SigHash(leaf, PQAlgorithm::SLH_DSA_SHA2_128S))});
+    };
+
+    // Hot path: no delay.
+    s.tx.vin[0].nSequence = CTxIn::SEQUENCE_FINAL;
+    sign_hot(0);
+    CHECK_ERR(s.Verify(flags), SCRIPT_ERR_OK);
+
+    // Relative recovery: valid from 144 blocks after the funding transaction, not before.
+    s.tx.vin[0].nSequence = CSV_BLOCKS;
+    sign_recovery(1);
+    CHECK_ERR(s.Verify(flags), SCRIPT_ERR_OK);
+    s.tx.vin[0].nSequence = CSV_BLOCKS - 1;
+    sign_recovery(1);
+    CHECK_ERR(s.Verify(flags), SCRIPT_ERR_UNSATISFIED_LOCKTIME);
+    s.tx.vin[0].nSequence = CTxIn::SEQUENCE_LOCKTIME_DISABLE_FLAG | CSV_BLOCKS;
+    sign_recovery(1);
+    CHECK_ERR(s.Verify(flags), SCRIPT_ERR_UNSATISFIED_LOCKTIME);
+    s.tx.version = 1; // CSV needs version 2
+    s.tx.vin[0].nSequence = CSV_BLOCKS;
+    sign_recovery(1);
+    CHECK_ERR(s.Verify(flags), SCRIPT_ERR_UNSATISFIED_LOCKTIME);
+    s.tx.version = 2;
+
+    // Absolute recovery (vault 2, leaf 0): valid from block 100000, not before, and not with a final nSequence.
+    cur = &v2;
+    cur->tx.nLockTime = CLTV_HEIGHT;
+    cur->tx.vin[0].nSequence = CTxIn::MAX_SEQUENCE_NONFINAL;
+    sign_recovery(0);
+    CHECK_ERR(cur->Verify(flags), SCRIPT_ERR_OK);
+    cur->tx.nLockTime = CLTV_HEIGHT - 1;
+    sign_recovery(0);
+    CHECK_ERR(cur->Verify(flags), SCRIPT_ERR_UNSATISFIED_LOCKTIME);
+    cur->tx.nLockTime = CLTV_HEIGHT;
+    cur->tx.vin[0].nSequence = CTxIn::SEQUENCE_FINAL;
+    sign_recovery(0);
+    CHECK_ERR(cur->Verify(flags), SCRIPT_ERR_UNSATISFIED_LOCKTIME);
+    cur->tx.nLockTime = 0;
+
+    // Delayed hot path (vault 2, leaf 1): both signatures and 6 blocks; rule 2 still applies.
+    cur->tx.vin[0].nSequence = 6;
+    sign_hot(1);
+    CHECK_ERR(cur->Verify(flags), SCRIPT_ERR_OK);
+    cur->tx.vin[0].nSequence = 5;
+    sign_hot(1);
+    CHECK_ERR(cur->Verify(flags), SCRIPT_ERR_UNSATISFIED_LOCKTIME);
+    cur->tx.vin[0].nSequence = 6;
+    cur->SetWitness(1, {{}, SignSchnorr(hot_ec, cur->SchnorrSigHash(1))});
+    CHECK_ERR(cur->Verify(flags), SCRIPT_ERR_PQ_SIG_REQUIRED);
+
+    // The recovery key cannot skip the delay: the delay is part of the leaf it has to use.
+    cur = &v1;
+    s.tx.vin[0].nSequence = 0;
+    sign_recovery(1);
+    CHECK_ERR(s.Verify(flags), SCRIPT_ERR_UNSATISFIED_LOCKTIME);
+}
+
 BOOST_AUTO_TEST_CASE(p2mr_structure)
 {
     const auto key{MLDSAKey(5)};
