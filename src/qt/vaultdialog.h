@@ -11,6 +11,7 @@
 
 class UniValue;
 class WalletModel;
+class QDoubleSpinBox;
 class QLabel;
 class QLineEdit;
 class QPlainTextEdit;
@@ -36,6 +37,7 @@ private:
     QTableWidget* m_table{nullptr};
     QLabel* m_status{nullptr};
     QLineEdit* m_recover_to{nullptr};
+    QDoubleSpinBox* m_fee_rate{nullptr};
     QSpinBox* m_key_index{nullptr};
     QLineEdit* m_key_out{nullptr};
     QLineEdit* m_owner_key{nullptr};

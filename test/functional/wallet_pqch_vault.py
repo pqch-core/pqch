@@ -25,6 +25,8 @@ class PQCHWalletVaultTest(BitcoinTestFramework):
     def set_test_params(self):
         self.num_nodes = 1
         self.setup_clean_chain = True
+        # As on a quiet testnet node: no fee estimate and no -fallbackfee (recovervault must still work).
+        self.extra_args = [["-fallbackfee=0"]]
         self.legacy_bitcoin_scripts = False  # post-quantum rules from genesis (P2MR only)
         self.wallet_names = []
 
@@ -98,7 +100,7 @@ class PQCHWalletVaultTest(BitcoinTestFramework):
         self.log.info("The owner cannot spend the vault through the hot leaf, nor count it in its balance")
         assert_equal(owner.getbalance(), 0)
         assert_equal(owner.getbalances()["mine"]["untrusted_pending"], 0)
-        assert_raises_rpc_error(-6, "Insufficient funds", owner.sendtoaddress, pay, 1)
+        assert_raises_rpc_error(-6, "Insufficient funds", owner.sendtoaddress, pay, 1, fee_rate=FEE_RATE)
 
         self.log.info("Before `older` confirmations, nothing can be recovered")
         [v] = [v for v in owner.listvaults() if v["internal"]]
@@ -130,6 +132,8 @@ class PQCHWalletVaultTest(BitcoinTestFramework):
         assert_equal(res["inputs"], 1)
         assert_equal(res["waiting"], [])
         assert_equal(res["amount"] + res["fee"], total)
+        assert_equal(res["fee_source"], "given")
+        assert FEE_RATE <= res["fee_rate"] < FEE_RATE + 1
         tx = node.getrawtransaction(res["txid"], True)
         wit = tx["vin"][0]["txinwitness"]
         assert_equal(len(wit), 3)
@@ -153,8 +157,12 @@ class PQCHWalletVaultTest(BitcoinTestFramework):
         addr0 = agent.getnewaddress()
         funder.send({addr0: 2}, fee_rate=FEE_RATE)
         self.generatetoaddress(node, 1, funder.getnewaddress())
-        res = owner.recovervault(dest, FEE_RATE)
+        self.log.info("Without fee_rate and without a fee estimate, the recovery uses the default rate")
+        assert_raises_rpc_error(-6, "Fee estimation failed", owner.sendtoaddress, pay, 1)  # what a plain send does
+        res = owner.recovervault(dest)
         assert_equal(res["inputs"], 1)
+        assert_equal(res["fee_source"], "default")
+        assert 10 <= res["fee_rate"] < 11
         tx = node.getrawtransaction(res["txid"], True)
         assert "OP_CHECKSEQUENCEVERIFY" not in node.decodescript(tx["vin"][0]["txinwitness"][1])["asm"]
 

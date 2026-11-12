@@ -122,6 +122,11 @@ Antes de começar:
    - Envia numa só transação, para um endereço novo do dono (ou para o endereço indicado), todas as
      moedas do cofre que já têm confirmações suficientes.
    - As que ainda não podem ser recuperadas aparecem em `waiting`, com os blocos em falta.
+   - Taxa: com `fee_rate=N` usa N quanta/vB. Sem ela usa a estimativa do nó; se o nó não tiver
+     estimativa nem `-fallbackfee` (testnet calma, nó acabado de arrancar), usa 10 quanta/vB, ou
+     mais se o mempool o exigir. A resposta diz a taxa paga (`fee_rate`) e de onde veio
+     (`fee_source`: `given`, `estimated` ou `default`). Uma recuperação de emergência nunca falha por
+     falta de estimativa.
    - Se as chaves do agente foram roubadas: recupere logo e deixe de usar esse cofre.
 
 ## Restaurar

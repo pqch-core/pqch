@@ -21,9 +21,11 @@
 #include <script/p2mr.h>
 #include <univalue.h>
 #include <util/strencodings.h>
+#include <util/string.h>
 #include <util/time.h>
 #include <util/translation.h>
 #include <wallet/coincontrol.h>
+#include <wallet/fees.h>
 #include <wallet/rpc/util.h>
 #include <wallet/rpc/wallet.h>
 #include <wallet/scriptpubkeyman.h>
@@ -32,9 +34,14 @@
 #include <wallet/walletutil.h>
 
 #include <chainparams.h>
+#include <policy/policy.h>
 
 namespace wallet {
 namespace {
+
+/** Fee rate of a recovery when the node cannot estimate one and has no -fallbackfee: an emergency
+ *  recovery must not fail for want of fee data (a quiet chain, a node just started). In quanta/vB. */
+constexpr CAmount DEFAULT_RECOVERY_FEE_RATE{10};
 
 std::string PathString(const p2mr::Path& path)
 {
@@ -287,7 +294,8 @@ RPCMethod recovervault()
         "If the agent's keys were stolen, recover at once and stop using the vault: the thief can spend through the hot leaf too.\n",
         {
             {"address", RPCArg::Type::STR, RPCArg::DefaultHint{"a new address of this wallet"}, "Where the coins go"},
-            {"fee_rate", RPCArg::Type::AMOUNT, RPCArg::DefaultHint{"wallet -paytxfee or estimate"}, "Fee rate in " + CURRENCY_ATOM + "/vB"},
+            {"fee_rate", RPCArg::Type::AMOUNT, RPCArg::DefaultHint{"estimate"}, "Fee rate in " + CURRENCY_ATOM + "/vB. Without it the node's estimate is used, or, "
+             "if the node has none and no -fallbackfee, " + util::ToString(DEFAULT_RECOVERY_FEE_RATE) + " " + CURRENCY_ATOM + "/vB (more if the mempool requires it)"},
         },
         RPCResult{
             RPCResult::Type::OBJ, "", "",
@@ -296,6 +304,8 @@ RPCMethod recovervault()
                 {RPCResult::Type::NUM, "inputs", "Number of coins recovered"},
                 {RPCResult::Type::STR_AMOUNT, "amount", "Value sent to the address (after the fee)"},
                 {RPCResult::Type::STR_AMOUNT, "fee", "The fee"},
+                {RPCResult::Type::NUM, "fee_rate", "The fee rate paid, in " + CURRENCY_ATOM + "/vB"},
+                {RPCResult::Type::STR, "fee_source", "given (fee_rate), estimated (the node's estimate or -fallbackfee) or default (no estimate: the default rate above)"},
                 {RPCResult::Type::ARR, "waiting", "Coins not yet recoverable", {
                     {RPCResult::Type::OBJ, "", "", {
                         {RPCResult::Type::STR_HEX, "txid", ""},
@@ -332,7 +342,17 @@ RPCMethod recovervault()
     CCoinControl cc;
     cc.m_p2mr_recovery = true;
     cc.m_allow_other_inputs = false;
-    if (!request.params[1].isNull()) cc.m_feerate = CFeeRate{AmountFromValue(request.params[1], /*decimals=*/3)};
+    std::string fee_source{"given"};
+    if (!request.params[1].isNull()) {
+        cc.m_feerate = CFeeRate{AmountFromValue(request.params[1], /*decimals=*/3)};
+    } else if (GetMinimumFeeRate(*pwallet, cc).fee_reason == FeeReason::FALLBACK && !pwallet->m_allow_fallback_fee) {
+        // No estimate and no -fallbackfee: CreateTransaction would refuse. Use the default rate, but
+        // never below what the mempool and the wallet's minimums require.
+        cc.m_feerate = std::max({CFeeRate{DEFAULT_RECOVERY_FEE_RATE * 1000}, pwallet->chain().mempoolMinFee(), GetRequiredFeeRate(*pwallet)});
+        fee_source = "default";
+    } else {
+        fee_source = "estimated";
+    }
 
     CAmount total{0};
     int inputs{0};
@@ -367,6 +387,9 @@ RPCMethod recovervault()
     obj.pushKV("inputs", inputs);
     obj.pushKV("amount", ValueFromAmount(total - res->fee));
     obj.pushKV("fee", ValueFromAmount(res->fee));
+    const int64_t vsize{GetVirtualTransactionSize(*res->tx)};
+    obj.pushKV("fee_rate", UniValue{UniValue::VNUM, strprintf("%.3f", static_cast<double>(res->fee) / vsize)});
+    obj.pushKV("fee_source", fee_source);
     obj.pushKV("waiting", waiting);
     return obj;
 },

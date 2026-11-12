@@ -11,6 +11,7 @@
 
 #include <QApplication>
 #include <QClipboard>
+#include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -81,6 +82,13 @@ VaultDialog::VaultDialog(WalletModel* model, QWidget* parent)
         m_recover_to = new QLineEdit;
         m_recover_to->setPlaceholderText(tr("Address for the recovered coins (empty: a new address of this wallet)"));
         row->addWidget(m_recover_to, 1);
+        m_fee_rate = new QDoubleSpinBox;
+        m_fee_rate->setRange(0, 10000);
+        m_fee_rate->setDecimals(1);
+        m_fee_rate->setSuffix(tr(" quanta/vB"));
+        m_fee_rate->setSpecialValueText(tr("Automatic fee"));
+        m_fee_rate->setToolTip(tr("Fee rate of the recovery. Automatic: the node's estimate, or 10 quanta/vB if it has none."));
+        row->addWidget(m_fee_rate);
         auto* recover = new QPushButton(tr("Recover now"));
         recover->setToolTip(tr("Owner: send every vault coin that can be recovered to the address, through the recovery key"));
         row->addWidget(recover);
@@ -217,10 +225,15 @@ void VaultDialog::recover()
     if (QMessageBox::question(this, windowTitle(), tr("Send every vault coin that can be recovered now to %1?")
                               .arg(m_recover_to->text().trimmed().isEmpty() ? tr("a new address of this wallet") : m_recover_to->text().trimmed())) != QMessageBox::Yes) return;
     UniValue params{UniValue::VARR};
-    if (!m_recover_to->text().trimmed().isEmpty()) params.push_back(m_recover_to->text().trimmed().toStdString());
+    const QString to{m_recover_to->text().trimmed()};
+    params.push_back(to.isEmpty() ? UniValue{} : UniValue{to.toStdString()});
+    if (m_fee_rate->value() > 0) params.push_back(UniValue{UniValue::VNUM, QString::number(m_fee_rate->value(), 'f', 1).toStdString()});
     if (const auto res{Call("recovervault", params, /*unlock=*/true)}) {
-        QString text{tr("Recovered %1 PQCH from %n coin(s) (fee %2 PQCH).", "", (*res)["inputs"].getInt<int>())
-                     .arg(QString::fromStdString((*res)["amount"].getValStr()), QString::fromStdString((*res)["fee"].getValStr()))};
+        const std::string source{(*res)["fee_source"].getValStr()};
+        const QString how{source == "given" ? tr("the rate you chose") : source == "estimated" ? tr("the node's estimate") : tr("the default rate, since the node has no estimate")};
+        QString text{tr("Recovered %1 PQCH from %n coin(s) (fee %2 PQCH, %3 quanta/vB: %4).", "", (*res)["inputs"].getInt<int>())
+                     .arg(QString::fromStdString((*res)["amount"].getValStr()), QString::fromStdString((*res)["fee"].getValStr()),
+                          QString::fromStdString((*res)["fee_rate"].getValStr()), how)};
         if (!(*res)["waiting"].empty()) text += " " + tr("%n coin(s) must wait longer.", "", static_cast<int>((*res)["waiting"].size()));
         QMessageBox::information(this, windowTitle(), text + "\n" + QString::fromStdString((*res)["txid"].get_str()));
     }
