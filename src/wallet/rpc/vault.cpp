@@ -176,7 +176,8 @@ RPCMethod createvault()
     }
 
     LOCK(pwallet->cs_wallet);
-    const p2mr::PQSeed vault_seed{p2mr::VaultSeed(WalletSeedOrThrow(*pwallet), static_cast<uint32_t>(index))};
+    const p2mr::PQSeed wallet_seed{WalletSeedOrThrow(*pwallet)};
+    const p2mr::PQSeed vault_seed{p2mr::VaultSeed(wallet_seed, static_cast<uint32_t>(index))};
     const int64_t now{GetTime()};
     UniValue descriptors(UniValue::VARR), owner_import(UniValue::VARR);
     for (const bool internal : {false, true}) {
@@ -186,6 +187,12 @@ RPCMethod createvault()
         std::string error;
         auto parsed{Parse(desc_str, keys, error, /*require_checksum=*/false)};
         if (parsed.size() != 1) throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid owner_key or vault: " + error); // the parser's errors never quote the seed
+        // The owner's key must come from another wallet: with its own key this wallet would own the
+        // vault, so it could not spend from it as the agent (and its new addresses would be a vault
+        // only it recovers).
+        if (const auto vault{parsed[0]->GetP2MRVault()}; vault && vault->first == wallet_seed.Id()) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "owner_key is this wallet's own recovery key. Make the vault in the agent's wallet, with the key from getvaultkey in the owner's wallet");
+        }
         std::string priv;
         if (!parsed[0]->ToPrivateString(keys, priv)) throw JSONRPCError(RPC_WALLET_ERROR, "Could not write the vault descriptor");
         const std::string pub{parsed[0]->ToString()};
@@ -297,7 +304,7 @@ RPCMethod recovervault()
         "Coins that are still too young, or not yet confirmed, are left and listed under `waiting`. Requires the wallet to be unlocked if it is encrypted.\n"
         "If the agent's keys were stolen, recover at once and stop using the vault: the thief can spend through the hot leaf too.\n",
         {
-            {"address", RPCArg::Type::STR, RPCArg::DefaultHint{"a new address of this wallet"}, "Where the coins go"},
+            {"address", RPCArg::Type::STR, RPCArg::DefaultHint{"a new address of this wallet, never a vault's"}, "Where the coins go (not an address of a vault this wallet owns)"},
             {"fee_rate", RPCArg::Type::AMOUNT, RPCArg::DefaultHint{"estimate"}, "Fee rate in " + CURRENCY_ATOM + "/vB. Without it the node's estimate is used, or, "
              "if the node has none and no -fallbackfee, " + util::ToString(DEFAULT_RECOVERY_FEE_RATE) + " " + CURRENCY_ATOM + "/vB (more if the mempool requires it)"},
         },
@@ -335,12 +342,17 @@ RPCMethod recovervault()
 
     CTxDestination dest;
     if (request.params[0].isNull()) {
-        auto res{pwallet->GetNewDestination(OutputType::BECH32M, "")};
+        // Never a vault address, even when a vault gives this wallet's new addresses: the coins
+        // would go back into a vault.
+        auto res{pwallet->GetNewPQMainDestination("")};
         if (!res) throw JSONRPCError(RPC_WALLET_KEYPOOL_RAN_OUT, util::ErrorString(res).original);
         dest = *res;
     } else {
         dest = DecodeDestination(request.params[0].get_str());
         if (!IsValidDestination(dest)) throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid address");
+        if (pwallet->IsP2MRVaultOwnerScript(GetScriptForDestination(dest))) {
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "This address is in a vault this wallet owns: the coins would go back into the vault");
+        }
     }
 
     CCoinControl cc;

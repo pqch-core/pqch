@@ -44,6 +44,9 @@ class PQCHWalletVaultTest(BitcoinTestFramework):
 
         self.log.info("The owner gives a recovery key; the agent makes the vault with it")
         key = owner.getvaultkey()["key"]
+        # Found on the testnet (0.2.6): with its own key a wallet made a vault it could only recover.
+        assert_raises_rpc_error(-8, "this wallet's own recovery key", owner.createvault, key, OLDER)
+        assert_equal(owner.listvaults(), [])
         assert key.startswith("slh([") and key.endswith(")")
         assert_equal(owner.getvaultkey(0)["key"], key)
         assert owner.getvaultkey(1)["key"] != key
@@ -158,7 +161,11 @@ class PQCHWalletVaultTest(BitcoinTestFramework):
         self.log.info("older(0): the owner can recover at once (emergency button)")
         key1 = owner.getvaultkey(1)["key"]
         vault0 = agent.createvault(key1, 0, 1)
-        assert all(r["success"] for r in owner.importdescriptors(vault0["owner_import"]))
+        # The owner makes its copy of this vault its active receiving descriptor: then its new
+        # addresses are vault addresses, and a recovery must still never go back into the vault.
+        owner_import = [dict(item, active=True) for item in vault0["owner_import"]]
+        assert all(r["success"] for r in owner.importdescriptors(owner_import))
+        assert owner.getaddressinfo(owner.getnewaddress())["parent_desc"].startswith("p2mr_vault(")
         vaults = agent.listvaults()
         assert_equal(len(vaults), 4)
         assert_equal({v["older"] for v in vaults if v["active"]}, {0})
@@ -167,8 +174,12 @@ class PQCHWalletVaultTest(BitcoinTestFramework):
         self.generatetoaddress(node, 1, funder.getnewaddress())
         self.log.info("Without fee_rate and without a fee estimate, the recovery uses the default rate")
         assert_raises_rpc_error(-6, "Fee estimation failed", owner.sendtoaddress, pay, 1)  # what a plain send does
-        res = owner.recovervault(dest)
+        assert_raises_rpc_error(-5, "back into the vault", owner.recovervault, owner.getnewaddress())
+        res = owner.recovervault()  # no address: a new one of the owner's own p2mr() descriptor
         assert_equal(res["inputs"], 1)
+        [out] = node.getrawtransaction(res["txid"], True)["vout"]
+        info = owner.getaddressinfo(out["scriptPubKey"]["address"])
+        assert info["ismine"] and info["parent_desc"].startswith("p2mr("), info
         assert_equal(res["fee_source"], "default")
         assert 10 <= res["fee_rate"] < 11
         tx = node.getrawtransaction(res["txid"], True)

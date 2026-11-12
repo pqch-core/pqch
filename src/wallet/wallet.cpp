@@ -2731,6 +2731,17 @@ util::Result<CTxDestination> CWallet::GetNewDestination(const OutputType type, c
     return op_dest;
 }
 
+util::Result<CTxDestination> CWallet::GetNewPQMainDestination(const std::string& label)
+{
+    LOCK(cs_wallet);
+    // GetPQMainScriptPubKeyMan() gives a const pointer to one of this wallet's own managers.
+    auto* spkm{const_cast<DescriptorScriptPubKeyMan*>(GetPQMainScriptPubKeyMan())};
+    if (!spkm) return util::Error{_("Error: this wallet has no post-quantum receiving addresses of its own.")};
+    auto op_dest{spkm->GetNewDestination(OutputType::BECH32M)};
+    if (op_dest) SetAddressBook(*op_dest, label, AddressPurpose::RECEIVE);
+    return op_dest;
+}
+
 util::Result<CTxDestination> CWallet::GetNewChangeDestination(const OutputType type)
 {
     LOCK(cs_wallet);

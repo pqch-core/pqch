@@ -1075,6 +1075,9 @@ public:
     /** PQCH: whether `script` belongs to the owner's copy of a vault (contrib/pqch/COFRE.md). Such
      *  coins are spent only through the recovery leaf (recovervault, or the p2mr_recovery option). */
     bool IsP2MRVaultOwnerScript(const CScript& script) const;
+    /** PQCH: a new receiving address of the wallet's own p2mr() descriptor, never of a vault (even
+     *  when a vault gives the wallet's new addresses). */
+    util::Result<CTxDestination> GetNewPQMainDestination(const std::string& label);
     //! PQCH: delete the stored recovery words of every descriptor; the keys stay
     util::Result<void> ForgetPQMnemonic();
     //! PQCH: whether these words (and optional BIP39 passphrase) give this wallet's seed; never stores them

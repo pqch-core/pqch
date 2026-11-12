@@ -96,7 +96,10 @@ Antes de começar:
    - Por omissão, o cofre passa a dar os endereços novos de receber e de troco desta carteira. Assim,
      o troco dos pagamentos do agente fica no cofre.
    - A resposta traz `owner_import`. **Esse texto contém a semente do cofre.** Entregue-o ao dono
-     por um canal privado e apague as cópias intermédias.
+     por um canal privado e apague as cópias intermédias. Na interface gráfica fica escondido: o
+     botão *Copy* copia-o sem o mostrar, e *Show* mostra-o só se for preciso (não o fotografe).
+   - A chave do dono tem de vir de **outra** carteira. Com a chave da própria carteira, o
+     `createvault` recusa: essa carteira ficaria dona do cofre e não o poderia gastar como agente.
 
 3. **Dono**, importa o cofre:
 
@@ -121,7 +124,9 @@ Antes de começar:
    ```
 
    - Envia numa só transação, para um endereço novo do dono (ou para o endereço indicado), todas as
-     moedas do cofre que já têm confirmações suficientes.
+     moedas do cofre que já têm confirmações suficientes. O endereço novo é sempre da carteira do
+     próprio dono (`p2mr()`), nunca de um cofre; um endereço de um cofre que esta carteira possui é
+     recusado, porque as moedas voltariam para o cofre.
    - As que ainda não podem ser recuperadas aparecem em `waiting`, com os blocos em falta.
    - Taxa: com `fee_rate=N` usa N quanta/vB. Sem ela usa a estimativa do nó; se o nó não tiver
      estimativa nem `-fallbackfee` (testnet calma, nó acabado de arrancar), usa 10 quanta/vB, ou

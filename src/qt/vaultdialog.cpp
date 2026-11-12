@@ -54,7 +54,10 @@ QString Delay(int blocks)
 VaultDialog::VaultDialog(WalletModel* model, QWidget* parent)
     : QDialog(parent, GUIUtil::dialog_flags), m_model(model)
 {
-    setWindowTitle(tr("Agent vaults"));
+    // The wallet's name in the title: the steps happen in two wallets, and doing one in the wrong
+    // wallet is the easiest mistake to make.
+    const QString wallet{model->getWalletName().isEmpty() ? tr("[default wallet]") : model->getWalletName()};
+    setWindowTitle(tr("Agent vaults — wallet %1").arg(wallet));
     setMinimumSize(760, 520);
     auto* layout = new QVBoxLayout(this);
     layout->addWidget(Note(tr("A <b>vault</b> holds the coins of an agent (a program that pays by itself). The agent's wallet spends them at any time; "
@@ -131,10 +134,21 @@ VaultDialog::VaultDialog(WalletModel* model, QWidget* parent)
         m_import_out = new QPlainTextEdit;
         m_import_out->setReadOnly(true);
         v->addWidget(m_import_out, 1);
+        auto* buttons = new QHBoxLayout;
         auto* copy = new QPushButton(tr("Copy"));
-        v->addWidget(copy, 0, Qt::AlignLeft);
+        copy->setToolTip(tr("Copies the text without showing it"));
+        buttons->addWidget(copy);
+        m_show_import = new QPushButton(tr("Show"));
+        m_show_import->setCheckable(true);
+        m_show_import->setEnabled(false);
+        buttons->addWidget(m_show_import);
+        buttons->addStretch(1);
+        v->addLayout(buttons);
         connect(create, &QPushButton::clicked, this, &VaultDialog::createVault);
-        connect(copy, &QPushButton::clicked, this, [this] { QApplication::clipboard()->setText(m_import_out->toPlainText()); });
+        connect(copy, &QPushButton::clicked, this, [this] {
+            if (!m_owner_import.isEmpty()) QApplication::clipboard()->setText(m_owner_import);
+        });
+        connect(m_show_import, &QPushButton::toggled, this, &VaultDialog::showOwnerImport);
         tabs->addTab(page, tr("Agent"));
     }
 
@@ -244,6 +258,19 @@ void VaultDialog::recover()
     refresh();
 }
 
+void VaultDialog::showOwnerImport(bool show)
+{
+    m_show_import->setText(show ? tr("Hide") : tr("Show"));
+    if (m_owner_import.isEmpty()) {
+        m_import_out->clear();
+    } else if (show) {
+        m_import_out->setPlainText(m_owner_import);
+    } else {
+        m_import_out->setPlainText(tr("Hidden: this text holds the vault's seed. Use Copy to pass it on without showing it, "
+                                      "or Show if you must read it (do not photograph it)."));
+    }
+}
+
 void VaultDialog::showKey()
 {
     UniValue params{UniValue::VARR};
@@ -262,7 +289,10 @@ void VaultDialog::createVault()
     params.push_back(m_older->value());
     params.push_back(m_vault_index->value());
     if (const auto res{Call("createvault", params, /*unlock=*/true)}) {
-        m_import_out->setPlainText(QString::fromStdString((*res)["owner_import"].write()));
+        m_owner_import = QString::fromStdString((*res)["owner_import"].write());
+        m_show_import->setEnabled(true);
+        m_show_import->setChecked(false);
+        showOwnerImport(false);
         refresh();
     }
 }

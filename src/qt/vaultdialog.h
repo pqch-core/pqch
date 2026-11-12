@@ -15,6 +15,7 @@ class QDoubleSpinBox;
 class QLabel;
 class QLineEdit;
 class QPlainTextEdit;
+class QPushButton;
 class QSpinBox;
 class QTableWidget;
 
@@ -44,6 +45,11 @@ private:
     QSpinBox* m_older{nullptr};
     QSpinBox* m_vault_index{nullptr};
     QPlainTextEdit* m_import_out{nullptr};
+    QPushButton* m_show_import{nullptr};
+    //! What the owner imports (holds the vault's seed): shown only on request, so that it is not
+    //! on the screen (or in a photo of it) by default.
+    QString m_owner_import;
+    void showOwnerImport(bool show);
     QPlainTextEdit* m_import_in{nullptr};
 
     /** Runs a wallet RPC; shows the error and returns nullopt if it fails. */
