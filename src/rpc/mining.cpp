@@ -529,6 +529,7 @@ static RPCMethod getmininginfo()
                         {RPCResult::Type::NUM, "difficulty", "The current difficulty"},
                         {RPCResult::Type::STR_HEX, "target", "The current target"},
                         {RPCResult::Type::NUM, "networkhashps", "The network hashes per second"},
+                        {RPCResult::Type::NUM, "localhashps", "PQCH: hashes per second of this node's own miner (generate* RPCs), averaged over the time it spent searching in the last 10 minutes; 0 if it has not mined in that time"},
                         {RPCResult::Type::NUM, "pooledtx", "The size of the mempool"},
                         {RPCResult::Type::STR_AMOUNT, "blockmintxfee", "Minimum feerate of packages selected for block inclusion in " + CURRENCY_UNIT + "/kvB"},
                         {RPCResult::Type::STR, "chain", "current network name (" LIST_CHAIN_NAMES ")"},
@@ -570,6 +571,7 @@ static RPCMethod getmininginfo()
     obj.pushKV("difficulty", GetDifficulty(tip));
     obj.pushKV("target", GetTarget(tip, chainman.GetConsensus().powLimit).GetHex());
     obj.pushKV("networkhashps",    getnetworkhashps().HandleRequest(request));
+    obj.pushKV("localhashps", RandomXMiningHashrate());
     obj.pushKV("pooledtx", mempool.size());
     const auto mining_options{node::FlattenMiningOptions(node.mining_args)};
     obj.pushKV("blockmintxfee", ValueFromAmount(CHECK_NONFATAL(mining_options.block_min_fee_rate)->GetFeePerK()));

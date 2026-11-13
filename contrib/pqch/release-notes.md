@@ -4,6 +4,9 @@
 
 **Changes**
 Since v0.2.3 (testnet trial; no consensus change):
+- `getmininginfo` gains `localhashps`: hashes per second of this node's own miner (generate*),
+  over the time it spent searching in the last 10 minutes. Compare it with `networkhashps` to see
+  the share of blocks a machine should win.
 - Mining: `generatetoaddress` / `generatetodescriptor` stop searching as soon as another block
   arrives and start again on top of it. Before, a slow miner kept hashing on the old tip for up to
   an hour, so with 1-minute blocks almost all of its work went to orphans (on the testnet a laptop

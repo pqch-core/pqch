@@ -77,6 +77,8 @@ class MiningTest(BitcoinTestFramework):
         assert_equal(mining_info['blocks'], 200)
         assert_equal(mining_info['currentblocktx'], 0)
         assert_equal(mining_info['currentblockweight'], DEFAULT_BLOCK_RESERVED_WEIGHT)
+        # PQCH: this node has just mined, so its own hash rate is known.
+        assert_greater_than(mining_info['localhashps'], 0)
 
         self.log.info('test blockversion')
         # PQCH: 1081 = 1337 without bit 8, the merged mining (AuxPoW) bit, which the miner always clears.
@@ -448,6 +450,8 @@ class MiningTest(BitcoinTestFramework):
         assert_equal(round(mining_info['next']['difficulty'], 10), Decimal('0.0000000005'))
         assert_equal(round(mining_info['networkhashps'], 5), Decimal('0.00333'))
         assert_equal(mining_info['pooledtx'], 0)
+        # PQCH: restarted since it last mined, so no hash rate of its own yet.
+        assert_equal(mining_info['localhashps'], 0)
 
         self.log.info("getblocktemplate: Test default witness commitment")
         txid = int(self.wallet.send_self_transfer(from_node=node)['wtxid'], 16)

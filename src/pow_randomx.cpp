@@ -19,6 +19,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <chrono>
 #include <deque>
 #include <limits>
 #include <mutex>
@@ -371,6 +372,47 @@ struct SearchVMs {
 };
 } // namespace
 
+// PQCH: hash rate of the built-in miner (getmininginfo "localhashps"). Each search adds how many
+// hashes it did and for how long (dataset and VM set-up left out); the rate is the total over the
+// searches that ended in the last RATE_WINDOW. A steady clock, so -mocktime does not affect it.
+namespace {
+constexpr auto RATE_WINDOW{std::chrono::minutes{10}};
+struct RateSample {
+    std::chrono::steady_clock::time_point end;
+    double seconds;
+    uint64_t hashes;
+};
+Mutex g_rate_mutex;
+std::deque<RateSample> g_rate_samples GUARDED_BY(g_rate_mutex);
+
+void PruneRate(std::chrono::steady_clock::time_point now) EXCLUSIVE_LOCKS_REQUIRED(g_rate_mutex)
+{
+    while (!g_rate_samples.empty() && now - g_rate_samples.front().end > RATE_WINDOW) g_rate_samples.pop_front();
+}
+
+void RecordRate(double seconds, uint64_t hashes)
+{
+    if (hashes == 0 || seconds <= 0) return;
+    const auto now{std::chrono::steady_clock::now()};
+    LOCK(g_rate_mutex);
+    PruneRate(now);
+    g_rate_samples.push_back({now, seconds, hashes});
+}
+} // namespace
+
+double RandomXMiningHashrate()
+{
+    LOCK(g_rate_mutex);
+    PruneRate(std::chrono::steady_clock::now());
+    double seconds{0};
+    uint64_t hashes{0};
+    for (const auto& s : g_rate_samples) {
+        seconds += s.seconds;
+        hashes += s.hashes;
+    }
+    return seconds > 0 ? hashes / seconds : 0;
+}
+
 static Mutex g_search_mutex;
 static SearchVMs g_search_vms GUARDED_BY(g_search_mutex);
 
@@ -390,6 +432,7 @@ bool RandomXMiner::Search(CBlockHeader& header, const uint256& seed, unsigned th
     std::atomic<bool> found{false};
     std::atomic<uint32_t> winner{0};
     std::vector<std::thread> workers;
+    const auto start{std::chrono::steady_clock::now()};
     for (unsigned t = 0; t < threads; ++t) {
         workers.emplace_back([&, t] {
             CBlockHeader h{header};
@@ -407,6 +450,7 @@ bool RandomXMiner::Search(CBlockHeader& header, const uint256& seed, unsigned th
         });
     }
     for (auto& w : workers) w.join();
+    RecordRate(std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count(), done.load());
     max_tries -= std::min<uint64_t>(max_tries, done.load());
     if (found) {
         header.nNonce = winner;

@@ -122,6 +122,12 @@ private:
     std::unique_ptr<Impl> m_impl;
 };
 
+/**
+ * PQCH: hashes per second of this node's built-in miner (generate* RPCs), over the searches that
+ * ended in the last 10 minutes, counting only the time spent hashing. 0 if it has not mined lately.
+ */
+double RandomXMiningHashrate();
+
 /** Set from -randomxfastmining: whether the built-in miner (generate* RPCs) uses fast mode. */
 extern std::atomic<bool> g_randomx_fast_mining;
 /** Set from -randomxminingthreads: threads of the built-in miner (0 = one per CPU core). */
