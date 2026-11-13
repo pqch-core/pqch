@@ -4,6 +4,10 @@
 
 **Changes**
 Since v0.2.3 (testnet trial; no consensus change):
+- Mining: `generatetoaddress` / `generatetodescriptor` stop searching as soon as another block
+  arrives and start again on top of it. Before, a slow miner kept hashing on the old tip for up to
+  an hour, so with 1-minute blocks almost all of its work went to orphans (on the testnet a laptop
+  with 2 threads won 1 block in 600).
 - Agent vaults (`contrib/pqch/COFRE.md`): an agent's coins in a P2MR vault that its owner can take back
   with a post-quantum recovery key, at once or after a timelock of up to 65,535 blocks. New RPCs
   `getvaultkey`, `createvault`, `listvaults`, `recovervault`, and the dialog **Settings → Agent Vaults…**.

@@ -64,6 +64,7 @@
 #include <versionbits.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -176,9 +177,15 @@ static Mutex g_rx_miner_mutex;
 static std::unique_ptr<RandomXMiner> g_rx_miner GUARDED_BY(g_rx_miner_mutex);
 static bool g_rx_miner_fast GUARDED_BY(g_rx_miner_mutex){false};
 
-static bool GenerateBlock(ChainstateManager& chainman, CBlock&& block, uint64_t& max_tries, std::shared_ptr<const CBlock>& block_out, bool process_new_block)
+/**
+ * Mines `block`. With `stale` given (generatetoaddress, generatetodescriptor), the search stops as
+ * soon as the chain tip is no longer the block's parent, sets *stale and returns false: a block
+ * found on an old tip would only be an orphan, so the caller makes a new template instead.
+ */
+static bool GenerateBlock(ChainstateManager& chainman, CBlock&& block, uint64_t& max_tries, std::shared_ptr<const CBlock>& block_out, bool process_new_block, bool* stale = nullptr)
 {
     block_out.reset();
+    if (stale) *stale = false;
     block.hashMerkleRoot = BlockMerkleRoot(block);
 
     // PQCH: the proof of work is RandomX, keyed by an earlier block of the chain being extended.
@@ -192,7 +199,8 @@ static bool GenerateBlock(ChainstateManager& chainman, CBlock&& block, uint64_t&
     {
         // The shared miner keeps the fast-mode dataset between calls when -randomxfastmining is set.
         // Concurrent generate* calls are serialised: they would only compete for the same CPU.
-        // The lock is released before the block is processed, so it is never held with cs_main.
+        // The lock is released before the block is processed; while searching, cs_main is only
+        // taken briefly (after this lock) to see whether the tip moved.
         LOCK(g_rx_miner_mutex);
         if (rx_seed && (!g_rx_miner || g_rx_miner_fast != g_randomx_fast_mining.load())) {
             g_rx_miner.reset(); // free a previous dataset before building a new one
@@ -205,10 +213,27 @@ static bool GenerateBlock(ChainstateManager& chainman, CBlock&& block, uint64_t&
                                                                          : g_randomx_mining_threads.load()};
             const uint32_t nbits{block.nBits};
             CBlockHeader header = block;
-            g_rx_miner->Search(header, *rx_seed, threads, max_tries,
+            // PQCH: stop when another block arrives. Without this a slow miner kept hashing on the
+            // old tip until it found a block or ran out of tries (up to an hour on a laptop), so
+            // with 1-minute blocks almost all of its work went to orphans (testnet, 13 nov. 2026).
+            // Lock order: g_rx_miner_mutex, then RandomX's search mutex, then cs_main (never reversed).
+            std::atomic<bool> tip_moved{false}; // the search threads call the check below concurrently
+            const bool found{g_rx_miner->Search(header, *rx_seed, threads, max_tries,
                                [&](const uint256& hash) { return CheckProofOfWork(hash, nbits, consensus); },
-                               [&] { return bool{chainman.m_interrupt}; });
+                               [&] {
+                                   if (chainman.m_interrupt) return true;
+                                   if (!stale) return false;
+                                   if (tip_moved) return true;
+                                   if (WITH_LOCK(::cs_main, return chainman.ActiveChain().Tip()->GetBlockHash()) != block.hashPrevBlock) {
+                                       tip_moved = true;
+                                   }
+                                   return tip_moved.load();
+                               })};
             block.nNonce = header.nNonce;
+            if (!found && tip_moved) {
+                *stale = true;
+                return false;
+            }
         } else {
             while (max_tries > 0 && block.nNonce < std::numeric_limits<uint32_t>::max() && !CheckProofOfWork(block.GetHash(), block.nBits, consensus) && !chainman.m_interrupt) {
                 ++block.nNonce;
@@ -242,7 +267,9 @@ static UniValue generateBlocks(ChainstateManager& chainman, Mining& miner, const
         CHECK_NONFATAL(block_template);
 
         std::shared_ptr<const CBlock> block_out;
-        if (!GenerateBlock(chainman, block_template->getBlock(), nMaxTries, block_out, /*process_new_block=*/true)) {
+        bool stale{false};
+        if (!GenerateBlock(chainman, block_template->getBlock(), nMaxTries, block_out, /*process_new_block=*/true, &stale)) {
+            if (stale && nMaxTries > 0) continue; // a new block arrived: mine on top of it
             break;
         }
 
