@@ -97,11 +97,11 @@ PY
 TR="tr($TPRV/86h/1h/0h/0/*)"
 TR="$TR#$(c A getdescriptorinfo "$TR" | js 'd["checksum"]')"
 R=$(w A a importdescriptors "[{\"desc\":\"$TR\",\"timestamp\":\"now\",\"active\":false}]" 2>&1 || true)
-contem "Descritor tr() recusado" "$R" "Only p2mr(), addr() and raw() descriptors"
+contem "Descritor tr() recusado" "$R" "Only p2mr(), p2mr_vault(), addr() and raw() descriptors"
 WPKH="wpkh($TPRV/84h/1h/0h/0/*)"
 WPKH="$WPKH#$(c A getdescriptorinfo "$WPKH" | js 'd["checksum"]')"
 R=$(w A a importdescriptors "[{\"desc\":\"$WPKH\",\"timestamp\":\"now\",\"active\":false}]" 2>&1 || true)
-contem "Descritor wpkh() recusado" "$R" "Only p2mr(), addr() and raw() descriptors"
+contem "Descritor wpkh() recusado" "$R" "Only p2mr(), p2mr_vault(), addr() and raw() descriptors"
 arranca C 49764 49763
 para C
 echo "addresstype=bech32" >> "$TMP/C/pqch.conf"
