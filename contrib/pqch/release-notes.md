@@ -3,7 +3,17 @@
 **PQCH {{VERSION}}**
 
 **Changes**
-- (fill in)
+Since v0.2.3 (testnet trial; no consensus change):
+- Agent vaults (`contrib/pqch/COFRE.md`): an agent's coins in a P2MR vault that its owner can take back
+  with a post-quantum recovery key, at once or after a timelock of up to 65,535 blocks. New RPCs
+  `getvaultkey`, `createvault`, `listvaults`, `recovervault`, and the dialog **Settings → Agent Vaults…**.
+- `recovervault` never fails for want of a fee estimate: it falls back to 10 quanta/vB and reports
+  where the fee rate came from (`fee_source`).
+- `listvaults` shows vault coins not yet confirmed (`unconfirmed`); they are never recovered.
+- A wallet can no longer make a vault with its own recovery key, and a recovery never sends the coins
+  back into a vault (the default address is a new `p2mr()` address of the owner).
+- The dialog shows the wallet's name and hides the owner's import data (it holds the vault's seed)
+  behind *Show* / *Copy*.
 
 **Verify before installing**
 1. Import the release key (`pqch-releases.asc`) and check its fingerprint:
