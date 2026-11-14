@@ -21,6 +21,8 @@ SendCoinsEntry::SendCoinsEntry(const PlatformStyle *_platformStyle, QWidget *par
     platformStyle(_platformStyle)
 {
     ui->setupUi(this);
+    setAttribute(Qt::WA_StyledBackground, true); // PQCH: drawn as a card (qt/pqchstyle.cpp)
+    layout()->setContentsMargins(14, 12, 14, 12);
 
     ui->addressBookButton->setIcon(platformStyle->SingleColorIcon(":/icons/address-book"));
     ui->pasteButton->setIcon(platformStyle->SingleColorIcon(":/icons/editpaste"));

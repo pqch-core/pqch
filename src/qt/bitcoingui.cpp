@@ -18,6 +18,7 @@
 #include <qt/optionsdialog.h>
 #include <qt/optionsmodel.h>
 #include <qt/platformstyle.h>
+#include <qt/pqchstyle.h>
 #include <qt/rpcconsole.h>
 #include <qt/utilitydialog.h>
 
@@ -688,6 +689,7 @@ void BitcoinGUI::createToolBars()
         appToolBar = toolbar;
         toolbar->setMovable(false);
         toolbar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+        toolbar->setStyleSheet(PQCHStyle::ToolbarSheet());
         toolbar->addAction(overviewAction);
         toolbar->addAction(sendCoinsAction);
         toolbar->addAction(receiveCoinsAction);

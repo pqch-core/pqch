@@ -3,6 +3,7 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <qt/overviewpage.h>
+#include <qt/pqchstyle.h>
 #include <qt/forms/ui_overviewpage.h>
 
 #include <qt/bitcoinunits.h>
@@ -136,6 +137,8 @@ OverviewPage::OverviewPage(const PlatformStyle *platformStyle, QWidget *parent) 
     txdelegate(new TxViewDelegate(platformStyle, this))
 {
     ui->setupUi(this);
+    PQCHStyle::AddShadow(ui->frame, 34, 70);
+    PQCHStyle::AddShadow(ui->frame_2);
 
     // use a SingleColorIcon for the "out of sync warning" icon
     QIcon icon = m_platform_style->SingleColorIcon(QStringLiteral(":/icons/warning"));

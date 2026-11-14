@@ -13,6 +13,8 @@ Since v0.2.9 (testnet trial; no consensus change):
   of the open wallet: choose threads and fast mode, then Start / Stop. Shows your hash rate, the
   network's, your share and the expected time between your blocks. It waits while the node has no
   peers or is still catching up, so it never mines on an old tip. One wallet can mine at a time.
+- Wallet (PQCH-Qt): new look in the PQCH colours: tab bar with a highlighted tab, the balance in a
+  gradient card, white cards with soft shadows, gradient Send / Receive buttons, cleaner tables.
 
 Earlier, in v0.2.9:
 - `getmininginfo` gains `localhashps`: hashes per second of this node's own miner (generate*),

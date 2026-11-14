@@ -5,6 +5,7 @@
 #include <bitcoin-build-config.h> // IWYU pragma: keep
 
 #include <qt/sendcoinsdialog.h>
+#include <qt/pqchstyle.h>
 #include <qt/forms/ui_sendcoinsdialog.h>
 
 #include <qt/addresstablemodel.h>
@@ -68,6 +69,8 @@ SendCoinsDialog::SendCoinsDialog(const PlatformStyle *_platformStyle, QWidget *p
     platformStyle(_platformStyle)
 {
     ui->setupUi(this);
+    PQCHStyle::AddShadow(ui->frameCoinControl);
+    PQCHStyle::AddShadow(ui->frameFee);
 
     if (!_platformStyle->getImagesOnButtons()) {
         ui->addButton->setIcon(QIcon());

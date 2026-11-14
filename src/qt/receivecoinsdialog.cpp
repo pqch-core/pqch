@@ -5,6 +5,7 @@
 #include <wallet/wallet.h>
 
 #include <qt/receivecoinsdialog.h>
+#include <qt/pqchstyle.h>
 #include <qt/forms/ui_receivecoinsdialog.h>
 
 #include <qt/addresstablemodel.h>
@@ -28,6 +29,10 @@ ReceiveCoinsDialog::ReceiveCoinsDialog(const PlatformStyle *_platformStyle, QWid
     platformStyle(_platformStyle)
 {
     ui->setupUi(this);
+    PQCHStyle::AddShadow(ui->frame2);
+    PQCHStyle::AddShadow(ui->frame);
+    ui->recentRequestsView->setShowGrid(false);
+    ui->recentRequestsView->setWordWrap(false);
 
     if (!_platformStyle->getImagesOnButtons()) {
         ui->clearButton->setIcon(QIcon());

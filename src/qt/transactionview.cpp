@@ -137,6 +137,8 @@ TransactionView::TransactionView(const PlatformStyle *platformStyle, QWidget *pa
     }
     transactionView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
     transactionView->setTabKeyNavigation(false);
+    transactionView->setShowGrid(false); // PQCH: rows told apart by alternating colours
+    transactionView->setWordWrap(false);
     transactionView->setContextMenuPolicy(Qt::CustomContextMenu);
     transactionView->installEventFilter(this);
     transactionView->setAlternatingRowColors(true);

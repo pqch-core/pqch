@@ -14,6 +14,7 @@
 #include <qt/optionsmodel.h>
 #include <qt/overviewpage.h>
 #include <qt/platformstyle.h>
+#include <qt/pqchstyle.h>
 #include <qt/receivecoinsdialog.h>
 #include <qt/sendcoinsdialog.h>
 #include <qt/signverifymessagedialog.h>
@@ -83,6 +84,9 @@ WalletView::WalletView(WalletModel* wallet_model, const PlatformStyle* _platform
     miningPage = new MiningPage(platformStyle);
     miningPage->setWalletModel(walletModel);
     addWidget(miningPage);
+
+    // PQCH: brand colours, cards and shadows
+    PQCHStyle::ApplyWalletStyle(this);
 
     connect(overviewPage, &OverviewPage::transactionClicked, this, &WalletView::transactionClicked);
     // Clicking on a transaction on the overview pre-selects the transaction on the transaction history page
