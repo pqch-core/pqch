@@ -18,6 +18,7 @@ class ClientModel;
 class PlatformStyle;
 class WalletModel;
 class QCheckBox;
+class QFrame;
 class QLabel;
 class QPushButton;
 class QSpinBox;
@@ -44,6 +45,9 @@ public:
     bool isMining() const { return m_thread.joinable(); }
     int blocksFound() const { return m_blocks_found; }
 
+protected:
+    void changeEvent(QEvent* e) override;
+
 public Q_SLOTS:
     void startMining();
     void stopMining();
@@ -51,7 +55,11 @@ public Q_SLOTS:
 private:
     void workerLoop(std::string address, unsigned threads);
     void post(std::function<void()> fn);
-    void setStatus(const QString& text);
+    enum class Tone { Idle, Active, Waiting, Error };
+    //! The pill in the header (a short word) and, under the title, the details.
+    void setStatus(const QString& pill, Tone tone, const QString& detail = QString());
+    void applyStyle();
+    QLabel* addStat(class QGridLayout* grid, int column, const QString& caption, const QString& accent, QLabel** sub);
     void workerFinished();
     void refresh();
     void updateControls();
@@ -68,6 +76,13 @@ private:
     QLabel* m_share{nullptr};
     QLabel* m_found{nullptr};
     QLabel* m_address{nullptr};
+    QLabel* m_status_detail{nullptr};
+    QLabel* m_hashrate_sub{nullptr};
+    QLabel* m_network_sub{nullptr};
+    QLabel* m_share_sub{nullptr};
+    QLabel* m_found_sub{nullptr};
+    QFrame* m_warning{nullptr};
+    Tone m_tone{Tone::Idle};
     QTimer* m_timer{nullptr};
 
     std::thread m_thread;
