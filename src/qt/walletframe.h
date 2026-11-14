@@ -73,6 +73,8 @@ public Q_SLOTS:
     void gotoHistoryPage();
     /** Switch to receive coins page */
     void gotoReceiveCoinsPage();
+    //! PQCH: switch to the Mining tab
+    void gotoMiningPage();
     /** Switch to send coins page */
     void gotoSendCoinsPage(QString addr = "");
 

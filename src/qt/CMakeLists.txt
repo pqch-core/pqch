@@ -186,6 +186,8 @@ if(ENABLE_WALLET)
       receivecoinsdialog.cpp
       recoverywordsdialog.cpp
       recoverywordsdialog.h
+      miningpage.cpp
+      miningpage.h
       vaultdialog.cpp
       vaultdialog.h
       receivecoinsdialog.h

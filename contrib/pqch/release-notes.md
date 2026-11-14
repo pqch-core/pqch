@@ -9,6 +9,10 @@ Since v0.2.9 (testnet trial; no consensus change):
   second) no longer try the same nonces in the same order, where the slower one only repeated the
   faster one's work: on the testnet the MacBook won under half its share of blocks.
 - A block found on the last allowed try (`maxtries`) is no longer thrown away.
+- Wallet (PQCH-Qt): new **Mining** tab (Alt+5). Mines with this computer's processor to a new address
+  of the open wallet: choose threads and fast mode, then Start / Stop. Shows your hash rate, the
+  network's, your share and the expected time between your blocks. It waits while the node has no
+  peers or is still catching up, so it never mines on an old tip. One wallet can mine at a time.
 
 Earlier, in v0.2.9:
 - `getmininginfo` gains `localhashps`: hashes per second of this node's own miner (generate*),

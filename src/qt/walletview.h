@@ -19,6 +19,7 @@ class SendCoinsRecipient;
 class TransactionView;
 class WalletModel;
 class AddressBookPage;
+class MiningPage;
 
 QT_BEGIN_NAMESPACE
 class QModelIndex;
@@ -62,6 +63,7 @@ private:
     QWidget *transactionsPage;
     ReceiveCoinsDialog *receiveCoinsPage;
     SendCoinsDialog *sendCoinsPage;
+    MiningPage* miningPage;
     AddressBookPage *usedSendingAddressesPage;
     AddressBookPage *usedReceivingAddressesPage;
 
@@ -77,6 +79,8 @@ public Q_SLOTS:
     void gotoHistoryPage();
     /** Switch to receive coins page */
     void gotoReceiveCoinsPage();
+    //! PQCH: switch to the Mining tab
+    void gotoMiningPage();
     /** Switch to send coins page */
     void gotoSendCoinsPage(QString addr = "");
 
