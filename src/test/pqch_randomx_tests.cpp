@@ -16,6 +16,8 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include <cstdint>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -174,6 +176,36 @@ BOOST_AUTO_TEST_CASE(randomx_check_block_pow)
 
     // Changing the key changes the hash.
     BOOST_CHECK(GetRandomXPowHash(header, genesis_hash) != GetRandomXPowHash(header, uint256::ONE));
+}
+
+BOOST_AUTO_TEST_CASE(randomx_search_from_any_nonce)
+{
+    // generate* starts the search at a random nonce (outside regtest), so the search must work
+    // from anywhere in the nonce space and stop cleanly at its end.
+    RandomXMiner miner{/*fast_mode=*/false};
+    const uint256 seed{uint256::ONE};
+    CBlockHeader header;
+    header.nVersion = 1;
+    header.nTime = 1700000000;
+    header.nBits = 0x207fffff;
+    const auto never{[](const uint256&) { return false; }};
+    const auto always{[](const uint256&) { return true; }};
+    const auto no_interrupt{[] { return false; }};
+
+    // Found at once: the winning nonce is the starting one (one thread).
+    header.nNonce = 0x9e3779b9;
+    uint64_t tries{1000};
+    BOOST_CHECK(miner.Search(header, seed, /*threads=*/1, tries, always, no_interrupt));
+    BOOST_CHECK_EQUAL(header.nNonce, 0x9e3779b9U);
+    BOOST_CHECK_EQUAL(tries, 999U);
+
+    // Near the end of the nonce space: it tries what is left, never wraps, and reports the end.
+    const uint32_t max{std::numeric_limits<uint32_t>::max()};
+    header.nNonce = max - 20;
+    tries = 1000;
+    BOOST_CHECK(!miner.Search(header, seed, /*threads=*/2, tries, never, no_interrupt));
+    BOOST_CHECK_EQUAL(header.nNonce, max);
+    BOOST_CHECK_EQUAL(tries, 1000U - 20U);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

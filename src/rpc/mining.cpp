@@ -36,6 +36,7 @@
 #include <pow_randomx.h>
 #include <primitives/block.h>
 #include <primitives/transaction.h>
+#include <random.h>
 #include <rpc/blockchain.h>
 #include <rpc/mining.h>
 #include <rpc/protocol.h>
@@ -212,6 +213,15 @@ static bool GenerateBlock(ChainstateManager& chainman, CBlock&& block, uint64_t&
             const unsigned threads{g_randomx_mining_threads.load() == 0 ? std::max(1u, std::thread::hardware_concurrency())
                                                                          : g_randomx_mining_threads.load()};
             const uint32_t nbits{block.nBits};
+            // PQCH: start at a random nonce. From 0, two miners preparing the same block (same tip,
+            // same payout address, same second) tried the same nonces in the same order, and the
+            // slower one only repeated the faster one's work: on the testnet the MacBook won under
+            // half its share of blocks (14 nov. 2026). Regtest keeps nonce 0 so that the chains the
+            // tests build stay the same from run to run. If the search reaches the end of the nonce
+            // space, generate* makes a new template (new time) and starts again at a random nonce.
+            if (chainman.GetParams().GetChainType() != ChainType::REGTEST) {
+                block.nNonce = FastRandomContext().rand32();
+            }
             CBlockHeader header = block;
             // PQCH: stop when another block arrives. Without this a slow miner kept hashing on the
             // old tip until it found a block or ran out of tries (up to an hour on a laptop), so
@@ -230,9 +240,14 @@ static bool GenerateBlock(ChainstateManager& chainman, CBlock&& block, uint64_t&
                                    return tip_moved.load();
                                })};
             block.nNonce = header.nNonce;
-            if (!found && tip_moved) {
-                *stale = true;
-                return false;
+            if (!found) {
+                if (tip_moved) {
+                    *stale = true;
+                    return false;
+                }
+                // Out of tries, interrupted, or the end of the nonce space (then true, no block,
+                // and generate* tries again with a new template).
+                return max_tries > 0 && !chainman.m_interrupt;
             }
         } else {
             while (max_tries > 0 && block.nNonce < std::numeric_limits<uint32_t>::max() && !CheckProofOfWork(block.GetHash(), block.nBits, consensus) && !chainman.m_interrupt) {
@@ -241,11 +256,13 @@ static bool GenerateBlock(ChainstateManager& chainman, CBlock&& block, uint64_t&
             }
         }
     }
-    if (max_tries == 0 || chainman.m_interrupt) {
-        return false;
-    }
-    if (block.nNonce == std::numeric_limits<uint32_t>::max()) {
-        return true;
+    if (!rx_seed) {
+        if (max_tries == 0 || chainman.m_interrupt) {
+            return false;
+        }
+        if (block.nNonce == std::numeric_limits<uint32_t>::max()) {
+            return true;
+        }
     }
 
     block_out = std::make_shared<const CBlock>(std::move(block));

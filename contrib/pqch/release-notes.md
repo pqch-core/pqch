@@ -3,7 +3,14 @@
 **PQCH {{VERSION}}**
 
 **Changes**
-Since v0.2.8 (testnet trial; no consensus change):
+Since v0.2.9 (testnet trial; no consensus change):
+- Mining: `generatetoaddress` / `generatetodescriptor` start each search at a random nonce instead of 0
+  (regtest keeps 0). Two machines preparing the same block (same tip, same payout address, same
+  second) no longer try the same nonces in the same order, where the slower one only repeated the
+  faster one's work: on the testnet the MacBook won under half its share of blocks.
+- A block found on the last allowed try (`maxtries`) is no longer thrown away.
+
+Earlier, in v0.2.9:
 - `getmininginfo` gains `localhashps`: hashes per second of this node's own miner (generate*),
   over the time it spent searching in the last 10 minutes. Compare it with `networkhashps` to see
   the share of blocks a machine should win.
