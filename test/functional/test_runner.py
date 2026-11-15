@@ -318,6 +318,7 @@ BASE_SCRIPTS = [
     'wallet_pqch_locked.py',
     'wallet_pqch_recovery.py',
     'wallet_pqch_recovery_words.py',
+    'pqch_lightwallet.py',
     'wallet_pqch_vault.py',
     'feature_dersig.py',
     'feature_reindex_init.py',

@@ -170,6 +170,33 @@ target_link_libraries(bitcoin_common
     $<$<PLATFORM_ID:Windows>:ws2_32>
 )
 
+# PQCH: light wallet core (pqchwallet/pqchwallet.h) for the Android app, also loaded by the
+# functional test pqch_lightwallet.py. Only the C entry points are exported.
+option(BUILD_PQCH_LIGHTWALLET "Build the PQCH light wallet core (libpqchwallet)" OFF)
+if(BUILD_TESTS OR BUILD_PQCH_LIGHTWALLET)
+  add_library(pqchwallet SHARED pqchwallet/pqchwallet.cpp)
+  target_link_libraries(pqchwallet
+    PRIVATE
+      core_interface
+      bitcoin_common
+      bitcoin_consensus
+      bitcoin_util
+      bitcoin_crypto
+      univalue
+      secp256k1
+      randomx
+  )
+  set_target_properties(pqchwallet PROPERTIES
+    CXX_VISIBILITY_PRESET hidden
+    VISIBILITY_INLINES_HIDDEN ON
+    LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib
+  )
+  # Keep the static libraries' symbols inside: only pqchw_call and pqchw_free are visible.
+  if(NOT WIN32 AND NOT APPLE)
+    target_link_options(pqchwallet PRIVATE -Wl,--exclude-libs,ALL)
+  endif()
+endif()
+
 include(InstallBinaryComponent)
 
 if(ENABLE_WALLET)
