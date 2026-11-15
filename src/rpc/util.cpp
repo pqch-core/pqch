@@ -6,6 +6,7 @@
 
 #include <arith_uint256.h>
 #include <chain.h>
+#include <chainparams.h>
 #include <common/args.h>
 #include <common/messages.h>
 #include <common/types.h>
@@ -46,13 +47,17 @@ using util::SplitString;
 using util::TrimString;
 
 const std::string UNIX_EPOCH_TIME = "UNIX epoch time";
-const std::string EXAMPLE_ADDRESS[2] = {"bc1q09vm5lfy0j5reeulh4x5752q25uqqvz34hufdl", "bc1q02ad21edsxd23d32dfgqqsz4vv4nmtfzuklhy3"};
+// PQCH: mainnet P2MR addresses of the public BIP39 test words ("abandon" x 23 + "art"), for help texts only.
+const std::string EXAMPLE_ADDRESS[2] = {"pqc1pr7xcsvknhj3w2xw6j7kzvggz7yw0khc2smpht0teu96r6g49aj4q3hzh5m", "pqc1pwnr59esx3pwn733a5aja0thv3s93wncvdq9yjwvlyxyy4m0f2fesnf9sny"};
 
 std::string GetAllOutputTypes()
 {
     std::vector<std::string> ret;
     using U = std::underlying_type_t<TxoutType>;
+    const bool pq_chain{Params().GetConsensus().PQRulesHeight == 0};
     for (U i = (U)TxoutType::NONSTANDARD; i <= (U)TxoutType::WITNESS_UNKNOWN; ++i) {
+        // PQCH: on chains with the post-quantum rules from genesis a witness v1 output is P2MR, never Taproot
+        if (pq_chain && static_cast<TxoutType>(i) == TxoutType::WITNESS_V1_TAPROOT) continue;
         ret.emplace_back(GetTxnOutputType(static_cast<TxoutType>(i)));
     }
     ret.emplace_back("p2mr"); // PQCH: witness v1 on post-quantum chains (RPCOutputTypeName)
@@ -188,12 +193,12 @@ std::string ShellQuoteIfNeeded(const std::string& s)
 
 std::string HelpExampleCli(const std::string& methodname, const std::string& args)
 {
-    return "> bitcoin-cli " + methodname + " " + args + "\n";
+    return "> pqch-cli " + methodname + " " + args + "\n";
 }
 
 std::string HelpExampleCliNamed(const std::string& methodname, const RPCArgList& args)
 {
-    std::string result = "> bitcoin-cli -named " + methodname;
+    std::string result = "> pqch-cli -named " + methodname;
     for (const auto& argpair: args) {
         const auto& value = argpair.second.isStr()
                 ? argpair.second.get_str()
@@ -207,7 +212,7 @@ std::string HelpExampleCliNamed(const std::string& methodname, const RPCArgList&
 std::string HelpExampleRpc(const std::string& methodname, const std::string& args)
 {
     return "> curl --user myusername --data-binary '{\"jsonrpc\": \"2.0\", \"id\": \"curltest\", "
-        "\"method\": \"" + methodname + "\", \"params\": [" + args + "]}' -H 'content-type: application/json' http://127.0.0.1:8332/\n";
+        "\"method\": \"" + methodname + "\", \"params\": [" + args + "]}' -H 'content-type: application/json' http://127.0.0.1:29332/\n";
 }
 
 std::string HelpExampleRpcNamed(const std::string& methodname, const RPCArgList& args)
@@ -218,7 +223,7 @@ std::string HelpExampleRpcNamed(const std::string& methodname, const RPCArgList&
     }
 
     return "> curl --user myusername --data-binary '{\"jsonrpc\": \"2.0\", \"id\": \"curltest\", "
-           "\"method\": \"" + methodname + "\", \"params\": " + params.write() + "}' -H 'content-type: application/json' http://127.0.0.1:8332/\n";
+           "\"method\": \"" + methodname + "\", \"params\": " + params.write() + "}' -H 'content-type: application/json' http://127.0.0.1:29332/\n";
 }
 
 // Converts a hex string to a public key if possible

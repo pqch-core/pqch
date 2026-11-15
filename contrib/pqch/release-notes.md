@@ -3,7 +3,17 @@
 **PQCH {{VERSION}}**
 
 **Changes**
-Since v0.2.9 (testnet trial; no consensus change):
+Since v0.2.10 (testnet trial; no consensus change):
+- Help texts and messages name PQCH's programs (`pqchd`, `pqch-cli`, `pqch-qt`, `pqch-wallet`) and
+  the PQCH network instead of Bitcoin's; examples use `pqc1p…` addresses and RPC port 29332; the
+  list of output types no longer offers `witness_v1_taproot` (on PQCH a witness v1 output is `p2mr`);
+  the default signature hash is described as DEFAULT for P2MR.
+- Wallet (PQCH-Qt): the Mining tab gives the network's coinbase maturity (100 blocks on testnet,
+  720 on mainnet) instead of a fixed 720.
+- Light wallet core (`libpqchwallet`, for the Android wallet): same addresses and signatures as
+  PQCH Core from the same 24 words (not part of the downloads yet).
+
+Earlier, in v0.2.10:
 - Mining: `generatetoaddress` / `generatetodescriptor` start each search at a random nonce instead of 0
   (regtest keeps 0). Two machines preparing the same block (same tip, same payout address, same
   second) no longer try the same nonces in the same order, where the slower one only repeated the
