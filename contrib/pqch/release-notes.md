@@ -4,10 +4,20 @@
 
 **Changes**
 Since v0.2.10 (testnet trial; no consensus change):
+- P2P: a merged mined header that brings a Monero RandomX key no valid header has used, and that is
+  not cached, is only checked when it comes from an outbound peer (or one with `noban`). Building
+  the key's RandomX cache costs about 0.5 s and 256 MiB before fake work can be refused, so inbound
+  peers could otherwise stall the node for free. From inbound peers such headers (and compact or
+  unrequested blocks) are ignored without penalty until an outbound peer relays them; a real new
+  key appears about once every 3 days.
 - Help texts and messages name PQCH's programs (`pqchd`, `pqch-cli`, `pqch-qt`, `pqch-wallet`) and
   the PQCH network instead of Bitcoin's; examples use `pqc1p…` addresses and RPC port 29332; the
   list of output types no longer offers `witness_v1_taproot` (on PQCH a witness v1 output is `p2mr`);
   the default signature hash is described as DEFAULT for P2MR.
+- Wallet: an unencrypted wallet checks its address cache against its post-quantum seed every time
+  it is loaded (encrypted wallets already did at `walletpassphrase`). A wallet file whose cache holds
+  another seed's keys is refused, so it never hands out addresses it cannot spend from. About 0.25 s
+  per load with the default 1,000 + 1,000 addresses.
 - Wallet (PQCH-Qt): the Mining tab gives the network's coinbase maturity (100 blocks on testnet,
   720 on mainnet) instead of a fixed 720.
 - Light wallet core (`libpqchwallet`, for the Android wallet): same addresses and signatures as

@@ -10,6 +10,7 @@
 #include <streams.h>
 #include <test/util/setup_common.h>
 #include <util/strencodings.h>
+#include <wallet/context.h>
 #include <wallet/test/util.h>
 #include <wallet/wallet.h>
 #include <wallet/walletdb.h>
@@ -128,6 +129,56 @@ BOOST_AUTO_TEST_CASE(p2mr_cache_checked_against_seed)
     auto spkm2{honest.AddWalletDescriptor(w_desc2, keys2, "", false)};
     BOOST_REQUIRE(spkm2);
     BOOST_CHECK(!spkm2->get().FindCacheMismatch());
+}
+
+// An unencrypted wallet has its seed at hand: its address cache is checked at every load, and a
+// wallet file whose cache holds another seed's keys is refused.
+BOOST_AUTO_TEST_CASE(p2mr_cache_checked_when_loading)
+{
+    const p2mr::PQSeed seed{RandomSeed()}, attacker{RandomSeed()};
+    auto write_wallet{[&](const std::string& name, bool tamper) {
+        DatabaseOptions options;
+        options.require_create = true;
+        DatabaseStatus status;
+        bilingual_str error;
+        auto database{MakeWalletDatabase(name, options, status, error)};
+        BOOST_REQUIRE_MESSAGE(database, error.original);
+        auto wallet{std::make_shared<CWallet>(nullptr, name, std::move(database))};
+        LOCK(wallet->cs_wallet);
+        wallet->SetWalletFlag(WALLET_FLAG_DESCRIPTORS);
+        wallet->m_keypool_size = 3;
+        FlatSigningProvider keys;
+        keys.pq_seeds.emplace(seed.Id(), seed);
+        WalletDescriptor w_desc{ParseP2MR(seed.Id(), keys)};
+        if (tamper) {
+            p2mr::AddressKeys fake;
+            const p2mr::Path path{360 | p2mr::HARDENED, 1 | p2mr::HARDENED, 0 | p2mr::HARDENED, 0 | p2mr::HARDENED, 2 | p2mr::HARDENED};
+            p2mr::Path rpath{path};
+            rpath.back() = p2mr::RECOVERY_KEY_INDEX | p2mr::HARDENED;
+            BOOST_REQUIRE(p2mr::DeriveAddressKeys(attacker, path, rpath, fake));
+            w_desc.cache.CacheP2MRKeys(2, fake);
+        }
+        BOOST_REQUIRE(wallet->AddWalletDescriptor(w_desc, keys, "", false));
+    }};
+    auto load_wallet{[&](const std::string& name, bilingual_str& error) {
+        DatabaseOptions options;
+        options.require_existing = true;
+        DatabaseStatus status;
+        auto database{MakeWalletDatabase(name, options, status, error)};
+        BOOST_REQUIRE_MESSAGE(database, error.original);
+        WalletContext context;
+        context.args = &m_args;
+        std::vector<bilingual_str> warnings;
+        return CWallet::LoadExisting(context, name, std::move(database), error, warnings);
+    }};
+
+    write_wallet("honest", /*tamper=*/false);
+    bilingual_str error;
+    BOOST_CHECK(load_wallet("honest", error));
+
+    write_wallet("altered", /*tamper=*/true);
+    BOOST_CHECK(!load_wallet("altered", error));
+    BOOST_CHECK_MESSAGE(error.original.find("does not match its post-quantum seed (index 2)") != std::string::npos, error.original);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

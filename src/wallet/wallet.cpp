@@ -3323,6 +3323,24 @@ std::shared_ptr<CWallet> CWallet::LoadExisting(WalletContext& context, const std
         }
     }
 
+    // PQCH: the cached addresses must be the seed's: a changed wallet file could swap in someone
+    // else's keys, and the wallet would hand out addresses it cannot spend from. An encrypted wallet
+    // is checked when it is unlocked (walletpassphrase); an unencrypted one here, at every load.
+    if (!walletInstance->HasEncryptionKeys()) {
+        const auto start_check{SteadyClock::now()};
+        LOCK(walletInstance->cs_wallet);
+        for (ScriptPubKeyMan* spkm : walletInstance->GetAllScriptPubKeyMans()) {
+            const auto* desc{dynamic_cast<DescriptorScriptPubKeyMan*>(spkm)};
+            if (!desc) continue;
+            if (const auto bad{desc->FindCacheMismatch()}) {
+                walletInstance->WalletLogPrintf("Address cache does not match the post-quantum seed at index %d: wallet file damaged or altered\n", *bad);
+                error = strprintf(_("Wallet %s: the address cache does not match its post-quantum seed (index %d). The wallet file is damaged or was altered: do not use its addresses. Restore it from the seed (24 words) or a backup."), name, *bad);
+                return nullptr;
+            }
+        }
+        walletInstance->WalletLogPrintf("Address cache checked against the post-quantum seed in %dms\n", Ticks<std::chrono::milliseconds>(SteadyClock::now() - start_check));
+    }
+
     if (walletInstance->IsWalletFlagSet(WALLET_FLAG_DISABLE_PRIVATE_KEYS)) {
         for (auto spk_man : walletInstance->GetActiveScriptPubKeyMans()) {
             if (spk_man->HavePrivateKeys()) {

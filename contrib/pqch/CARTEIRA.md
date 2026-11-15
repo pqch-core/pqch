@@ -114,6 +114,9 @@ p2mr(pqprv(<semente>)/360h/1h/0h/0h/*h)            forma privada (listdescriptor
 - Ao desbloquear, o `walletpassphrase` volta a derivar da semente todos os endereços da cache e
   compara-os. Se um ficheiro da carteira alterado tiver trocado chaves, a carteira volta a bloquear
   e dá erro: não se recebe para endereços de outra pessoa.
+- Uma carteira **não cifrada** faz a mesma comparação sempre que é carregada (desde a 0.2.11): se a
+  cache não corresponder à semente, a carteira não abre e o erro diz em que índice. Custa ~250 ms com
+  2.000 endereços em reserva. Teste: `pqch_wallet_import_tests/p2mr_cache_checked_when_loading`.
 
 ## Importação
 
@@ -226,8 +229,6 @@ quânticos, mas depende de uma frase-passe forte.
   carteira assina cada entrada P2MR de uma vez só.
 - Registar o prefixo no SLIP-0173. O segundo passo do caminho usa `0h` na rede principal.
 - Mostrar a árvore P2MR em `getaddressinfo`; hoje o `desc` de um endereço é `addr(…)`.
-- Comparar a cache com a semente também ao carregar carteiras não cifradas (hoje só no
-  `walletpassphrase`).
 - A troca para as regras da carteira usa `PQRulesHeight == 0`, sem olhar para a altura (só afeta
   testes com `-testactivationheight=pqrules@N`).
 - Rever os alvos de fuzzing que assinam ou inferem descritores, porque agora leem os parâmetros da

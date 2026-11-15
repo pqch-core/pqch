@@ -3,12 +3,17 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <auxpow.h>
+#include <banman.h>
 #include <chain.h>
 #include <chainparams.h>
 #include <consensus/validation.h>
 #include <hash.h>
 #include <interfaces/mining.h>
 #include <key_io.h>
+#include <net.h>
+#include <net_processing.h>
+#include <netbase.h>
+#include <protocol.h>
 #include <node/mergemining.h>
 #include <pubkey.h>
 #include <pow.h>
@@ -18,6 +23,7 @@
 #include <rpc/server.h>
 #include <streams.h>
 #include <univalue.h>
+#include <test/util/net.h>
 #include <test/util/setup_common.h>
 #include <uint256.h>
 #include <util/strencodings.h>
@@ -742,6 +748,124 @@ BOOST_AUTO_TEST_CASE(merged_mined_block_accepted)
     // A normal block can follow.
     CreateAndProcessBlock({}, m_coinbase_script);
     BOOST_CHECK_EQUAL(WITH_LOCK(cs_main, return chainman.ActiveChain().Height()), 102);
+}
+
+// A merged mined header that brings a Monero key no valid header has used costs a 256 MiB RandomX
+// cache (~0.5 s, under cs_main) before its work can be checked, and anyone can send one with fake
+// work. Such headers are only checked when a peer we chose (outbound) or trust (NoBan) sends them;
+// from an inbound peer they are ignored without penalty and without building the cache.
+BOOST_AUTO_TEST_CASE(new_monero_key_only_checked_from_chosen_peers)
+{
+    LOCK(NetEventsInterface::g_msgproc_mutex);
+    ChainstateManager& chainman{*Assert(m_node.chainman)};
+    const Consensus::Params& params{chainman.GetConsensus()};
+    auto& connman{static_cast<ConnmanTestMsg&>(*m_node.connman)};
+
+    // A merged mined block on the tip under `seed`, whose Monero work meets the target or not.
+    uint32_t block_nonce{0};
+    auto make_block{[&](const uint256& seed, bool valid_work) {
+        CBlock block{CreateBlock({}, m_coinbase_script)};
+        block.nVersion |= VERSION_AUXPOW;
+        block.nNonce = ++block_nonce; // the block id does not commit to the proof: make each one different
+        AuxTree tree{params.hashGenesisBlock, block.GetHash(), 1, 7};
+        MoneroBlock mb;
+        mb.extra = MakeExtra(1, 7, tree.Root());
+        auto a{std::make_shared<CAuxPow>()};
+        std::string error;
+        const arith_uint256 target{arith_uint256{}.SetCompact(block.nBits)};
+        for (;; ++mb.nonce) {
+            BOOST_REQUIRE(BuildFromMoneroBlock(mb.Serialize(), seed, tree.Branch(), *a, block.m_auxpow_head, error));
+            if ((UintToArith256(MoneroPowHash(seed, a->HashingBlob())) <= target) == valid_work) break;
+        }
+        block.auxpow = a;
+        return block;
+    }};
+    // Grinding above built the caches of these keys: start each case with a key not cached.
+    auto forget_keys{[&]() {
+        for (uint8_t t = 0xd0; t < 0xd8; ++t) RandomXHash(std::span<const unsigned char>{Tagged(t).data(), 32}, std::span<const unsigned char>{});
+    }};
+    auto key_cached{[](const uint256& seed) { return RandomXKeyCached(std::span<const unsigned char>{seed.data(), seed.size()}); }};
+    auto punished{[&](const CNode& node) { return m_node.banman->IsDiscouraged(node.addr); }};
+    auto known{[&](const CBlockHeader& h) { return WITH_LOCK(cs_main, return chainman.m_blockman.LookupBlockIndex(h.GetHash()) != nullptr); }};
+
+    NodeId id{0};
+    std::vector<std::unique_ptr<CNode>> peers;
+    auto make_peer{[&](ConnectionType type, NetPermissionFlags permissions = NetPermissionFlags::None) -> CNode& {
+        const CAddress addr{Lookup(strprintf("1.2.3.%d", 10 + id), 8333, /*fAllowLookup=*/false).value(), NODE_NETWORK};
+        auto& node{*peers.emplace_back(std::make_unique<CNode>(id++, /*sock=*/nullptr, addr, /*nKeyedNetGroupIn=*/0, /*nLocalHostNonceIn=*/0,
+                                                               CService{}, /*addrNameIn=*/"", type, /*inbound_onion=*/false, /*network_key=*/0,
+                                                               CNodeOptions{.permission_flags = permissions}))};
+        connman.Handshake(node, /*successfully_connected=*/true, ServiceFlags(NODE_NETWORK | NODE_WITNESS), NODE_NETWORK, PROTOCOL_VERSION, /*relay_txs=*/true);
+        return node;
+    }};
+    auto send_headers{[&](CNode& node, const CBlockHeader& header) {
+        DataStream s;
+        WriteCompactSize(s, 1);
+        s << header;
+        WriteCompactSize(s, 0);
+        CSerializedNetMsg msg;
+        msg.m_type = NetMsgType::HEADERS;
+        msg.data.resize(s.size());
+        std::memcpy(msg.data.data(), s.data(), s.size());
+        connman.FlushSendBuffer(node);
+        node.fPauseSend = false; // the test reads nothing the node sends
+        BOOST_REQUIRE(connman.ReceiveMsgFrom(node, std::move(msg)));
+        connman.ProcessMessagesOnce(node);
+        m_node.peerman->SendMessages(node); // a misbehaving peer is discouraged here
+    }};
+
+    CNode& inbound{make_peer(ConnectionType::INBOUND)};
+    CNode& outbound{make_peer(ConnectionType::OUTBOUND_FULL_RELAY)};
+
+    // Fake work, new key, from an inbound peer: not checked (no cache), not stored, no penalty.
+    const uint256 key_a{Tagged(0xc1)};
+    const CBlock fake{make_block(key_a, /*valid_work=*/false)};
+    forget_keys();
+    BOOST_REQUIRE(!key_cached(key_a));
+    send_headers(inbound, fake);
+    BOOST_CHECK(!key_cached(key_a));
+    BOOST_CHECK(!known(fake));
+    BOOST_CHECK(!punished(inbound));
+
+    // The same header from an outbound peer is checked: refused, and the peer is punished.
+    send_headers(outbound, fake);
+    BOOST_CHECK(key_cached(key_a));
+    BOOST_CHECK(!known(fake));
+    BOOST_CHECK(punished(outbound));
+
+    // A real block with a new key: waits for an outbound peer, then is accepted.
+    CNode& inbound2{make_peer(ConnectionType::INBOUND)};
+    CNode& outbound2{make_peer(ConnectionType::OUTBOUND_FULL_RELAY)};
+    const uint256 key_b{Tagged(0xc2)};
+    const CBlock real{make_block(key_b, /*valid_work=*/true)};
+    forget_keys();
+    send_headers(inbound2, real);
+    BOOST_CHECK(!known(real));
+    BOOST_CHECK(!key_cached(key_b));
+    send_headers(outbound2, real);
+    BOOST_CHECK(known(real));
+    BOOST_CHECK(!punished(outbound2));
+    // Now the key is known: the same header from the inbound peer is fine.
+    send_headers(inbound2, real);
+    BOOST_CHECK(!punished(inbound2));
+
+    // An unrequested full block with a new key from an inbound peer is ignored as well.
+    const uint256 key_c{Tagged(0xc3)};
+    const CBlock real_c{make_block(key_c, /*valid_work=*/true)};
+    forget_keys();
+    connman.FlushSendBuffer(inbound2);
+    inbound2.fPauseSend = false;
+    BOOST_REQUIRE(connman.ReceiveMsgFrom(inbound2, NetMsg::Make(NetMsgType::BLOCK, TX_WITH_WITNESS(real_c))));
+    connman.ProcessMessagesOnce(inbound2);
+    BOOST_CHECK(!known(real_c));
+    BOOST_CHECK(!key_cached(key_c));
+
+    // A NoBan (trusted) inbound peer is treated like an outbound one.
+    CNode& trusted{make_peer(ConnectionType::INBOUND, NetPermissionFlags::NoBan)};
+    send_headers(trusted, real_c);
+    BOOST_CHECK(known(real_c));
+
+    for (auto& node : peers) m_node.peerman->FinalizeNode(*node);
 }
 
 // A PQCH block merge mined with a Monero block after hard fork 17: Carrot coinbase, FCMP++ tree

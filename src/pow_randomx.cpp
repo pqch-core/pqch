@@ -112,6 +112,15 @@ std::shared_ptr<RxContext> GetContext(std::span<const unsigned char> key)
     return ctx;
 }
 
+} // namespace
+
+bool RandomXKeyCached(std::span<const unsigned char> key)
+{
+    std::lock_guard<std::mutex> lock(g_rx_mutex);
+    return std::any_of(g_rx_contexts.begin(), g_rx_contexts.end(), [&](const auto& ctx) { return std::ranges::equal(ctx->key, key); });
+}
+
+namespace {
 std::vector<unsigned char> SerializeHeader(const CBlockHeader& header)
 {
     auto bytes{header.SerializePure()};

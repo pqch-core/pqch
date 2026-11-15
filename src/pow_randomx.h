@@ -41,6 +41,12 @@ int GetRandomXSeedHeight(int height, const Consensus::Params& params);
 /** RandomX key for the block that extends pindexPrev. */
 uint256 GetRandomXSeedHash(const CBlockIndex* pindexPrev, const Consensus::Params& params);
 
+/**
+ * PQCH: whether a light-mode cache for `key` is already built (a hash under it costs ~25 ms; a key
+ * without a cache costs ~0.5 s and 256 MiB first). Thread-safe; never builds a cache.
+ */
+bool RandomXKeyCached(std::span<const unsigned char> key);
+
 /** RandomX v2 hash of arbitrary data under a key, in light mode (256 MiB cache). Thread-safe. */
 uint256 RandomXHash(std::span<const unsigned char> key, std::span<const unsigned char> input);
 

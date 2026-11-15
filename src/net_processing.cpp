@@ -64,6 +64,7 @@
 #include <util/trace.h>
 #include <validation.h>
 #include <auxpow.h>
+#include <pow_randomx.h>
 
 #include <algorithm>
 #include <array>
@@ -789,6 +790,18 @@ private:
     /** Return true if the given header is an ancestor of
      *  m_chainman.m_best_header or our current tip */
     bool IsAncestorOfBestHeaderOrTip(const CBlockIndex* header) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+    /**
+     * PQCH: whether checking the proof of work of `header` would first build a RandomX cache (~0.5 s
+     * and 256 MiB, while holding cs_main) for a Monero key that no valid header of the key window has
+     * used and that is not cached: a merged mined header with a new key. Anyone can send such a
+     * header with fake work at no cost, so they are only checked when they come from a peer we chose
+     * or trust (MayVerifyNewAuxKey); from other peers they are ignored, without penalty, until an
+     * outbound peer relays them (honest peers relay valid blocks). A real new key appears about once
+     * every 3 days (Monero changes key every 2048 blocks), so the delay is rare and short.
+     */
+    bool NeedsNewAuxKey(const CBlockHeader& header) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    static bool MayVerifyNewAuxKey(const CNode& node) { return !node.IsInboundConn() || node.HasPermission(NetPermissionFlags::NoBan); }
 
     /** Request further headers from this peer with a given locator.
      * We don't issue a getheaders message if we have a recent one outstanding.
@@ -3072,6 +3085,23 @@ bool PeerManagerImpl::TryLowWorkHeadersSync(Peer& peer, CNode& pfrom, const CBlo
     return false;
 }
 
+bool PeerManagerImpl::NeedsNewAuxKey(const CBlockHeader& header)
+{
+    AssertLockHeld(cs_main);
+    if (!header.IsAuxPow() || !header.auxpow) return false;
+    const uint256& seed{header.auxpow->seed_hash};
+    if (RandomXKeyCached(std::span<const unsigned char>{seed.data(), seed.size()})) return false;
+    if (m_chainman.m_blockman.LookupBlockIndex(header.GetHash())) return false; // already checked
+    // A header whose parent is not in the index is not checked now (its parent, earlier in the same
+    // message, must be valid first, which takes real work).
+    const CBlockIndex* prev{m_chainman.m_blockman.LookupBlockIndex(header.hashPrevBlock)};
+    if (!prev) return false;
+    bool is_new{false};
+    std::string error;
+    CheckAuxSeed(seed, prev, m_chainman.GetConsensus(), is_new, error);
+    return is_new;
+}
+
 bool PeerManagerImpl::IsAncestorOfBestHeaderOrTip(const CBlockIndex* header)
 {
     if (header == nullptr) {
@@ -3336,6 +3366,15 @@ void PeerManagerImpl::ProcessHeadersMessage(CNode& pfrom, Peer& peer,
 
     // At this point, we have a set of headers with sufficient work on them
     // which can be processed.
+
+    // PQCH: a new Monero key is only checked when a peer we chose or trust sends it (NeedsNewAuxKey).
+    if (!MayVerifyNewAuxKey(pfrom)) {
+        LOCK(cs_main);
+        if (std::ranges::any_of(headers, [&](const CBlockHeader& h) { return NeedsNewAuxKey(h); })) {
+            LogDebug(BCLog::NET, "Ignoring headers with a new Monero RandomX key from inbound peer=%d (waiting for an outbound peer to relay them)\n", pfrom.GetId());
+            return;
+        }
+    }
 
     // If we don't have the last header, then this peer will have given us
     // something new (if these headers are valid).
@@ -4828,6 +4867,10 @@ void PeerManagerImpl::ProcessMessage(Peer& peer, CNode& pfrom, const std::string
             // If we get a low-work header in a compact block, we can ignore it.
             LogDebug(BCLog::NET, "Ignoring low-work compact block from peer %d\n", pfrom.GetId());
             return;
+        } else if (!MayVerifyNewAuxKey(pfrom) && NeedsNewAuxKey(cmpctblock.header)) {
+            // PQCH: see NeedsNewAuxKey
+            LogDebug(BCLog::NET, "Ignoring compact block with a new Monero RandomX key from inbound peer=%d\n", pfrom.GetId());
+            return;
         }
 
         if (!m_chainman.m_blockman.LookupBlockIndex(blockhash)) {
@@ -5140,6 +5183,11 @@ void PeerManagerImpl::ProcessMessage(Peer& peer, CNode& pfrom, const std::string
             // Always process the block if we requested it, since we may
             // need it even when it's not a candidate for a new best tip.
             forceProcessing = IsBlockRequested(hash);
+            // PQCH: an unrequested block with a new Monero key from an inbound peer (NeedsNewAuxKey)
+            if (!forceProcessing && !MayVerifyNewAuxKey(pfrom) && NeedsNewAuxKey(*pblock)) {
+                LogDebug(BCLog::NET, "Ignoring unrequested block with a new Monero RandomX key from inbound peer=%d\n", pfrom.GetId());
+                return;
+            }
             RemoveBlockRequest(hash, pfrom.GetId());
             // mapBlockSource is only used for punishing peers and setting
             // which peers send us compact blocks, so the race between here and

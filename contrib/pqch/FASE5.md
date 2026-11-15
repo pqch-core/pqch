@@ -184,7 +184,15 @@ ou mais, tanto em `BuildFromMoneroBlock` como em `CheckAuxPowCoinbase`. Testes:
 - A framework de testes em Python não lê cabeçalhos com prova. Não faz falta enquanto os testes
   funcionais não minerarem em conjunto.
 - Calibrar no testnet a janela de chaves (4.320 blocos / 4 chaves) e o limite do `tx_extra` (512 B).
-- Ataque de negação de serviço possível: um par pode enviar um cabeçalho com uma chave nova e
-  trabalho falso. Isso custa ao nó uma cache RandomX antes de o recusar (e de penalizar o par). É o
-  mesmo custo que um cabeçalho normal com trabalho falso numa mudança de época. O limite de chaves
-  só cobre cadeias válidas.
+- ~~Ataque de negação de serviço: um par pode enviar um cabeçalho com uma chave nova e trabalho
+  falso.~~ Resolvido a 15 nov. 2026 (0.2.11). Medido: uma chave nova custa ~480 ms e 256 MiB (contra
+  ~25 ms com a cache feita), com o `cs_main` preso, e expulsa uma das 4 caches em uso. O limite de
+  chaves só cobre cadeias válidas: um cabeçalho falso passa sempre como "chave nova permitida", e as
+  chaves Monero são 32 bytes à escolha de quem envia (ao contrário das chaves diretas, que vêm de
+  blocos da cadeia). Defesa (`NeedsNewAuxKey` em `net_processing.cpp`): um cabeçalho que traz uma
+  chave Monero que nenhum cabeçalho válido da janela usou e que não está em cache só é verificado
+  quando vem de um par **de saída** (escolhido pelo nó) ou com permissão `noban`; de um par de entrada
+  é ignorado, sem castigo e sem construir a cache, até um par de saída o retransmitir (os pares
+  honestos retransmitem blocos válidos). Aplica-se a `headers`, `cmpctblock` e a blocos não pedidos.
+  Uma chave nova legítima aparece cerca de uma vez a cada 3 dias. Teste:
+  `pqch_auxpow_chain_tests/new_monero_key_only_checked_from_chosen_peers` (falha sem a defesa).
