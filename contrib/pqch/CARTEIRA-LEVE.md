@@ -8,7 +8,7 @@ mina** (a Google Play proíbe mineração no próprio telemóvel e um telemóvel
 
 | Peça | Onde | Estado |
 |---|---|---|
-| Núcleo (chaves, endereços, assinatura) | `src/pqchwallet/` → `libpqchwallet` | feito, testado contra o nó (`test/functional/pqch_lightwallet.py`) |
+| Núcleo (chaves, endereços, assinatura) | `src/pqchwallet/` → `libpqchwallet` | feito, testado contra o nó (`test/functional/wallet_pqch_lightwallet.py`) |
 | Servidor de consulta | `pqch-electrs` + API do explorador (`/api/address/…/utxo`, `/api/address/…/txs`, `POST /api/tx`, `/api/v1/fees/recommended`) | já existe (explorador) |
 | App Android | `contrib/pqch/android/` (Kotlin, Jetpack Compose) | primeira versão de teste |
 | Compilação do APK | `.github/workflows/android.yml` (runner de casa: JDK 17, Android SDK/NDK, Gradle) + `contrib/pqch/android/build-core.sh` | primeira versão |
@@ -41,7 +41,7 @@ Consequências:
 
 ## Testes antes do lançamento
 
-1. Núcleo: `pqch_lightwallet.py` (corre no CI).
+1. Núcleo: `wallet_pqch_lightwallet.py` (corre no CI).
 2. APK de teste na **testnet pública** (decidido a 15 nov. 2026): o explorador público está em modo
    mainnet e não serve a testnet fechada, e não se monta um índice só para a VPN. Os testes de saldo,
    envio e receção começam quando o explorador passar a testnet (etapa 3, até 15 dez. 2026). Até lá

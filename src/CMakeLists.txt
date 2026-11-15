@@ -171,7 +171,7 @@ target_link_libraries(bitcoin_common
 )
 
 # PQCH: light wallet core (pqchwallet/pqchwallet.h) for the Android app, also loaded by the
-# functional test pqch_lightwallet.py. Only the C entry points are exported.
+# functional test wallet_pqch_lightwallet.py. Only the C entry points are exported.
 option(BUILD_PQCH_LIGHTWALLET "Build the PQCH light wallet core (libpqchwallet)" OFF)
 if(BUILD_TESTS OR BUILD_PQCH_LIGHTWALLET)
   add_library(pqchwallet SHARED pqchwallet/pqchwallet.cpp)
