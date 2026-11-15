@@ -203,7 +203,11 @@ MiningPage::MiningPage(const PlatformStyle* platform_style, QWidget* parent) : Q
     address_layout->addWidget(m_address);
     layout->addWidget(address_card);
 
-    auto* note = new QLabel(tr("Mined coins appear under Transactions and can be spent after 720 blocks (about 12 hours)."));
+    const int maturity{Params().GetConsensus().nCoinbaseMaturity};
+    const int maturity_minutes{static_cast<int>(maturity * Params().GetConsensus().nPowTargetSpacing / 60)};
+    auto* note = new QLabel(tr("Mined coins appear under Transactions and can be spent after %1 blocks (about %2).")
+                                .arg(maturity)
+                                .arg(maturity_minutes >= 120 ? tr("%1 hours").arg(maturity_minutes / 60) : tr("%1 minutes").arg(maturity_minutes)));
     note->setObjectName("caption");
     note->setWordWrap(true);
     layout->addWidget(note);

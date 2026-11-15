@@ -33,3 +33,11 @@ crash-*
 leak-*
 timeout-*
 slow-unit-*
+
+# PQCH: Android light wallet (contrib/pqch/android)
+/build-android/
+contrib/pqch/android/.gradle/
+contrib/pqch/android/build/
+contrib/pqch/android/app/build/
+contrib/pqch/android/app/src/main/jniLibs/
+contrib/pqch/android/local.properties

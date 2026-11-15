@@ -175,6 +175,9 @@ target_link_libraries(bitcoin_common
 option(BUILD_PQCH_LIGHTWALLET "Build the PQCH light wallet core (libpqchwallet)" OFF)
 if(BUILD_TESTS OR BUILD_PQCH_LIGHTWALLET)
   add_library(pqchwallet SHARED pqchwallet/pqchwallet.cpp)
+  if(ANDROID)
+    target_sources(pqchwallet PRIVATE pqchwallet/jni.cpp)
+  endif()
   target_link_libraries(pqchwallet
     PRIVATE
       core_interface

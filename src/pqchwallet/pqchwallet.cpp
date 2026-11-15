@@ -197,6 +197,8 @@ UniValue Init(const UniValue& p)
     g_chain = type;
     UniValue r(UniValue::VOBJ);
     r.pushKV("chain", chain);
+    r.pushKV("coinbase_maturity", Params().GetConsensus().nCoinbaseMaturity);
+    r.pushKV("block_seconds", Params().GetConsensus().nPowTargetSpacing);
     return r;
 }
 

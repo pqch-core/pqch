@@ -19,7 +19,7 @@
  *   pqchw_free(out);
  *
  * Methods (params → result):
- *   init           {chain: "main"|"test"|"regtest"} → {chain}           first, and when changing network
+ *   init           {chain: "main"|"test"|"regtest"} → {chain, coinbase_maturity, block_seconds}           first, and when changing network
  *   new_mnemonic   {} → {mnemonic}                                     24 new words (strong randomness)
  *   check_mnemonic {mnemonic} → {valid, normalized}
  *   wallet_id      {mnemonic, passphrase?} → {id}                       public id of the seed (no secret)

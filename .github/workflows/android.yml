@@ -1,0 +1,75 @@
+# Copyright (c) 2026 The PQCH developers
+# Distributed under the MIT software license, see the accompanying
+# file COPYING or https://opensource.org/license/mit.
+
+# PQCH: the Android light wallet (contrib/pqch/CARTEIRA-LEVE.md). Builds the core (libpqchwallet.so)
+# with the NDK for phones (arm64-v8a) and the emulator (x86_64), then the test APK, and keeps it as
+# the run's artifact "pqch-wallet-apk" (with its SHA256).
+#
+# Runs where the other PQCH jobs run (repository variable PQCH_RUNS_ON). On the self-hosted runner the
+# Android SDK, NDK and Gradle are downloaded once into the runner's tool cache (about 4 GB), and the
+# APK is signed with the runner's debug key (~/.android/debug.keystore), the same for every build, so
+# a new APK installs over the previous one. A release key comes before the public testnet.
+
+name: PQCH Android wallet
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'contrib/pqch/android/**'
+      - 'src/pqchwallet/**'
+      - '.github/workflows/android.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: pqch-android-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  NDK_VERSION: 27.2.12479018
+  ANDROID_API: 35
+
+jobs:
+  apk:
+    name: 'Test APK'
+    runs-on: ${{ fromJSON(vars.PQCH_RUNS_ON || '"ubuntu-24.04"') }}
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: ''
+      - name: Android SDK packages
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-${ANDROID_API}" "build-tools;35.0.0" "ndk;${NDK_VERSION}" >/dev/null
+          echo "ANDROID_NDK_HOME=${ANDROID_SDK_ROOT}/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Core library (NDK)
+        run: contrib/pqch/android/build-core.sh arm64-v8a x86_64
+      - name: APK
+        working-directory: contrib/pqch/android
+        env:
+          PQCH_APP_VERSION_CODE: ${{ github.run_number }}
+          PQCH_APP_VERSION_NAME: 0.1.${{ github.run_number }}-test
+        run: gradle --no-daemon assembleDebug
+      - name: Name and checksum
+        run: |
+          mkdir -p out
+          cp contrib/pqch/android/app/build/outputs/apk/debug/app-debug.apk "out/pqch-wallet-0.1.${{ github.run_number }}-test.apk"
+          (cd out && sha256sum *.apk > SHA256SUMS && cat SHA256SUMS)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pqch-wallet-apk
+          path: out/
+          retention-days: 30

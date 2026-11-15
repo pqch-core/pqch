@@ -10,8 +10,8 @@ mina** (a Google Play proíbe mineração no próprio telemóvel e um telemóvel
 |---|---|---|
 | Núcleo (chaves, endereços, assinatura) | `src/pqchwallet/` → `libpqchwallet` | feito, testado contra o nó (`test/functional/pqch_lightwallet.py`) |
 | Servidor de consulta | `pqch-electrs` + API do explorador (`/api/address/…/utxo`, `/api/address/…/txs`, `POST /api/tx`, `/api/v1/fees/recommended`) | já existe (explorador) |
-| App Android | `contrib/pqch/android/` (Kotlin) | a fazer |
-| Compilação do APK | workflow no runner de casa (JDK + Android SDK/NDK) | a fazer |
+| App Android | `contrib/pqch/android/` (Kotlin, Jetpack Compose) | primeira versão de teste |
+| Compilação do APK | `.github/workflows/android.yml` (runner de casa: JDK 17, Android SDK/NDK, Gradle) + `contrib/pqch/android/build-core.sh` | primeira versão |
 
 ## Porque o núcleo é o código do nó
 
@@ -45,3 +45,22 @@ Consequências:
 2. APK de teste na testnet fechada, instalado à mão nos telemóveis da equipa (com o WireGuard
    para chegar ao explorador da testnet).
 3. Restaurar no telemóvel uma carteira do PQCH Core e vice-versa; enviar e receber entre os dois.
+
+## O que a app de teste faz (0.1)
+
+- Criar carteira (24 palavras novas, confirmação de 3 palavras) ou restaurar (palavras + frase-passe opcional).
+- PIN de 6 a 12 algarismos; a app bloqueia ao sair dela; 5 PIN errados → esperas crescentes.
+- Saldo (disponível, pendente, minerado ainda imaturo), histórico, receber (endereço + QR, copiar),
+  enviar (colar endereço, valor ou "tudo", taxa rápida/normal/económica, ecrã de confirmação).
+- Definições: rede (testnet por omissão), servidor da API, mostrar as palavras (pede o PIN),
+  remover a carteira do telemóvel.
+- Ainda não: ler QR com a câmara, impressão digital, traduções, aumentar a taxa (RBF) a partir da app.
+
+## Instalar o APK de teste
+
+1. GitHub → Actions → **PQCH Android wallet** → a última execução verde → artefacto
+   **pqch-wallet-apk** (ZIP com o APK e o `SHA256SUMS`).
+2. Conferir o SHA256 do APK com o do ficheiro.
+3. Passar o APK para o telemóvel (cabo USB) e abri-lo; o Android pede para autorizar
+   "instalar apps desta origem" para o gestor de ficheiros (só para este teste).
+4. Usar só na testnet e sem valor real.

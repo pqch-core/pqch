@@ -29,9 +29,19 @@ function(add_boost_if_needed)
     endif()
   endif()
 
-  find_package(Boost 1.74.0 REQUIRED CONFIG)
-  mark_as_advanced(Boost_INCLUDE_DIR boost_headers_DIR)
-  set_target_properties(Boost::headers PROPERTIES IMPORTED_GLOBAL TRUE)
+  if(PQCH_BOOST_INCLUDE_DIR)
+    # PQCH: cross builds whose toolchain re-roots package searches (Android NDK, for the light
+    # wallet core) name the Boost headers directly; only headers are used.
+    if(NOT EXISTS "${PQCH_BOOST_INCLUDE_DIR}/boost/version.hpp")
+      message(FATAL_ERROR "PQCH_BOOST_INCLUDE_DIR has no boost/version.hpp: ${PQCH_BOOST_INCLUDE_DIR}")
+    endif()
+    add_library(Boost::headers INTERFACE IMPORTED GLOBAL)
+    set_target_properties(Boost::headers PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${PQCH_BOOST_INCLUDE_DIR}")
+  else()
+    find_package(Boost 1.74.0 REQUIRED CONFIG)
+    mark_as_advanced(Boost_INCLUDE_DIR boost_headers_DIR)
+    set_target_properties(Boost::headers PROPERTIES IMPORTED_GLOBAL TRUE)
+  endif()
   target_compile_definitions(Boost::headers INTERFACE
     # We don't use multi_index serialization.
     BOOST_MULTI_INDEX_DISABLE_SERIALIZATION
