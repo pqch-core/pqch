@@ -234,9 +234,16 @@ quânticos, mas depende de uma frase-passe forte.
 - Rever os alvos de fuzzing que assinam ou inferem descritores, porque agora leem os parâmetros da
   rede. O `psbt` já foi corrigido.
 - A migração de carteiras antigas do Bitcoin para descritores não é suportada nas redes PQCH.
-- Adaptar ao subsídio de 12,5 e às unidades os testes funcionais de carteira herdados do Bitcoin
-  (`wallet_basic`, `wallet_send`, `wallet_sendall`, `wallet_importdescriptors`, `rpc_psbt`). Correm
-  no modo antigo e falham nos montantes, não nas funções.
+- ~~Adaptar os testes funcionais de carteira herdados do Bitcoin.~~ Feito a 15 nov. 2026:
+  `wallet_basic`, `wallet_send`, `wallet_sendall`, `wallet_importdescriptors` e `rpc_psbt` passam e
+  estão no CI. As falhas eram só diferenças do PQCH, nenhuma de funcionamento: subsídio de 12,5,
+  unidades `quantum/vB` e `PQCH/kvB`, `MAX_MONEY` de 58,9 milhões (um valor de 22 milhões é válido
+  no PQCH) e a frase-passe obrigatória para exportar descritores privados de uma carteira cifrada.
+- `feature_assumevalid` fica fora do CI: o *assumevalid* só salta scripts quando o bloco está pelo
+  menos duas semanas de trabalho atrás do melhor cabeçalho. Com blocos de 1 minuto são mais de 20.160
+  blocos (o teste do Bitcoin enterra 2.100, que lá são duas semanas e meia), o que levaria mais de
+  15 minutos a minerar em Python. O comportamento visto ("block too recent relative to best header")
+  é o correto. Falta um teste próprio, mais curto, do caminho que salta os scripts.
 - **Carteiras de teste da primeira versão** (`p2mr(xprv…)`) já não carregam.
 - Carteiras de hardware com ML-DSA e SLH-DSA. Não são compatíveis com as carteiras BIP32 atuais.
 
