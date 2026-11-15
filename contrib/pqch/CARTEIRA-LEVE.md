@@ -42,8 +42,10 @@ Consequências:
 ## Testes antes do lançamento
 
 1. Núcleo: `pqch_lightwallet.py` (corre no CI).
-2. APK de teste na testnet fechada, instalado à mão nos telemóveis da equipa (com o WireGuard
-   para chegar ao explorador da testnet).
+2. APK de teste na **testnet pública** (decidido a 15 nov. 2026): o explorador público está em modo
+   mainnet e não serve a testnet fechada, e não se monta um índice só para a VPN. Os testes de saldo,
+   envio e receção começam quando o explorador passar a testnet (etapa 3, até 15 dez. 2026). Até lá
+   só se pode testar no telemóvel a parte que não usa a rede: criar e restaurar, PIN, receber (endereço e QR).
 3. Restaurar no telemóvel uma carteira do PQCH Core e vice-versa; enviar e receber entre os dois.
 
 ## O que a app de teste faz (0.1)
