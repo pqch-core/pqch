@@ -225,6 +225,21 @@ com `gpg --verify` e `sha256sum -c`), sem compilar na máquina:
   256 MiB), `Nice=10`, `IOWeight=50`; depende de `wg-quick@pqch`;
 - firewall `ufw`: entra só SSH (`limit`), 80 e 443 (site) e a 39333 só pela interface `pqch`.
 
+**API da testnet para carteiras leves** (16 nov. 2026; o explorador `explorer.pqch.org` fica só
+para a rede real): `https://api-testnet.pqch.org/api/`, na VPS pública, sem páginas.
+
+- `pqch-electrs` (≥ `24d809b`, que aceita as versões 0.x do PQCH) como serviço
+  `pqch-electrs-testnet`: utilizador `electrs`, índice em `/var/lib/pqch-electrs`, só em
+  `127.0.0.1:3000`, `--jsonrpc-import`; limites `CPUQuota=50%`, `MemoryMax=1G`.
+- RPC: utilizador `electrs` por `rpcauth` (palavra-passe só em `/etc/pqch-api/electrs.env`, root),
+  com `rpcwhitelist` de leitura e `sendrawtransaction`; `rpcwhitelistdefault=0` deixa o cookie local
+  com acesso total.
+- nginx: ficheiro próprio `/etc/nginx/sites-available/pqch-api-testnet` (os sites da máquina ficam
+  intactos); certificado Let's Encrypt por *webroot* (`/var/www/pqch-acme`, renovação automática com
+  `--deploy-hook "systemctl reload nginx"`); `/api/` → índice, 10 pedidos/s por IP (rajada 40),
+  só GET e POST, corpo até 2 MB; tudo o resto 404; HTTP redireciona para HTTPS.
+- DNS: registo A `api-testnet` → 72.61.20.80, sem AAAA (o nginx da VPS só escuta em IPv4).
+
 **Fase B (dia da abertura), nos dois nós:**
 
 1. Snapshot da máquina.
