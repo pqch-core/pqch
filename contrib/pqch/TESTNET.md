@@ -201,6 +201,40 @@ O nó arranca o minerador; parar ou reiniciar o nó para e reinicia o minerador.
 minerador parado (merged mining, por exemplo), pará-lo depois de arrancar o nó:
 `sudo systemctl stop pqch-minerar-testnet`.
 
+### Nós públicos da testnet (preparados a 16 nov. 2026)
+
+Dois nós vão servir de entrada à testnet aberta. São também as sementes fixas do código
+(`contrib/seeds/nodes_test.txt` → `src/chainparamsseeds.h`, a partir da 0.3.0):
+
+| Nó | IP público | Na VPN | Notas |
+|---|---|---|---|
+| Âncora | 187.127.89.83 | 10.77.0.1 | centro da VPN; mina |
+| VPS pública | 72.61.20.80 | 10.77.0.20 | partilha a máquina com um site (nginx); não mina, sem carteira |
+
+**Fase A (agora):** a VPS é um membro da VPN como os outros. O nó escuta só em `10.77.0.20`, não
+anuncia o IP e liga-se à âncora. Instalação feita com os binários assinados da release (conferidos
+com `gpg --verify` e `sha256sum -c`), sem compilar na máquina:
+
+- utilizador `pqch` sem shell; binários `pqchd` e `pqch-cli` em `/usr/local/bin`;
+- `/etc/wireguard/pqch.conf` com `PostUp = wg set %i private-key /etc/wireguard/pqch.key` (a chave
+  privada gerada na própria VPS; a âncora só recebeu a pública);
+- `pqch.conf` com `bind=10.77.0.20`, `addnode=10.77.0.1`, `disablewallet=1`, RPC só local,
+  `dbcache=300`, `maxmempool=100`;
+- serviço `pqchd-testnet` com limites para o site ter sempre prioridade: `CPUQuota=100%` (1 dos 2
+  núcleos), `MemoryHigh=2G`, `MemoryMax=2560M` (a verificação RandomX pode ter até 4 caches de
+  256 MiB), `Nice=10`, `IOWeight=50`; depende de `wg-quick@pqch`;
+- firewall `ufw`: entra só SSH (`limit`), 80 e 443 (site) e a 39333 só pela interface `pqch`.
+
+**Fase B (dia da abertura), nos dois nós:**
+
+1. Snapshot da máquina.
+2. `pqch.conf`: trocar `bind=10.77.0.x` por escutar em todas as interfaces (apagar a linha `bind`),
+   `discover=1` e `fixedseeds=1`; manter a RPC só local.
+3. Firewall: `ufw allow 39333/tcp comment 'PQCH testnet publica'` (e confirmar que o painel da
+   Hostinger não bloqueia a porta).
+4. Reiniciar o nó e testar de fora: `Test-NetConnection 72.61.20.80 -Port 39333` no PowerShell.
+5. Os membros da equipa continuam na VPN sem mudar nada.
+
 ### Cuidados
 
 - O runner da integração contínua corre código de pull requests: não deve ser o nó âncora.

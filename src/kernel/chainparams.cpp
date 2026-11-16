@@ -307,8 +307,9 @@ public:
         assert(consensus.hashGenesisBlock == uint256{"b3079ef1e4520057cda8cfb841850523d295519c1815a8e3287e2a9c465d9caa"});
         assert(genesis.hashMerkleRoot == uint256{"c39254a1cdab114a1e14d2fe8a31d686801052099170e132db6b2109109ab93c"});
 
-        // PQCH: seeds are added when the first public nodes are up (contrib/pqch/TESTNET.md).
-        vFixedSeeds.clear();
+        // PQCH: the project's public testnet nodes (contrib/seeds/nodes_test.txt, TESTNET.md). No DNS
+        // seed yet.
+        vFixedSeeds = std::vector<uint8_t>(std::begin(chainparams_seed_test), std::end(chainparams_seed_test));
         vSeeds.clear();
 
         base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1,111);

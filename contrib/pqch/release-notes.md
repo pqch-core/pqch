@@ -4,6 +4,9 @@
 
 **Changes**
 Since v0.2.10 (testnet trial; no consensus change):
+- Testnet: fixed seeds for the project's two public nodes (187.127.89.83 and 72.61.20.80, port
+  39333). A new testnet node with an empty address list finds the network without `-addnode`. Team
+  nodes with `fixedseeds=0` are unaffected.
 - P2P: a merged mined header that brings a Monero RandomX key no valid header has used, and that is
   not cached, is only checked when it comes from an outbound peer (or one with `noban`). Building
   the key's RandomX cache costs about 0.5 s and 256 MiB before fake work can be refused, so inbound
