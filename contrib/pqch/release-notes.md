@@ -3,7 +3,7 @@
 **PQCH {{VERSION}}**
 
 **Changes**
-Since v0.2.10 (testnet trial; no consensus change):
+In v0.3.0 (prepares the public testnet; no consensus change):
 - Android light wallet: release APKs are signed with the PQCH app release key. Check it with
   `apksigner verify --print-certs pqch-wallet-<version>.apk`; the certificate SHA-256 must be
   `39:86:31:73:B5:7A:8D:95:92:E4:FF:5C:84:D8:6D:87:27:82:BC:51:8A:7C:90:DE:F9:E2:F0:E7:3B:F3:D2:ED`.
@@ -27,8 +27,16 @@ Since v0.2.10 (testnet trial; no consensus change):
   per load with the default 1,000 + 1,000 addresses.
 - Wallet (PQCH-Qt): the Mining tab gives the network's coinbase maturity (100 blocks on testnet,
   720 on mainnet) instead of a fixed 720.
-- Light wallet core (`libpqchwallet`, for the Android wallet): same addresses and signatures as
-  PQCH Core from the same 24 words (not part of the downloads yet).
+- Android light wallet (testnet), `pqch-wallet-0.3.0.apk`: keeps only the 24 words (encrypted on
+  the phone, PIN, locks when leaving the app) and reads the chain from `https://api-testnet.pqch.org/api`.
+  Create or restore a wallet, receive (address and QR code), send (paste or **scan a QR code**, fee
+  choice, confirmation screen; "send the whole balance" is shown and confirmed as such). Its core
+  (`libpqchwallet`) is PQCH Core's own code: the same 24 words give the same addresses on the phone
+  and in PQCH Core.
+- Testnet services: faucet `https://faucet-testnet.pqch.org` (4 test coins per address and per
+  connection a day) and the API above for light wallets. The explorer stays for the real network.
+- Security reports: `SECURITY.md` now points to PQCH (GitHub private vulnerability reporting, or
+  community@pqch.org with the subject "security") instead of Bitcoin Core.
 
 Earlier, in v0.2.10:
 - Mining: `generatetoaddress` / `generatetodescriptor` start each search at a random nonce instead of 0
