@@ -107,7 +107,7 @@ keytool -genkeypair -v -storetype PKCS12 -keystore D:\android-pqch\pqch-wallet-r
 - A impressão digital **SHA-256 do certificado** que esse comando mostra publica-se nas notas de
   versão e na página da testnet: é o que permite a cada pessoa confirmar que o APK é do projeto.
 
-**Chave criada a 16 nov. 2026** (RSA 4096, SHA384withRSA, alias `pqch-wallet`, nas pens D: e E:).
+**Chave criada a 16 nov. 2026; ensaio de assinatura completo no mesmo dia (APK 0.3.0 do run #4)** (RSA 4096, SHA384withRSA, alias `pqch-wallet`, nas pens D: e E:).
 Impressão digital SHA-256 do certificado, a que todo o APK de release tem de mostrar:
 
 ```
@@ -119,13 +119,18 @@ Impressão digital SHA-256 do certificado, a que todo o APK de release tem de mo
 1. GitHub → Actions → **PQCH Android wallet** → *Run workflow*, com **release** marcado e a versão
    (por exemplo `0.3.0`). O artefacto traz `pqch-wallet-0.3.0-unsigned.apk` e o `SHA256SUMS`.
 2. No PC, conferir o SHA-256 do APK com o `SHA256SUMS` do artefacto.
-3. Assinar (pen D: ligada; pede a palavra-passe):
+3. Assinar (pen D: ligada). A palavra-passe entra pelo `Read-Host`, que aceita Ctrl+V (colar na
+   pergunta do próprio `apksigner` falhou no ensaio de 16 nov. 2026), e é apagada no fim:
    ```
-   C:\Android\build-tools\35.0.0\apksigner.bat sign --ks D:\android-pqch\pqch-wallet-release.jks --ks-key-alias pqch-wallet --out pqch-wallet-0.3.0.apk pqch-wallet-0.3.0-unsigned.apk
+   $s = Read-Host "Palavra-passe da chave" -AsSecureString
+   $env:PQCH_KS_PASS = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($s))
+   C:\Android\build-tools\35.0.0\apksigner.bat sign --ks D:\android-pqch\pqch-wallet-release.jks --ks-key-alias pqch-wallet --ks-pass env:PQCH_KS_PASS --out pqch-wallet-0.3.0.apk pqch-wallet-0.3.0-unsigned.apk
+   Remove-Item Env:PQCH_KS_PASS; Remove-Variable s
    C:\Android\build-tools\35.0.0\apksigner.bat verify --verbose --print-certs pqch-wallet-0.3.0.apk
    ```
-   O `verify` tem de dizer `Verified using v2 scheme: true` e mostrar a impressão digital SHA-256
-   publicada.
+   O `verify` tem de dizer `v2 … true` e `v3 … true` (o v1 fica `false`: não é preciso a partir do
+   Android 8, o mínimo da app) e `Signer #1 certificate SHA-256 digest:
+   39863173b57a8d9592e4ff5c84d86d872782bc518a7c90def9e2f0e73bf3d2ed`. Fechar a janela do PowerShell.
 4. Juntar o APK assinado à release do PQCH Core **antes** de assinar o `SHA256SUMS` com a chave GPG
    (`RELEASE.md`): acrescentar a linha `Get-FileHash` do APK ao `SHA256SUMS` e só depois assinar.
 5. Tirar a pen.
