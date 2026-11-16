@@ -8,8 +8,12 @@
 #
 # Runs where the other PQCH jobs run (repository variable PQCH_RUNS_ON). On the self-hosted runner the
 # Android SDK, NDK and Gradle are downloaded once into the runner's tool cache (about 4 GB), and the
-# APK is signed with the runner's debug key (~/.android/debug.keystore), the same for every build, so
-# a new APK installs over the previous one. A release key comes before the public testnet.
+# test APK is signed with the runner's debug key (~/.android/debug.keystore), the same for every build,
+# so a new test APK installs over the previous one.
+#
+# Release ("Run workflow" with "release" ticked and a version): builds the release APK UNSIGNED and
+# zip-aligned. It is signed afterwards on the release PC with the release key, which lives only on
+# the USB pens and never reaches the runner (contrib/pqch/CARTEIRA-LEVE.md, "Assinar uma versão").
 
 name: PQCH Android wallet
 on:
@@ -20,6 +24,15 @@ on:
       - 'src/pqchwallet/**'
       - '.github/workflows/android.yml'
   workflow_dispatch:
+    inputs:
+      release:
+        description: 'Release APK (unsigned, to be signed with the release key)'
+        type: boolean
+        default: false
+      version:
+        description: 'Release version name, e.g. 0.3.0 (release only)'
+        type: string
+        default: ''
 
 concurrency:
   group: pqch-android-${{ github.ref }}
@@ -57,16 +70,44 @@ jobs:
           gradle-version: '8.11.1'
       - name: Core library (NDK)
         run: contrib/pqch/android/build-core.sh arm64-v8a x86_64
+      - name: Version
+        id: v
+        env:
+          RELEASE: ${{ inputs.release == true }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          if [[ "${RELEASE}" == true ]]; then
+            [[ "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::version must look like 0.3.0"; exit 1; }
+            echo "name=${VERSION}" >> "$GITHUB_OUTPUT"
+            echo "task=assembleRelease" >> "$GITHUB_OUTPUT"
+            echo "file=pqch-wallet-${VERSION}-unsigned.apk" >> "$GITHUB_OUTPUT"
+            echo "src=release/app-release-unsigned.apk" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=0.1.${{ github.run_number }}-test" >> "$GITHUB_OUTPUT"
+            echo "task=assembleDebug" >> "$GITHUB_OUTPUT"
+            echo "file=pqch-wallet-0.1.${{ github.run_number }}-test.apk" >> "$GITHUB_OUTPUT"
+            echo "src=debug/app-debug.apk" >> "$GITHUB_OUTPUT"
+          fi
       - name: APK
         working-directory: contrib/pqch/android
         env:
           PQCH_APP_VERSION_CODE: ${{ github.run_number }}
-          PQCH_APP_VERSION_NAME: 0.1.${{ github.run_number }}-test
-        run: gradle --no-daemon assembleDebug
+          PQCH_APP_VERSION_NAME: ${{ steps.v.outputs.name }}
+        run: gradle --no-daemon ${{ steps.v.outputs.task }}
       - name: Name and checksum
+        env:
+          SRC: contrib/pqch/android/app/build/outputs/apk/${{ steps.v.outputs.src }}
+          FILE: ${{ steps.v.outputs.file }}
         run: |
           mkdir -p out
-          cp contrib/pqch/android/app/build/outputs/apk/debug/app-debug.apk "out/pqch-wallet-0.1.${{ github.run_number }}-test.apk"
+          ZIPALIGN="${ANDROID_SDK_ROOT}/build-tools/35.0.0/zipalign"
+          if [[ "${FILE}" == *-unsigned.apk ]] && ! "${ZIPALIGN}" -c -P 16 4 "${SRC}" >/dev/null; then
+            # Align before signing (aligning a signed APK would break its signature).
+            "${ZIPALIGN}" -P 16 -f 4 "${SRC}" "out/${FILE}"
+          else
+            cp "${SRC}" "out/${FILE}"
+          fi
+          "${ZIPALIGN}" -c -P 16 4 "out/${FILE}"
           (cd out && sha256sum *.apk > SHA256SUMS && cat SHA256SUMS)
       - uses: actions/upload-artifact@v4
         with:

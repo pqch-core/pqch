@@ -67,3 +67,62 @@ Consequências:
 3. Passar o APK para o telemóvel (cabo USB) e abri-lo; o Android pede para autorizar
    "instalar apps desta origem" para o gestor de ficheiros (só para este teste).
 4. Usar só na testnet e sem valor real.
+
+## Assinar uma versão (APK de release)
+
+O APK de teste é assinado com a chave de debug do runner. As versões publicadas são assinadas com a
+**chave de release da app**, que fica só nas pens USB (como a chave GPG das releases) e nunca passa
+pelo runner nem pelo GitHub.
+
+Porque importa: o Android só instala uma atualização se vier assinada com a mesma chave da versão
+instalada.
+- Quem **perder** a chave nunca mais consegue atualizar a app nos telemóveis: teria de publicar
+  outra app e pedir a toda a gente para mudar.
+- Quem a **roubar** consegue publicar uma "atualização" falsa, que o Android aceita.
+
+Por isso: duas pens (`D:` e `E:`), a palavra-passe só no Bitwarden, nunca no repositório, no runner
+nem na conversa.
+
+### Uma vez: ferramentas no PC das releases (Windows)
+
+1. **Java 17:** instalador MSI do Temurin 17 (adoptium.net). Traz o `keytool`.
+2. **apksigner:** "Command line tools only" da página oficial do Android Studio
+   (developer.android.com/studio). Conferir o SHA-256 do ZIP com o da página. Extrair para
+   `C:\Android\cmdline-tools\latest\`, e depois:
+   ```
+   C:\Android\cmdline-tools\latest\bin\sdkmanager.bat --sdk_root=C:\Android "build-tools;35.0.0"
+   ```
+   O `apksigner.bat` fica em `C:\Android\build-tools\35.0.0\`.
+
+### Uma vez: criar a chave (com a pen D: ligada)
+
+```
+mkdir D:\android-pqch
+keytool -genkeypair -v -storetype PKCS12 -keystore D:\android-pqch\pqch-wallet-release.jks -alias pqch-wallet -keyalg RSA -keysize 4096 -validity 36500 -dname "CN=PQCH Releases, O=PQCH"
+```
+- Palavra-passe nova e forte, guardada no Bitwarden (a mesma serve para o ficheiro e para a chave).
+- Validade de 100 anos: o Android não deixa trocar a chave de uma app já instalada.
+- Copiar `D:\android-pqch\` para `E:\android-pqch\` e confirmar que as duas cópias abrem:
+  `keytool -list -v -keystore E:\android-pqch\pqch-wallet-release.jks -alias pqch-wallet`.
+- A impressão digital **SHA-256 do certificado** que esse comando mostra publica-se nas notas de
+  versão e na página da testnet: é o que permite a cada pessoa confirmar que o APK é do projeto.
+
+### Em cada versão
+
+1. GitHub → Actions → **PQCH Android wallet** → *Run workflow*, com **release** marcado e a versão
+   (por exemplo `0.3.0`). O artefacto traz `pqch-wallet-0.3.0-unsigned.apk` e o `SHA256SUMS`.
+2. No PC, conferir o SHA-256 do APK com o `SHA256SUMS` do artefacto.
+3. Assinar (pen D: ligada; pede a palavra-passe):
+   ```
+   C:\Android\build-tools\35.0.0\apksigner.bat sign --ks D:\android-pqch\pqch-wallet-release.jks --ks-key-alias pqch-wallet --out pqch-wallet-0.3.0.apk pqch-wallet-0.3.0-unsigned.apk
+   C:\Android\build-tools\35.0.0\apksigner.bat verify --verbose --print-certs pqch-wallet-0.3.0.apk
+   ```
+   O `verify` tem de dizer `Verified using v2 scheme: true` e mostrar a impressão digital SHA-256
+   publicada.
+4. Juntar o APK assinado à release do PQCH Core **antes** de assinar o `SHA256SUMS` com a chave GPG
+   (`RELEASE.md`): acrescentar a linha `Get-FileHash` do APK ao `SHA256SUMS` e só depois assinar.
+5. Tirar a pen.
+
+Quem tem instalado um APK de teste (chave de debug) tem de o **desinstalar** antes de instalar o
+primeiro APK de release: as chaves são diferentes. Os dados da carteira de teste perdem-se (as
+palavras de recuperação continuam a restaurá-la).
