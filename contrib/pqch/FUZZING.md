@@ -40,6 +40,41 @@ limites (2^20 transações, 256 cadeias) são verificados antes. Ainda assim, a 
 árvores maiores que 2^32 e a largura usa `std::bit_floor`. Há um teste de regressão em
 `pqch_auxpow_tests`.
 
+## Resultados (16 nov. 2026, máquina de 2 núcleos, ASan + UBSan)
+
+**Passagem 1: todos os 228 alvos, 500 execuções cada.** 223 passaram à primeira.
+
+| Alvo | Resultado |
+| --- | --- |
+| `pow_transition` (herdado) | falha do próprio alvo: criava cadeias com uma dificuldade zero, negativa ou acima de `powLimit` no bloco de referência do ASERT. Na PQCH a referência é sempre o génesis, por isso nenhum par a escolhe. O alvo passou a usar `SetCompact` com as verificações de valor negativo e transbordo e a trocar valores inválidos por `powLimit`. Depois: ~10 mil execuções sem erros |
+| `connect_block` (herdado) | falha do próprio alvo: gastava recompensas de 50 (Bitcoin) em vez de 12,5 e ligava ao acaso o bit AuxPoW sem prova Monero. Corrigido (saídas 3,75 + 3,75 + 2,5 + 2,5; bit AuxPoW retirado da versão). Depois: ~200 mil execuções sem erros |
+| `utxo_snapshot`, `utxo_snapshot_invalid` (herdados) | não se aplicam: exigem dados *assumeutxo*, que a PQCH não tem |
+| `p2p_headers_presync` (herdado) | não se aplica ainda (sem trabalho mínimo de cadeia, ver acima) |
+
+**Passagem 2: 5 minutos por alvo nos alvos de maior risco.** Nenhum erro.
+
+| Alvo | Execuções |
+| --- | --- |
+| `descriptor_parse` | ~2,9 milhões |
+| `mocked_descriptor_parse` | ~2,8 milhões |
+| `script_sign` | ~610 mil |
+| `psbt` | ~1,9 milhões |
+| `script` | ~1,9 milhões |
+| `miniscript_string` | ~3,3 milhões |
+| `miniscript_smart` | ~275 mil |
+| `signature_checker` | ~2,2 milhões |
+| `script_flags` | ~2,4 milhões |
+| `script_interpreter` | ~2,1 milhões |
+| `key` | ~194 mil |
+| `pqch_p2mr_descriptor` | ~56 mil |
+| `pqch_pq_verify` | ~454 mil |
+| `pqch_auxpow_header` | ~2,6 milhões |
+| `headers_sync_state` | ~1,6 milhões |
+| `block_header` | ~2,2 milhões |
+| `pow` | ~582 mil |
+
+Nenhum dos alvos encontrou um erro no código do nó nesta ronda.
+
 ## Pendente
 
 - Corridas longas (horas) num servidor com mais núcleos, e um corpus guardado no repositório.
