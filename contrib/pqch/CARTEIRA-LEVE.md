@@ -57,7 +57,9 @@ Consequências:
   enviar (colar endereço, valor ou "tudo", taxa rápida/normal/económica, ecrã de confirmação).
 - Definições: rede (testnet por omissão), servidor da API, mostrar as palavras (pede o PIN),
   remover a carteira do telemóvel.
-- Ainda não: ler QR com a câmara, impressão digital, traduções, aumentar a taxa (RBF) a partir da app.
+- Enviar: ler o endereço com a câmara (**Scan QR code**; aceita também ligações `pqch:<endereço>?amount=…`).
+  A câmara só é pedida da primeira vez que se usa o leitor.
+- Ainda não: impressão digital, traduções, aumentar a taxa (RBF) a partir da app.
 
 ## Instalar o APK de teste
 

@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.ActivityResultLauncher
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -17,9 +18,18 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import com.google.zxing.client.android.Intents
+import com.journeyapps.barcodescanner.ScanContract
+import com.journeyapps.barcodescanner.ScanOptions
 
 class MainActivity : ComponentActivity() {
     private lateinit var model: AppModel
+
+    // Camera QR reader (Send screen). The reader is a separate screen, so the wallet is not locked
+    // while it is open; if the person leaves from the reader, it locks on return after 2 minutes.
+    private val scanLauncher: ActivityResultLauncher<ScanOptions> = registerForActivityResult(ScanContract()) { r ->
+        model.scanFinished(r.contents)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -27,13 +37,29 @@ class MainActivity : ComponentActivity() {
         // balances are never captured.
         window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
         model = AppModel(Vault(applicationContext))
+        model.launchScanner = {
+            scanLauncher.launch(
+                ScanOptions()
+                    .setDesiredBarcodeFormats(ScanOptions.QR_CODE)
+                    .setPrompt("Point the camera at a PQCH address")
+                    .setBeepEnabled(false)
+                    .setOrientationLocked(false)
+                    .addExtra(Intents.Scan.SCAN_TYPE, Intents.Scan.MIXED_SCAN)
+            )
+        }
         setContent { PqchTheme { App(model) } }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        model.checkScanTimeout()
     }
 
     override fun onStop() {
         super.onStop()
         // Leaving the app locks the wallet: the words are forgotten until the PIN is entered again.
-        model.lock()
+        // Opening the QR reader is not leaving the app.
+        if (!model.scanning) model.lock()
     }
 }
 
@@ -99,6 +125,36 @@ class AppModel(val vault: Vault) {
             } finally {
                 busy = false
             }
+        }
+    }
+
+    // QR reader
+    var launchScanner: (() -> Unit)? = null
+    var scanning = false
+        private set
+    private var scanStartedAt = 0L
+    /** The last QR read on the Send screen: (address, amount or null). */
+    var scanned by mutableStateOf<Pair<String, String?>?>(null)
+
+    fun scan() {
+        val launch = launchScanner ?: return
+        scanning = true
+        scanStartedAt = System.currentTimeMillis()
+        error = null
+        launch()
+    }
+
+    fun scanFinished(contents: String?) {
+        scanning = false
+        if (contents == null) return
+        val p = parsePaymentQr(contents)
+        if (p == null) error = "This QR code is not a PQCH address." else scanned = p
+    }
+
+    fun checkScanTimeout() {
+        if (scanning && System.currentTimeMillis() - scanStartedAt > 120_000) {
+            scanning = false
+            lock()
         }
     }
 

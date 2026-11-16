@@ -186,3 +186,23 @@ fun parsePqch(text: String): Long? = try {
 } catch (e: Exception) {
     null
 }
+
+/**
+ * A QR code from the Send screen's camera reader: a bare address, or a payment link
+ * "pqch:<address>?amount=1.5" (also "bitcoin:"-style links from other wallets' QR generators).
+ * Addresses printed in capitals (smaller QR codes) are lower-cased. Returns null if there is no
+ * address-like text; the address itself is then checked like a typed one.
+ */
+fun parsePaymentQr(text: String): Pair<String, String?>? {
+    var t = text.trim()
+    val colon = t.indexOf(':')
+    if (colon in 1..10 && t.substring(0, colon).all { it.isLetter() }) t = t.substring(colon + 1).removePrefix("//")
+    val q = t.indexOf('?')
+    val address = (if (q >= 0) t.substring(0, q) else t).trim()
+    if (address.isEmpty() || address.length > 120 || !address.all { it.isLetterOrDigit() }) return null
+    val amount = if (q < 0) null else t.substring(q + 1).split('&')
+        .map { it.split('=', limit = 2) }
+        .firstOrNull { it.size == 2 && it[0].equals("amount", ignoreCase = true) }?.get(1)
+        ?.takeIf { parsePqch(it) != null }
+    return (if (address == address.uppercase()) address.lowercase() else address) to amount
+}

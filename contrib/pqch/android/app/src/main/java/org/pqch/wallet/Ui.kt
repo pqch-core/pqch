@@ -39,6 +39,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -469,6 +470,13 @@ fun SendScreen(m: AppModel) {
     val st = m.state
     val toError = remember(to) { if (to.isBlank()) null else Core.addressError(to.trim()) }
     val parsed = parsePqch(amount)
+    LaunchedEffect(m.scanned) {
+        m.scanned?.let { (address, amt) ->
+            to = address
+            if (amt != null) { amount = amt; sendAll = false }
+            m.scanned = null
+        }
+    }
     Page("Send", m, back = { m.go(Screen.Home) }) {
         if (st != null) Note("Available: ${formatPqch(st.confirmed + st.pending)} PQCH")
         OutlinedTextField(
@@ -478,7 +486,10 @@ fun SendScreen(m: AppModel) {
             modifier = Modifier.fillMaxWidth(),
         )
         if (toError != null) Text(toError, color = Red, fontSize = 13.sp)
-        TextButton(onClick = { clipboard.getText()?.let { to = it.text.trim() } }) { Text("Paste", color = Cyan) }
+        Row {
+            TextButton(onClick = { clipboard.getText()?.let { to = it.text.trim() } }) { Text("Paste", color = Cyan) }
+            TextButton(onClick = { m.scan() }) { Text("Scan QR code", color = Cyan) }
+        }
         OutlinedTextField(
             value = if (sendAll) "everything" else amount, onValueChange = { amount = it }, enabled = !sendAll,
             label = { Text("Amount (PQCH)") }, singleLine = true,
