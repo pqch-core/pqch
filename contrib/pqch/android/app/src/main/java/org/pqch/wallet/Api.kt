@@ -11,7 +11,7 @@ import java.net.URL
 class ApiException(message: String) : IOException(message)
 
 /**
- * The explorer's API (pqch-electrs, Esplora style) at `base`, e.g. https://explorer.pqch.org/testnet/api.
+ * The explorer's API (pqch-electrs, Esplora style) at `base`, e.g. https://explorer.pqch.org/api (real network) or https://api-testnet.pqch.org/api (testnet).
  * Only HTTPS (network_security_config.xml).
  */
 class Api(base: String) {

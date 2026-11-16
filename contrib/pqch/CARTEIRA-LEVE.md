@@ -9,7 +9,7 @@ mina** (a Google Play proíbe mineração no próprio telemóvel e um telemóvel
 | Peça | Onde | Estado |
 |---|---|---|
 | Núcleo (chaves, endereços, assinatura) | `src/pqchwallet/` → `libpqchwallet` | feito, testado contra o nó (`test/functional/wallet_pqch_lightwallet.py`) |
-| Servidor de consulta | `pqch-electrs` + API do explorador (`/api/address/…/utxo`, `/api/address/…/txs`, `POST /api/tx`, `/api/v1/fees/recommended`) | já existe (explorador) |
+| Servidor de consulta | `pqch-electrs` (API Esplora: `/address/…/utxo`, `/address/…/txs`, `POST /tx`, taxas em `/v1/fees/recommended` ou `/fee-estimates`). Rede real: `https://explorer.pqch.org/api`. Testnet: `https://api-testnet.pqch.org/api` (só API, sem páginas, na VPS 72.61.20.80) | rede real: explorador; testnet: a montar (etapa 3) |
 | App Android | `contrib/pqch/android/` (Kotlin, Jetpack Compose) | primeira versão de teste |
 | Compilação do APK | `.github/workflows/android.yml` (runner de casa: JDK 17, Android SDK/NDK, Gradle) + `contrib/pqch/android/build-core.sh` | primeira versão |
 
@@ -42,10 +42,11 @@ Consequências:
 ## Testes antes do lançamento
 
 1. Núcleo: `wallet_pqch_lightwallet.py` (corre no CI).
-2. APK de teste na **testnet pública** (decidido a 15 nov. 2026): o explorador público está em modo
-   mainnet e não serve a testnet fechada, e não se monta um índice só para a VPN. Os testes de saldo,
-   envio e receção começam quando o explorador passar a testnet (etapa 3, até 15 dez. 2026). Até lá
-   só se pode testar no telemóvel a parte que não usa a rede: criar e restaurar, PIN, receber (endereço e QR).
+2. APK de teste na **testnet pública**. O explorador `explorer.pqch.org` fica só para a rede real
+   (decidido a 16 nov. 2026); a testnet tem uma API própria sem páginas, `api-testnet.pqch.org`, na
+   VPS dos nós públicos. Os testes de saldo, envio e receção começam quando essa API estiver no ar.
+   Até lá só se pode testar no telemóvel a parte que não usa a rede: criar e restaurar, PIN, receber
+   (endereço e QR).
 3. Restaurar no telemóvel uma carteira do PQCH Core e vice-versa; enviar e receber entre os dois.
 
 ## O que a app de teste faz (0.1)

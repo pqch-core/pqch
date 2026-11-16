@@ -150,7 +150,8 @@ class WalletSync(private val keys: Keys, private val api: Api, private val coinb
     }
 }
 
-/** Fee rates in quanta per vB from the explorer (mempool backend), with sane fallbacks. */
+/** Fee rates in quanta per vB: the explorer's mempool backend if there is one, else the index's own
+ *  estimates (pqch-electrs `/fee-estimates`, blocks → rate), else sane minimums. */
 data class FeeRates(val fast: Double, val normal: Double, val economy: Double)
 
 fun fetchFees(api: Api): FeeRates = try {
@@ -161,7 +162,17 @@ fun fetchFees(api: Api): FeeRates = try {
         economy = j.optDouble("economyFee", 1.0).coerceAtLeast(1.0),
     )
 } catch (e: Exception) {
-    FeeRates(2.0, 1.0, 1.0)
+    try {
+        val j = JSONObject(api.get("/fee-estimates"))
+        // 1 block is a minute on PQCH: 1 / 30 / 144 blocks for fast / normal / economy.
+        fun at(blocks: Int, fallback: Double): Double {
+            val k = j.keys().asSequence().mapNotNull { it.toIntOrNull() }.filter { it >= blocks }.minOrNull()
+            return (if (k == null) fallback else j.optDouble(k.toString(), fallback)).coerceAtLeast(1.0)
+        }
+        FeeRates(fast = at(1, 2.0), normal = at(30, 1.0), economy = at(144, 1.0))
+    } catch (e2: Exception) {
+        FeeRates(2.0, 1.0, 1.0)
+    }
 }
 
 /** 123456789 → "1.23456789". */

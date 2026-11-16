@@ -131,7 +131,8 @@ class Vault(context: Context) {
 
         fun defaultServer(network: String) = when (network) {
             "main" -> "https://explorer.pqch.org/api"
-            else -> "https://explorer.pqch.org/testnet/api"
+            // The explorer is for the real network only; the testnet has an API without pages.
+            else -> "https://api-testnet.pqch.org/api"
         }
     }
 }
