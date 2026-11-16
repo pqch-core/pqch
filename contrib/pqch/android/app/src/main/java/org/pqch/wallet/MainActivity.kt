@@ -73,7 +73,7 @@ sealed interface Screen {
     data object Home : Screen
     data object Receive : Screen
     data object Send : Screen
-    data class Review(val tx: JSONObject, val to: String) : Screen
+    data class Review(val tx: JSONObject, val to: String, val sendAll: Boolean) : Screen
     data class Sent(val txid: String) : Screen
     data object Settings : Screen
     data object RevealWords : Screen
@@ -229,7 +229,7 @@ class AppModel(val vault: Vault) {
             .put("locktime", s.tipHeight)
         if (!sendAll) request.put("amount", amount ?: throw CoreException("Enter the amount."))
         val tx = withContext(Dispatchers.Default) { Core.createTx(k, request) }
-        go(Screen.Review(tx, to.trim()))
+        go(Screen.Review(tx, to.trim(), sendAll))
     }
 
     fun broadcast(tx: JSONObject) = task {

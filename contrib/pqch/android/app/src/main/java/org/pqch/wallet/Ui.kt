@@ -491,16 +491,24 @@ fun SendScreen(m: AppModel) {
             TextButton(onClick = { m.scan() }) { Text("Scan QR code", color = Cyan) }
         }
         OutlinedTextField(
-            value = if (sendAll) "everything" else amount, onValueChange = { amount = it }, enabled = !sendAll,
+            value = if (sendAll) "whole balance" else amount, onValueChange = { amount = it }, enabled = !sendAll,
             label = { Text("Amount (PQCH)") }, singleLine = true,
             isError = !sendAll && amount.isNotBlank() && parsed == null,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
         )
+        val everything = st?.let { formatPqch(it.confirmed + it.pending) }
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(checked = sendAll, onCheckedChange = { sendAll = it })
-            Text("Send everything (the fee is taken from the amount)", color = Ink, fontSize = 14.sp)
+            // Ticking it replaces any amount typed above: the whole balance goes, so the typed amount
+            // is cleared to avoid the impression that only that amount will be sent.
+            Checkbox(checked = sendAll, onCheckedChange = { sendAll = it; if (it) amount = "" })
+            Text(
+                "Send the whole balance" + (everything?.let { " ($it PQCH)" } ?: "") + " instead of an amount",
+                color = Ink, fontSize = 14.sp,
+            )
         }
+        if (sendAll) Warning("Everything in this wallet will be sent" + (everything?.let { ": $it PQCH" } ?: "") +
+            ", minus the fee. Untick the box to send only part of it.")
         Spacer(Modifier.height(8.dp))
         Text("Fee", color = Ink, fontWeight = FontWeight.SemiBold)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 8.dp)) {
@@ -530,12 +538,13 @@ fun ReviewScreen(m: AppModel, s: Screen.Review) {
     val tx = s.tx
     val amount = tx.getLong("amount")
     val fee = tx.getLong("fee")
-    Page("Confirm the payment", m, back = { m.go(Screen.Send) }) {
+    Page(if (s.sendAll) "Confirm: send everything" else "Confirm the payment", m, back = { m.go(Screen.Send) }) {
+        if (s.sendAll) Warning("You are sending the WHOLE BALANCE of this wallet. The wallet will be empty afterwards.")
         Panel {
             Text("TO", color = Muted, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
             Text(s.to, color = Ink, fontFamily = FontFamily.Monospace, fontSize = 14.sp)
             Spacer(Modifier.height(12.dp))
-            ReviewLine("Amount", "${formatPqch(amount)} PQCH", Ink)
+            ReviewLine(if (s.sendAll) "Amount (everything)" else "Amount", "${formatPqch(amount)} PQCH", Ink)
             ReviewLine("Fee", "${formatPqch(fee)} PQCH", Muted)
             ReviewLine("Size", "${tx.getLong("vsize")} vB", Muted)
             Box(Modifier.fillMaxWidth().padding(vertical = 8.dp).height(1.dp).background(Line))
@@ -581,6 +590,8 @@ fun SettingsScreen(m: AppModel) {
     var pin by remember { mutableStateOf("") }
     val hasWallet = m.vault.hasWallet
     Page("Settings", m, back = { m.go(if (m.keys != null) Screen.Home else if (hasWallet) Screen.Unlock else Screen.Welcome) }) {
+        // Which build is installed (the build number grows with every APK, so an update can be checked).
+        Note("PQCH Wallet ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE})")
         Panel {
             Text("Network", color = Ink, fontWeight = FontWeight.SemiBold)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 8.dp)) {
