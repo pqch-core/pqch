@@ -1,0 +1,25 @@
+[Unit]
+Description=PQCH testnet faucet (torneira)
+After=pqchd-testnet.service
+Requires=pqchd-testnet.service
+
+[Service]
+User=faucet
+Group=faucet
+EnvironmentFile=/etc/pqch-api/faucet.env
+Environment=RPC_URL=http://127.0.0.1:39332/wallet/torneira RPC_USER=faucet AMOUNT=4 DAILY_CAP=400 BURST=10 LISTEN=127.0.0.1:3010 DB=/var/lib/pqch-faucet/faucet.sqlite TRUST_PROXY=1
+ExecStart=/usr/bin/python3 -I /opt/pqch-faucet/faucet.py
+Restart=on-failure
+RestartSec=10
+CPUQuota=25%
+MemoryMax=256M
+Nice=10
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/pqch-faucet
+NoNewPrivileges=true
+PrivateDevices=true
+
+[Install]
+WantedBy=multi-user.target
