@@ -43,10 +43,21 @@ Para voltar aos runners do GitHub basta apagar a variável `PQCH_RUNS_ON`; o wor
 
 ## Segurança
 
-- **Só com o repositório privado.** Um runner próprio executa o código de cada pull request. Num
-  repositório público, qualquer pessoa podia abrir um PR e correr código na máquina. Se o repositório
-  passar a público, desliga primeiro o runner (ou exige aprovação para PRs de fora em
-  Settings › Actions › General › Fork pull request workflows).
+- **Pull requests de fora nunca correm neste runner.** No `pqch.yml`, um pull request vindo de um
+  fork corre sempre nos runners do GitHub (gratuitos em repositórios públicos), mesmo com
+  `PQCH_RUNS_ON` definido. Os outros workflows (`android.yml`, `release.yml`, `ci.yml`) não correm em
+  pull requests. Os pull requests de ramos do próprio repositório (só quem tem acesso de escrita)
+  continuam a usar o runner.
+- **Ao tornar o repositório público** (decidido: na abertura da testnet), no GitHub, por esta ordem:
+  1. *Settings › Actions › General › Approval for running fork pull request workflows from
+     contributors*: **Require approval for all external contributors**. Um PR de fora só corre
+     depois de alguém da equipa ler o código e aprovar.
+  2. *Organização pqch-core › Settings › Actions › Runner groups › Default*: o grupo tem de permitir
+     **só o repositório `pqch`** (*Selected repositories*), e **Allow public repositories** tem de
+     estar ligado, senão o runner deixa de aceitar jobs do repositório público.
+  3. *Settings › Code security › Private vulnerability reporting*: **Enable** (`SECURITY.md`).
+  4. Confirmar com um PR de teste a partir de um fork que o job corre em `ubuntu-24.04` e não no
+     runner próprio.
 - **Utilizador sem privilégios.** O serviço corre como `pqch-runner`, sem sudo. Os pacotes de
   compilação são instalados uma vez pelo script; os jobs nunca pedem sudo.
 - **Máquina dedicada, ou pelo menos sem segredos.** Não guardes na mesma máquina carteiras, chaves SSH

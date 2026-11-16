@@ -10,6 +10,9 @@
 #   tsan         weekly and by hand: unit tests with ThreadSanitizer.
 # The inherited Bitcoin Core matrix (ci.yml) only runs by hand.
 #
+# Pull requests from forks ALWAYS run on GitHub's runners, never on the project's own runner: their
+# code is untrusted and the self-hosted runner sits in the team's network (RUNNER.md).
+#
 # Where the jobs run: the repository variable PQCH_RUNS_ON (Settings > Secrets and variables >
 # Actions > Variables), a JSON label list such as ["self-hosted","linux","x64","pqch"] for the
 # project's own runner (contrib/pqch/RUNNER.md). Without it, GitHub's ubuntu-24.04 runners.
@@ -53,7 +56,7 @@ jobs:
   build-test:
     name: 'Build and test'
     if: github.event_name != 'schedule'
-    runs-on: ${{ fromJSON(vars.PQCH_RUNS_ON || '"ubuntu-24.04"') }}
+    runs-on: ${{ fromJSON((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && '"ubuntu-24.04"' || vars.PQCH_RUNS_ON || '"ubuntu-24.04"') }}
     timeout-minutes: 150
     steps:
       - uses: actions/checkout@v6
@@ -96,7 +99,7 @@ jobs:
   sanitizers:
     name: 'ASan + UBSan'
     if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
-    runs-on: ${{ fromJSON(vars.PQCH_RUNS_ON || '"ubuntu-24.04"') }}
+    runs-on: ${{ fromJSON((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && '"ubuntu-24.04"' || vars.PQCH_RUNS_ON || '"ubuntu-24.04"') }}
     timeout-minutes: 240
     env:
       ASAN_OPTIONS: detect_leaks=1:detect_stack_use_after_return=1
@@ -129,7 +132,7 @@ jobs:
   fuzz:
     name: 'Fuzz (PQCH targets)'
     if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
-    runs-on: ${{ fromJSON(vars.PQCH_RUNS_ON || '"ubuntu-24.04"') }}
+    runs-on: ${{ fromJSON((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && '"ubuntu-24.04"' || vars.PQCH_RUNS_ON || '"ubuntu-24.04"') }}
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v6
@@ -170,7 +173,7 @@ jobs:
   tsan:
     name: 'TSan'
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ${{ fromJSON(vars.PQCH_RUNS_ON || '"ubuntu-24.04"') }}
+    runs-on: ${{ fromJSON((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && '"ubuntu-24.04"' || vars.PQCH_RUNS_ON || '"ubuntu-24.04"') }}
     timeout-minutes: 300
     env:
       TSAN_OPTIONS: halt_on_error=1:second_deadlock_stack=1:suppressions=${{ github.workspace }}/test/sanitizer_suppressions/tsan
