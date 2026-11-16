@@ -4,6 +4,10 @@
 
 **Changes**
 Since v0.2.10 (testnet trial; no consensus change):
+- Android light wallet: release APKs are signed with the PQCH app release key. Check it with
+  `apksigner verify --print-certs pqch-wallet-<version>.apk`; the certificate SHA-256 must be
+  `39:86:31:73:B5:7A:8D:95:92:E4:FF:5C:84:D8:6D:87:27:82:BC:51:8A:7C:90:DE:F9:E2:F0:E7:3B:F3:D2:ED`.
+  Test APKs (debug key) must be uninstalled before installing a release APK.
 - Testnet: fixed seeds for the project's two public nodes (187.127.89.83 and 72.61.20.80, port
   39333). A new testnet node with an empty address list finds the network without `-addnode`. Team
   nodes with `fixedseeds=0` are unaffected.

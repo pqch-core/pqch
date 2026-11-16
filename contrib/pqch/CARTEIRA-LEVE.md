@@ -107,6 +107,13 @@ keytool -genkeypair -v -storetype PKCS12 -keystore D:\android-pqch\pqch-wallet-r
 - A impressão digital **SHA-256 do certificado** que esse comando mostra publica-se nas notas de
   versão e na página da testnet: é o que permite a cada pessoa confirmar que o APK é do projeto.
 
+**Chave criada a 16 nov. 2026** (RSA 4096, SHA384withRSA, alias `pqch-wallet`, nas pens D: e E:).
+Impressão digital SHA-256 do certificado, a que todo o APK de release tem de mostrar:
+
+```
+39:86:31:73:B5:7A:8D:95:92:E4:FF:5C:84:D8:6D:87:27:82:BC:51:8A:7C:90:DE:F9:E2:F0:E7:3B:F3:D2:ED
+```
+
 ### Em cada versão
 
 1. GitHub → Actions → **PQCH Android wallet** → *Run workflow*, com **release** marcado e a versão
