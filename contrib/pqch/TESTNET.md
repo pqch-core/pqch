@@ -240,6 +240,17 @@ para a rede real): `https://api-testnet.pqch.org/api/`, na VPS pública, sem pá
   só GET e POST, corpo até 2 MB; tudo o resto 404; HTTP redireciona para HTTPS.
 - DNS: registo A `api-testnet` → 72.61.20.80, sem AAAA (o nginx da VPS só escuta em IPv4).
 
+**Torneira** (16 nov. 2026): `https://faucet-testnet.pqch.org`, 4 moedas por pedido
+(`contrib/pqch/torneira/`). Carteira `torneira` no nó da VPS (sem cifra, só moedas de teste),
+utilizador RPC `faucet` limitado a `validateaddress`, `sendtoaddress` e `getbalances`;
+`fallbackfee=0.0001` no `pqch.conf` da VPS. Primeiro pedido real pelo browser às 14:43.
+
+**Reabastecer a torneira:** a partir da carteira `mineracao` da âncora, **em parcelas de 250**:
+`for i in $(seq 1 16); do c -named sendtoaddress address=<endereço da torneira> amount=250 fee_rate=10 || break; done`.
+Uma recompensa de bloco vale 12,5 e cada entrada P2MR ocupa cerca de 4 kB, por isso um envio de
+milhares de moedas teria centenas de entradas e passaria o limite de tamanho de uma transação
+padrão (~100 kvB). 250 moedas são ~20 entradas (~80 kvB).
+
 **Fase B (dia da abertura), nos dois nós:**
 
 1. Snapshot da máquina.
