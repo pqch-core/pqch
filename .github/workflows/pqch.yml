@@ -17,10 +17,21 @@
 # ccache lives in the runner's home directory.
 
 name: PQCH CI
+# Pushes and pull requests that only change documentation, the Android app (its own workflow) or the
+# faucet do not start a run, so they neither use the runner for 80 minutes nor cancel a run in
+# progress.
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'contrib/pqch/android/**'
+      - 'contrib/pqch/torneira/**'
   pull_request:
+    paths-ignore:
+      - '**/*.md'
+      - 'contrib/pqch/android/**'
+      - 'contrib/pqch/torneira/**'
   schedule:
     - cron: '17 3 * * 1'  # Mondays 03:17 UTC (TSan)
   workflow_dispatch:
