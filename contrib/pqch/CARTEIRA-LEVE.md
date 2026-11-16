@@ -49,6 +49,13 @@ Consequências:
    (endereço e QR).
 3. Restaurar no telemóvel uma carteira do PQCH Core e vice-versa; enviar e receber entre os dois.
 
+**Primeiro teste num telemóvel (16 nov. 2026, Android, APK de release assinado, testnet pública via
+`api-testnet.pqch.org`): validado.** Criar carteira, palavras, PIN, bloqueio ao sair, receber da
+torneira, ler o endereço por QR, enviar, desinstalar e restaurar pelas 24 palavras com o saldo de
+volta. Defeito encontrado e corrigido no mesmo dia: a caixa "enviar tudo" enviava o saldo inteiro
+mesmo com um valor escrito, sem o dizer claramente (agora apaga o valor, mostra o saldo e avisa no
+ecrã de confirmação). Falta: restaurar no PQCH Core uma carteira do telemóvel e vice-versa.
+
 ## O que a app de teste faz (0.1)
 
 - Criar carteira (24 palavras novas, confirmação de 3 palavras) ou restaurar (palavras + frase-passe opcional).
