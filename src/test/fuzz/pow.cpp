@@ -100,8 +100,11 @@ FUZZ_TARGET(pow_transition, .init = initialize_pow)
 
     const arith_uint256 pow_limit = UintToArith256(consensus_params.powLimit);
     arith_uint256 old_target;
-    old_target.SetCompact(nbits);
-    if (old_target > pow_limit) {
+    bool negative, overflow;
+    old_target.SetCompact(nbits, &negative, &overflow);
+    // PQCH: the first header is the ASERT anchor (the genesis block on every network), whose target
+    // is always a valid one; zero, negative or overflowing compact targets cannot occur there.
+    if (negative || overflow || old_target == 0 || old_target > pow_limit) {
         nbits = pow_limit.GetCompact();
     }
     // Create one difficulty adjustment period worth of headers

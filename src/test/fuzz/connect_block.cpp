@@ -2,6 +2,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include <auxpow.h>
 #include <addresstype.h>
 #include <chain.h>
 #include <consensus/amount.h>
@@ -196,17 +197,18 @@ void AddExtraTxsToMempool(TestingSetup& setup)
         ctx.vin[0] = g_spend_candidate_txins[i];
         ctx.vout.resize(4);
         // Arbitrarily create various outputs of different kinds in the same tx.
+        // PQCH: they add up to the 12.5 PQCH block reward (Bitcoin: 15 + 15 + 10 + 10 = 50).
         // P2WSH
-        ctx.vout[0].nValue = CAmount(15 * COIN);
+        ctx.vout[0].nValue = CAmount(375 * COIN / 100);
         ctx.vout[0].scriptPubKey = P2WSH_OP_TRUE;
         // P2SH
-        ctx.vout[1].nValue = CAmount(15 * COIN);
+        ctx.vout[1].nValue = CAmount(375 * COIN / 100);
         ctx.vout[1].scriptPubKey = P2SH_OP_TRUE;
         // Taproot
-        ctx.vout[2].nValue = CAmount(10 * COIN);
+        ctx.vout[2].nValue = CAmount(250 * COIN / 100);
         ctx.vout[2].scriptPubKey = TAPROOT_OP_TRUE;
         // Empty script
-        ctx.vout[3].nValue = CAmount(10 * COIN);
+        ctx.vout[3].nValue = CAmount(250 * COIN / 100);
         ctx.vout[3].scriptPubKey = CScript();
 
         LOCK(::cs_main);
@@ -395,7 +397,9 @@ CBlock ConsumeBlock(FuzzedDataProvider& fuzzed_data_provider, const CBlock& prev
 
     // Give the fuzzer input the ability to mutate block header fields.
     if (fuzzed_data_provider.ConsumeBool()) {
-        block.nVersion = fuzzed_data_provider.ConsumeIntegral<int32_t>();
+        // PQCH: without the merged mining bit (0x100): this target builds no auxpow proof, and a header
+        // with the bit and no proof cannot exist (it is not deserialized without one).
+        block.nVersion = fuzzed_data_provider.ConsumeIntegral<int32_t>() & ~auxpow::VERSION_AUXPOW;
     }
     if (fuzzed_data_provider.ConsumeBool()) {
         block.hashPrevBlock = ConsumeUInt256(fuzzed_data_provider);
