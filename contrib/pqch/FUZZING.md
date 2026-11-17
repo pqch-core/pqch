@@ -77,7 +77,10 @@ Nenhum dos alvos encontrou um erro no código do nó nesta ronda.
 
 ## Pendente
 
-- Corridas longas (horas) num servidor com mais núcleos, e um corpus guardado no repositório.
+- Corpus guardado no repositório.
+- Um alvo para as 24 palavras de recuperação (BIP39).
+
+As corridas longas fazem-se agora na máquina de testes, sem parar: `servidor-testes/README.md`.
 - Fuzzing com sanitizers na integração contínua.
 - Vetores ACVP completos do NIST para ML-DSA e SLH-DSA.
 - Rever o alvo `p2p_headers_presync` quando houver um trabalho mínimo de cadeia.

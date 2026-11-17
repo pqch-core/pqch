@@ -6,6 +6,7 @@
 > `ubuntu-24.04`. Num repositório público, um runner registado no repositório só fica protegido pela
 > aprovação manual dos pull requests de fora; por isso não deve voltar a ser usado aqui. Este guia
 > fica para uma eventual máquina dedicada, sem nada de pessoal, e só com essa aprovação ligada.
+> A máquina que era o runner passou a ser a máquina de testes (`servidor-testes/README.md`).
 
 A CI do PQCH (`.github/workflows/pqch.yml`) pode correr numa máquina do projeto em vez dos runners do
 GitHub. Com o plano gratuito, um repositório privado tem uma quota mensal de computação pequena, e os
