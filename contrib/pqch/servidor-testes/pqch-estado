@@ -3,7 +3,7 @@
 if systemctl list-unit-files pqch-minerar-testnet.service --no-legend 2>/dev/null | grep -q . && [[ -d /var/lib/pqch-minerador ]]; then
     echo "== Mineração (testnet)"
     echo "nó: $(systemctl is-active pqchd-testnet)   minerador: $(systemctl is-active pqch-minerar-testnet)"
-    C=(pqch-cli -testnet -datadir=/var/lib/pqch-minerador)
+    C=(/usr/local/bin/pqch-cli -testnet -datadir=/var/lib/pqch-minerador)
     echo "altura: $(sudo -u pqch-minerador "${C[@]}" getblockcount 2>/dev/null || echo '-')   ligações: $(sudo -u pqch-minerador "${C[@]}" getconnectioncount 2>/dev/null || echo '-')"
     echo "blocos encontrados nas últimas 24 h: $(journalctl -u pqch-minerar-testnet --since '24 hours ago' -q -o cat | grep -c 'bloco encontrado')"
     echo "saldo da carteira mineracao: $(sudo -u pqch-minerador "${C[@]}" -rpcwallet=mineracao getbalance 2>/dev/null || echo '-') (moedas de teste; amadurecem ao fim de 100 blocos)"

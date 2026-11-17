@@ -69,8 +69,10 @@ O nó de vigilância usa a porta RPC 39342, para poder coexistir com outro nó n
 ## Ver o estado
 
 ```bash
-sudo pqch-estado
+sudo /usr/local/bin/pqch-estado
 ```
+
+(O caminho completo porque, no Kali, o `sudo` não procura em `/usr/local/bin`.)
 
 Na máquina que vigia: as últimas horas da vigilância, os avisos das últimas 24 horas, o alvo de
 fuzzing em curso e quantas entradas com falha há para analisar. Na que mina: altura, ligações,

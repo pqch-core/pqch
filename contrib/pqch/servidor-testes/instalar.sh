@@ -266,4 +266,4 @@ else
     echo "O nó sincroniza primeiro; depois o minerador arranca sozinho (journalctl -u pqch-minerar-testnet -f)."
 fi
 echo
-echo "Pronto. Resumo a qualquer momento: sudo pqch-estado"
+echo "Pronto. Resumo a qualquer momento: sudo /usr/local/bin/pqch-estado"
