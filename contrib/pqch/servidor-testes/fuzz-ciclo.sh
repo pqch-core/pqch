@@ -14,6 +14,7 @@ ESTADO="${PQCH_FUZZ_ESTADO:-/var/lib/pqch-fuzz}"
 JOBS="${PQCH_FUZZ_JOBS:-$(( $(nproc) > 1 ? $(nproc) - 1 : 1 ))}"
 MIN_PQCH="${PQCH_FUZZ_MIN_PQCH:-45}"     # minutos por alvo do PQCH
 MIN_HERDADO="${PQCH_FUZZ_MIN_HERDADO:-15}" # minutos por alvo herdado do Bitcoin Core
+RSS="${PQCH_FUZZ_RSS:-3000}"               # memória máxima por processo (MB)
 
 ALVOS_PQCH="pqch_pq_verify pqch_p2mr_descriptor pqch_auxpow_header pqch_auxpow_monero_block pqch_monero_primitives"
 ALVOS_HERDADOS="headers_sync_state block_header pow pow_transition connect_block descriptor_parse mocked_descriptor_parse script_sign psbt script script_flags script_interpreter signature_checker miniscript_string miniscript_smart key"
@@ -40,7 +41,7 @@ correr() {
     registo "$alvo: ${minutos} min, $JOBS processos"
     ( cd "$ESTADO" && FUZZ="$alvo" timeout --kill-after=60 $(( minutos * 60 + 120 )) \
         "$SRC/build_fuzz/bin/fuzz" -fork="$JOBS" -ignore_crashes=1 -ignore_timeouts=1 -ignore_ooms=1 \
-        -max_total_time=$(( minutos * 60 )) -timeout=30 -rss_limit_mb=3000 \
+        -max_total_time=$(( minutos * 60 )) -timeout=30 -rss_limit_mb="$RSS" \
         -artifact_prefix="$ESTADO/falhas/${alvo}-" "$ESTADO/corpus/$alvo" ) >"$ESTADO/ultimo.log" 2>&1
     local n; n="$(find "$ESTADO/falhas" -name "${alvo}-*" | wc -l)"
     registo "$alvo: terminado; entradas com falha guardadas para este alvo: $n"

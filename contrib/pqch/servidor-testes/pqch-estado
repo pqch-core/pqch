@@ -1,15 +1,29 @@
 #!/usr/bin/env bash
-# Resumo da máquina de testes: vigilância da testnet e fuzzing. Correr com sudo.
+# Resumo da máquina de testes (README.md nesta pasta). Correr com sudo.
+if systemctl list-unit-files pqch-minerar-testnet.service --no-legend 2>/dev/null | grep -q . && [[ -d /var/lib/pqch-minerador ]]; then
+    echo "== Mineração (testnet)"
+    echo "nó: $(systemctl is-active pqchd-testnet)   minerador: $(systemctl is-active pqch-minerar-testnet)"
+    C=(pqch-cli -testnet -datadir=/var/lib/pqch-minerador)
+    echo "altura: $(sudo -u pqch-minerador "${C[@]}" getblockcount 2>/dev/null || echo '-')   ligações: $(sudo -u pqch-minerador "${C[@]}" getconnectioncount 2>/dev/null || echo '-')"
+    echo "blocos encontrados nas últimas 24 h: $(journalctl -u pqch-minerar-testnet --since '24 hours ago' -q -o cat | grep -c 'bloco encontrado')"
+    echo "saldo da carteira mineracao: $(sudo -u pqch-minerador "${C[@]}" -rpcwallet=mineracao getbalance 2>/dev/null || echo '-') (moedas de teste; amadurecem ao fim de 100 blocos)"
+    journalctl -u pqch-minerar-testnet --no-pager -q -n 3 -o cat
+    exit 0
+fi
 echo "== Testnet (últimas 6 horas; hora UTC)"
-column -s, -t < <(head -1 /var/lib/pqch-vigia/estado.csv 2>/dev/null; tail -6 /var/lib/pqch-vigia/estado.csv 2>/dev/null | grep -v '^hora_utc') 2>/dev/null || echo "ainda sem dados"
+if [[ -s /var/lib/pqch-vigia/estado.csv ]]; then
+    { head -1 /var/lib/pqch-vigia/estado.csv; tail -n +2 /var/lib/pqch-vigia/estado.csv | tail -6; } | column -s, -t
+else
+    echo "ainda sem dados (a primeira verificação é 10 minutos depois do arranque)"
+fi
 echo
 echo "== Avisos da vigilância (últimas 24 h)"
-journalctl -t pqch-vigia --since "24 hours ago" --no-pager -q | tail -10 || true
-[[ -n "$(journalctl -t pqch-vigia --since '24 hours ago' -q 2>/dev/null)" ]] || echo "nenhum"
+a="$(journalctl -t pqch-vigia --since '24 hours ago' --no-pager -q -o cat | tail -10)"
+echo "${a:-nenhum}"
 echo
 echo "== Fuzzing"
 echo "serviço: $(systemctl is-active pqch-fuzz)   commit compilado: $(cut -c1-9 /var/lib/pqch-fuzz/commit 2>/dev/null || echo '-')"
 journalctl -u pqch-fuzz --no-pager -q -n 3 -o cat
 n="$(find /var/lib/pqch-fuzz/falhas -type f 2>/dev/null | wc -l)"
 echo "entradas com falha guardadas: $n"
-[[ "$n" == 0 ]] || { echo "ATENÇÃO: há falhas para analisar em /var/lib/pqch-fuzz/falhas:"; ls -1 /var/lib/pqch-fuzz/falhas | head -20; }
+[[ "$n" == 0 ]] || { echo "ATENÇÃO: há falhas para analisar em /var/lib/pqch-fuzz/falhas (não publicar; ver SECURITY.md):"; ls -1 /var/lib/pqch-fuzz/falhas | head -20; }
