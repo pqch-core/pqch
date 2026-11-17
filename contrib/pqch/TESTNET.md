@@ -247,9 +247,10 @@ utilizador RPC `faucet` limitado a `validateaddress`, `sendtoaddress` e `getbala
 
 **Reabastecer a torneira:** a partir da carteira `mineracao` da âncora, **em parcelas de 250**:
 `for i in $(seq 1 16); do c -named sendtoaddress address=<endereço da torneira> amount=250 fee_rate=10 || break; done`.
-Uma recompensa de bloco vale 12,5 e cada entrada P2MR ocupa cerca de 4 kB, por isso um envio de
-milhares de moedas teria centenas de entradas e passaria o limite de tamanho de uma transação
-padrão (~100 kvB). 250 moedas são ~20 entradas (~80 kvB).
+Uma recompensa de bloco vale 7 PQCH e cada entrada P2MR conta cerca de 1 kvB (a assinatura híbrida tem
+~3,9 kB e a testemunha conta um quarto), por isso um envio de milhares de moedas teria centenas de
+entradas e passaria o limite de tamanho de uma transação padrão (100 kvB, ~98 entradas, ~680 moedas
+de recompensas). 250 moedas são ~36 entradas (~36 kvB).
 
 **Fase B (dia da abertura), nos dois nós:**
 
