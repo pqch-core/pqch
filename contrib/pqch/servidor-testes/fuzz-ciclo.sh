@@ -16,7 +16,7 @@ MIN_PQCH="${PQCH_FUZZ_MIN_PQCH:-45}"     # minutos por alvo do PQCH
 MIN_HERDADO="${PQCH_FUZZ_MIN_HERDADO:-15}" # minutos por alvo herdado do Bitcoin Core
 RSS="${PQCH_FUZZ_RSS:-3000}"               # memória máxima por processo (MB)
 
-ALVOS_PQCH="pqch_pq_verify pqch_p2mr_descriptor pqch_auxpow_header pqch_auxpow_monero_block pqch_monero_primitives"
+ALVOS_PQCH="pqch_pq_verify pqch_p2mr_descriptor pqch_bip39 pqch_auxpow_header pqch_auxpow_monero_block pqch_monero_primitives"
 ALVOS_HERDADOS="headers_sync_state block_header pow pow_transition connect_block descriptor_parse mocked_descriptor_parse script_sign psbt script script_flags script_interpreter signature_checker miniscript_string miniscript_smart key"
 
 registo() { echo "[fuzz] $*"; }

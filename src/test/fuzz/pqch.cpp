@@ -10,6 +10,8 @@
 #include <crypto/pqc/pqc.h>
 #include <key.h>
 #include <primitives/block.h>
+#include <script/bip39.h>
+#include <script/bip39_english.h>
 #include <script/descriptor.h>
 #include <script/p2mr.h>
 #include <streams.h>
@@ -19,6 +21,7 @@
 #include <util/check.h>
 #include <util/strencodings.h>
 
+#include <algorithm>
 #include <array>
 #include <cassert>
 #include <span>
@@ -212,5 +215,107 @@ FUZZ_TARGET(pqch_p2mr_descriptor, .init = initialize_pqch)
             assert(descs[0]->ExpandFromCache(pos, cache, s2, o2));
             assert(s1 == s2);
         }
+    }
+}
+
+/** The 24 recovery words (BIP39), from arbitrary text and from arbitrary entropy.
+ *  Arbitrary text: no crash; anything accepted round-trips through its canonical form.
+ *  Arbitrary entropy: the words are 24 lowercase list words separated by single spaces, give the
+ *  same entropy back, survive any ASCII whitespace between words, and are refused with a capital
+ *  letter or with a word changed into another (unless that change keeps a valid checksum, in which
+ *  case the entropy must differ). The seed is only computed sometimes: PBKDF2 has 2048 rounds. */
+FUZZ_TARGET(pqch_bip39, .init = initialize_pqch)
+{
+    FuzzedDataProvider fdp{buffer.data(), buffer.size()};
+
+    // 1. Arbitrary text as words.
+    const std::string text{fdp.ConsumeRandomLengthString(400)};
+    const auto from_text{bip39::EntropyFromMnemonic(text)};
+    const auto normalized{bip39::NormalizeMnemonic(text)};
+    assert(from_text.has_value() == normalized.has_value());
+    if (from_text) {
+        assert(bip39::MnemonicFromEntropy(*from_text) == *normalized);
+        assert(bip39::EntropyFromMnemonic(*normalized) == from_text);
+        assert(bip39::NormalizeMnemonic(*normalized) == normalized);
+    }
+
+    // 2. Arbitrary passphrase: accepted exactly when it is printable ASCII.
+    const std::string passphrase{fdp.ConsumeRandomLengthString(64)};
+    const bool printable{std::all_of(passphrase.begin(), passphrase.end(), [](char c) { return c >= 0x20 && c <= 0x7e; })};
+    assert(bip39::IsValidPassphrase(passphrase) == printable);
+
+    // 3. Words from arbitrary entropy.
+    std::array<unsigned char, bip39::ENTROPY_SIZE> entropy;
+    const auto e_bytes{fdp.ConsumeBytes<unsigned char>(bip39::ENTROPY_SIZE)};
+    if (e_bytes.size() != bip39::ENTROPY_SIZE) return;
+    std::copy(e_bytes.begin(), e_bytes.end(), entropy.begin());
+    const std::string words{bip39::MnemonicFromEntropy(entropy)};
+    std::vector<std::string> list;
+    for (size_t start = 0;;) {
+        const size_t space{words.find(' ', start)};
+        list.emplace_back(words.substr(start, space == std::string::npos ? std::string::npos : space - start));
+        if (space == std::string::npos) break;
+        start = space + 1;
+    }
+    assert(list.size() == bip39::WORD_COUNT);
+    for (const auto& w : list) {
+        assert(!w.empty() && w.size() <= 8);
+        assert(std::all_of(w.begin(), w.end(), [](char c) { return c >= 'a' && c <= 'z'; }));
+    }
+    assert(bip39::EntropyFromMnemonic(words) == entropy);
+    assert(bip39::NormalizeMnemonic(words) == words);
+
+    // Any ASCII whitespace between (and around) the words gives the same entropy.
+    static constexpr char SPACES[]{' ', '\t', '\n', '\r'};
+    std::string spaced;
+    for (size_t i = 0; i < list.size(); ++i) {
+        const int n{fdp.ConsumeIntegralInRange<int>(i == 0 ? 0 : 1, 3)};
+        for (int k = 0; k < n; ++k) spaced += SPACES[fdp.ConsumeIntegralInRange<int>(0, 3)];
+        spaced += list[i];
+    }
+    spaced += SPACES[fdp.ConsumeIntegralInRange<int>(0, 3)];
+    assert(bip39::EntropyFromMnemonic(spaced) == entropy);
+    assert(bip39::NormalizeMnemonic(spaced) == words);
+
+    // A capital letter is refused (words must be lowercase).
+    {
+        auto upper{list};
+        auto& w{upper[fdp.ConsumeIntegralInRange<size_t>(0, upper.size() - 1)]};
+        w[fdp.ConsumeIntegralInRange<size_t>(0, w.size() - 1)] -= 'a' - 'A';
+        std::string joined;
+        for (const auto& u : upper) joined += (joined.empty() ? "" : " ") + u;
+        assert(!bip39::EntropyFromMnemonic(joined));
+    }
+
+    // Too few or too many words are refused.
+    assert(!bip39::EntropyFromMnemonic(words.substr(0, words.rfind(' '))));
+    assert(!bip39::EntropyFromMnemonic(words + " " + list[0]));
+
+    // One word changed into another list word: refused, or (checksum still valid) other entropy.
+    {
+        auto changed{list};
+        const size_t pos{fdp.ConsumeIntegralInRange<size_t>(0, changed.size() - 1)};
+        const auto other{bip39::ENGLISH[fdp.ConsumeIntegralInRange<size_t>(0, bip39::ENGLISH.size() - 1)]};
+        if (other != changed[pos]) {
+            changed[pos] = std::string{other};
+            std::string joined;
+            for (const auto& c : changed) joined += (joined.empty() ? "" : " ") + c;
+            const auto e2{bip39::EntropyFromMnemonic(joined)};
+            if (e2) assert(*e2 != entropy);
+        }
+    }
+
+    // The seed (BIP39 PBKDF2), now and then: same words and passphrase give the same seed; a
+    // different passphrase gives a different seed; the post-quantum seed follows the BIP39 rules.
+    if (fdp.ConsumeBool()) {
+        const auto seed{bip39::SeedFromMnemonic(spaced, passphrase)};
+        assert(seed.has_value() == printable);
+        if (seed) {
+            assert(bip39::SeedFromMnemonic(words, passphrase) == seed);
+            assert(bip39::SeedFromMnemonic(words, passphrase + "x") != seed);
+            assert(p2mr::SeedFromMnemonic(words, passphrase).has_value());
+        }
+        assert(!bip39::SeedFromMnemonic(text + "\x01", ""));
+        assert(!p2mr::SeedFromMnemonic(words, passphrase + "\x7f"));
     }
 }

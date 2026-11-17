@@ -154,7 +154,7 @@ jobs:
         run: cmake --build build_fuzz -j$(nproc)
       - name: Fuzz
         run: |
-          for t in pqch_auxpow_header pqch_auxpow_monero_block pqch_monero_primitives pqch_pq_verify pqch_p2mr_descriptor headers_sync_state psbt; do
+          for t in pqch_auxpow_header pqch_auxpow_monero_block pqch_monero_primitives pqch_pq_verify pqch_p2mr_descriptor pqch_bip39 headers_sync_state psbt; do
             mkdir -p corpus/$t
             echo "::group::$t"
             FUZZ=$t build_fuzz/bin/fuzz -max_total_time=60 -timeout=20 -rss_limit_mb=3000 corpus/$t

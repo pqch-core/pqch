@@ -17,6 +17,7 @@ FUZZ=pqch_auxpow_header build_fuzz/bin/fuzz -max_total_time=600 corpus/pqch_auxp
 | `pqch_monero_primitives` | árvore e provas do Monero, parâmetros de merged mining, varints, Keccak, `tx_extra` | as provas levam à raiz; decodificar é o inverso de codificar; Keccak por partes, ou a partir do estado intermédio, igual ao de uma vez |
 | `pqch_pq_verify` | verificação ML-DSA e SLH-DSA com dados arbitrários | sem falhas; uma assinatura válida verifica; mudar um byte da assinatura, da mensagem, do contexto ou da chave faz falhar |
 | `pqch_p2mr_descriptor` | descritores `p2mr()` | sem falhas; o texto impresso volta a dar o mesmo descritor; a expansão com a semente é igual à expansão a partir do cache |
+| `pqch_bip39` | as 24 palavras de recuperação (BIP39), a partir de texto qualquer e de entropia qualquer | sem falhas; o que é aceite volta à forma canónica; 24 palavras da lista, em minúsculas, separadas por um espaço; a entropia volta igual; qualquer espaço ASCII entre palavras dá o mesmo; uma maiúscula, palavras a mais ou a menos são recusadas; trocar uma palavra é recusado ou dá outra entropia; a frase-passe só é aceite em ASCII imprimível; a mesma frase dá a mesma semente e outra frase dá outra |
 
 ## Resultados (5 nov. 2026, máquina de 2 núcleos)
 
@@ -75,10 +76,15 @@ limites (2^20 transações, 256 cadeias) são verificados antes. Ainda assim, a 
 
 Nenhum dos alvos encontrou um erro no código do nó nesta ronda.
 
+## Resultados (17 nov. 2026, máquina de 2 núcleos, ASan + UBSan)
+
+| Alvo | Execuções | Resultado |
+| --- | --- | --- |
+| `pqch_bip39` (novo) | ~163 mil em 10 minutos | sem erros; corpus de 313 entradas |
+
 ## Pendente
 
 - Corpus guardado no repositório.
-- Um alvo para as 24 palavras de recuperação (BIP39).
 
 As corridas longas fazem-se agora na máquina de testes, sem parar: `servidor-testes/README.md`.
 - Fuzzing com sanitizers na integração contínua.

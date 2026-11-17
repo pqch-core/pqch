@@ -57,6 +57,11 @@ class PQCHWalletRecoveryTest(BitcoinTestFramework):
         assert_equal(node.decodescript(spk)["type"], "p2mr")
         coinbase = node.getblock(node.getbestblockhash(), 2)["tx"][0]
         assert_equal(coinbase["vout"][0]["scriptPubKey"]["type"], "p2mr")
+        # Without spending data a witness v1 program is just an address: never a Taproot rawtr(),
+        # even when it is a valid x-only key (Bitcoin shows this one as rawtr(ee…)).
+        other = node.decodescript("5120" + "ee" * 32)
+        assert_equal(other["type"], "p2mr")
+        assert other["desc"].startswith("addr(")
 
         self.log.info("send: hybrid leaf by default, recovery leaf with p2mr_recovery")
         hybrid = w.send({dest: 1}, fee_rate=FEE_RATE)
@@ -64,7 +69,12 @@ class PQCHWalletRecoveryTest(BitcoinTestFramework):
         rec = w.send({dest: 1}, fee_rate=FEE_RATE, options={"p2mr_recovery": True})
         vsize_rec = self.check_spend(rec["txid"], recovery=True)
         assert_greater_than_or_equal(vsize_rec, vsize_hybrid + 1000)
-        self.generatetoaddress(node, 1, w.getnewaddress())
+        block = self.generatetoaddress(node, 1, w.getnewaddress())[0]
+        # getrawtransaction with prevouts (verbosity 2) and decoderawtransaction name P2MR too
+        tx = node.getrawtransaction(hybrid["txid"], 2, block)
+        assert all(vin["prevout"]["scriptPubKey"]["type"] == "p2mr" for vin in tx["vin"])
+        assert all(vout["scriptPubKey"]["type"] == "p2mr" for vout in tx["vout"])
+        assert all(vout["scriptPubKey"]["type"] == "p2mr" for vout in node.decoderawtransaction(tx["hex"])["vout"])
 
         self.log.info("walletcreatefundedpsbt + walletprocesspsbt with p2mr_recovery")
         psbt = w.walletcreatefundedpsbt([], [{dest: 1}], 0, {"fee_rate": FEE_RATE, "p2mr_recovery": True})["psbt"]
