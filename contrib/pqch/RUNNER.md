@@ -1,5 +1,12 @@
 # Runner próprio do GitHub Actions
 
+> **Estado (17 nov. 2026): desligado.** Com o repositório público, a CI corre nos runners do GitHub,
+> gratuitos e sem quota em repositórios públicos. O runner próprio foi removido no GitHub, o serviço
+> foi desativado na máquina e a variável `PQCH_RUNS_ON` foi apagada, por isso o `pqch.yml` usa
+> `ubuntu-24.04`. Num repositório público, um runner registado no repositório só fica protegido pela
+> aprovação manual dos pull requests de fora; por isso não deve voltar a ser usado aqui. Este guia
+> fica para uma eventual máquina dedicada, sem nada de pessoal, e só com essa aprovação ligada.
+
 A CI do PQCH (`.github/workflows/pqch.yml`) pode correr numa máquina do projeto em vez dos runners do
 GitHub. Com o plano gratuito, um repositório privado tem uma quota mensal de computação pequena, e os
 builds com sanitizers e os testes com RandomX gastam-na em poucos dias. Num runner próprio não há

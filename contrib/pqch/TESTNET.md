@@ -252,11 +252,14 @@ Uma recompensa de bloco vale 7 PQCH e cada entrada P2MR conta cerca de 1 kvB (a 
 entradas e passaria o limite de tamanho de uma transação padrão (100 kvB, ~98 entradas, ~680 moedas
 de recompensas). 250 moedas são ~36 entradas (~36 kvB).
 
-**Fase B (dia da abertura), nos dois nós:**
+**Fase B (feita a 17 nov. 2026, testnet aberta):** os dois nós escutam em todas as interfaces na
+porta 39333, com `externalip` (o IP público de cada um), `maxconnections=40` e `fixedseeds=1`; a RPC
+continua só local e a cópia da configuração anterior ficou em `pqch.conf.fase-a`. Teste de fora:
+`Test-NetConnection <IP> -Port 39333` deu `True` nos dois. Passos usados:
 
 1. Snapshot da máquina.
 2. `pqch.conf`: trocar `bind=10.77.0.x` por escutar em todas as interfaces (apagar a linha `bind`),
-   `discover=1` e `fixedseeds=1`; manter a RPC só local.
+   `externalip=<IP público>`, `maxconnections=40` e `fixedseeds=1`; manter a RPC só local.
 3. Firewall: `ufw allow 39333/tcp comment 'PQCH testnet publica'` (e confirmar que o painel da
    Hostinger não bloqueia a porta).
 4. Reiniciar o nó e testar de fora: `Test-NetConnection 72.61.20.80 -Port 39333` no PowerShell.
