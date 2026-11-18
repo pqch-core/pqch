@@ -108,19 +108,20 @@ Objetivo: minerar blocos da testnet PQCH em conjunto com o **Monero da rede prin
 P2Pool (rede `mini`), com as versões que os mineiros usam de facto. Confirma o formato das provas, o
 tamanho real do `tx_extra` e o comportamento nas mudanças de chave Monero.
 
-Máquina: o **server** (i7-7600U, Ubuntu 24.04), com um **SSD novo de 500 GB ou mais** só para o
-Monero. Os testes de 9 nov. foram na testnet e no stressnet do Monero; este é o primeiro na rede
+Máquina: o **server** (i7-7600U, Ubuntu 24.04), com 125 GB do SSD interno só para o Monero. Os testes de 9 nov. foram na testnet e no stressnet do Monero; este é o primeiro na rede
 principal.
 
 ### Passos
 
-1. **Disco.** Montar o SSD novo em `/srv/monero` (sistema de ficheiros ext4, entrada no `/etc/fstab`
-   com `nofail`). Nada da PQCH vai para esse disco.
+1. **Disco.** `/srv/monero`, só para o Monero (ver o passo 2). Nada da PQCH vai para esse disco.
 2. **Nó Monero podado** (instalado a 18 nov. 2026, v0.18.5.4). Binário oficial conferido: assinatura
    do `hashes.txt` pela chave do binaryFate (`81AC 591F E9C4 B65C 5806 AFC3 F0AF 4D46 2A0B DF92`) e
    SHA256 igual ao da lista. Corre como serviço `monerod`, utilizador `monero` sem shell, dados em
-   `/srv/monero` (SSD USB de 2 TB, ext4, montado com `nofail`; o serviço tem `RequiresMountsFor`
-   para nunca escrever no disco do sistema):
+   `/srv/monero`, um volume LVM de 125 GB no SSD interno do server (`ubuntu-vg/monero`, ext4); o
+   serviço tem `RequiresMountsFor`. Primeiro tentou-se um SSD USB «2 TB» genérico: era contrafeito
+   (erros de checksum do ext4 de 16 em 16 GB logo ao formatar, escritas encravadas) e foi retirado;
+   um segundo SSD (Kingston) numa caixa USB 2.0 caía a cada 2 minutos. Um disco externo para o
+   Monero tem de ser testado antes (`f3probe`) e ligado por USB 3 ou SATA:
    ```
    /opt/monero/monerod --non-interactive --data-dir /srv/monero --prune-blockchain --sync-pruned-blocks \
      --zmq-pub tcp://127.0.0.1:18083 --out-peers 32 --in-peers 0 --no-igd \
