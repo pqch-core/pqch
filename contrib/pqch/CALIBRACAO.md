@@ -116,13 +116,17 @@ principal.
 
 1. **Disco.** Montar o SSD novo em `/srv/monero` (sistema de ficheiros ext4, entrada no `/etc/fstab`
    com `nofail`). Nada da PQCH vai para esse disco.
-2. **Nó Monero podado.** `monerod` da versão oficial, com a assinatura conferida:
+2. **Nó Monero podado** (instalado a 18 nov. 2026, v0.18.5.4). Binário oficial conferido: assinatura
+   do `hashes.txt` pela chave do binaryFate (`81AC 591F E9C4 B65C 5806 AFC3 F0AF 4D46 2A0B DF92`) e
+   SHA256 igual ao da lista. Corre como serviço `monerod`, utilizador `monero` sem shell, dados em
+   `/srv/monero` (SSD USB de 2 TB, ext4, montado com `nofail`; o serviço tem `RequiresMountsFor`
+   para nunca escrever no disco do sistema):
    ```
-   monerod --data-dir /srv/monero --prune-blockchain --sync-pruned-blocks \
+   /opt/monero/monerod --non-interactive --data-dir /srv/monero --prune-blockchain --sync-pruned-blocks \
      --zmq-pub tcp://127.0.0.1:18083 --out-peers 32 --in-peers 0 --no-igd \
-     --rpc-bind-ip 127.0.0.1 --confirm-external-bind=false --detach
+     --rpc-bind-ip 127.0.0.1 --rpc-bind-port 18081 --log-file /srv/monero/monerod.log
    ```
-   A primeira sincronização leva dias e ocupa ~100 GB. A RPC do Monero fica só local, como a da PQCH.
+   A primeira sincronização leva dias. A RPC do Monero fica só local, como a da PQCH.
 3. **Nó PQCH com a API de merged mining.** No `pqch.conf` do minerador do server
    (`/var/lib/pqch-minerador/pqch.conf`), na secção `[test]`, acrescentar `mergemining=1`. A API fica
    em `http://127.0.0.1:39332/json_rpc`, só local.
