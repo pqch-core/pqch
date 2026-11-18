@@ -239,11 +239,12 @@ quânticos, mas depende de uma frase-passe forte.
   estão no CI. As falhas eram só diferenças do PQCH, nenhuma de funcionamento: subsídio de 12,5,
   unidades `quantum/vB` e `PQCH/kvB`, `MAX_MONEY` de 58,9 milhões (um valor de 22 milhões é válido
   no PQCH) e a frase-passe obrigatória para exportar descritores privados de uma carteira cifrada.
-- `feature_assumevalid` fica fora do CI: o *assumevalid* só salta scripts quando o bloco está pelo
-  menos duas semanas de trabalho atrás do melhor cabeçalho. Com blocos de 1 minuto são mais de 20.160
-  blocos (o teste do Bitcoin enterra 2.100, que lá são duas semanas e meia), o que levaria mais de
-  15 minutos a minerar em Python. O comportamento visto ("block too recent relative to best header")
-  é o correto. Falta um teste próprio, mais curto, do caminho que salta os scripts.
+- `feature_assumevalid` passa desde 18 nov. 2026, como teste *extended* (fora do CI normal). O
+  *assumevalid* só salta scripts sob duas semanas de trabalho: com blocos de 1 minuto, 20.160 blocos.
+  O teste enterra o bloco inválido 20.200 blocos, envia ao nó todos os cabeçalhos e só os primeiros
+  113 blocos, e congela o relógio do nó enquanto ele verifica os cabeçalhos RandomX (o prazo de
+  descarga de blocos segue o espaçamento dos blocos). Corre em ~35 minutos numa máquina de 2 núcleos:
+  `test/functional/test_runner.py --extended feature_assumevalid.py`.
 - **Carteiras de teste da primeira versão** (`p2mr(xprv…)`) já não carregam.
 - Carteiras de hardware com ML-DSA e SLH-DSA. Não são compatíveis com as carteiras BIP32 atuais.
 
