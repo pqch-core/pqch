@@ -15,15 +15,15 @@ We build a chain that includes an invalid signature for one of the transactions:
               output can be spent
     102:      a block containing a transaction spending the coinbase
               transaction output. The transaction has an invalid signature.
-    103-2202: bury the bad block with just over two weeks' worth of blocks
-              (2100 blocks)
+    103-20302: bury the bad block with just over two weeks' worth of blocks
+              (PQCH: 20200 one-minute blocks; Bitcoin: 2100 ten-minute blocks)
 
 Start a few nodes:
 
-    - node0 has no -assumevalid parameter. Try to sync to block 2202. It will
-      reject block 102 and only sync as far as block 101
-    - node1 has -assumevalid set to the hash of block 102. Try to sync to
-      block 2202. node1 will sync all the way to block 2202.
+    - node0 has no -assumevalid parameter. It will reject block 102 and only
+      sync as far as block 101
+    - node1 has -assumevalid set to the hash of block 102. It gets all the
+      headers and the first 113 blocks, and skips the scripts of blocks 1-102.
     - node2 has -assumevalid set to the hash of block 102. Try to sync to
       block 200. node2 will reject block 102 since it's assumed valid, but it
       isn't buried by at least two weeks' work.
@@ -34,6 +34,8 @@ Start a few nodes:
     - node5 starts with no -assumevalid parameter. Reindex to hit
       "assumevalid hash not in headers" and "below minimum chainwork".
 """
+
+import time
 
 from test_framework.blocktools import (
     COINBASE_MATURITY,
@@ -50,6 +52,7 @@ from test_framework.messages import (
     msg_headers,
 )
 from test_framework.p2p import P2PInterface
+from test_framework.randomx import register_block_hash
 from test_framework.script import (
     CScript,
     OP_TRUE,
@@ -57,6 +60,12 @@ from test_framework.script import (
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.util import assert_equal
 from test_framework.wallet_util import generate_keypair
+
+# PQCH: assumevalid only skips scripts under at least two weeks of work (validation.cpp). With
+# one-minute blocks that is 20160 blocks (Bitcoin: 2016), so the bad block is buried 20200 deep.
+# Building and checking that many RandomX headers takes tens of minutes: an extended test.
+BURY = 14 * 24 * 60 * 60 // 60 + 40
+BLOCKS_TO_NODE1 = 113
 
 
 class BaseNode(P2PInterface):
@@ -95,6 +104,7 @@ class AssumeValidTest(BitcoinTestFramework):
         self.blocks.append(block)
         self.block_time += 1
         block.solve()
+        register_block_hash(height, block.hash_int)
         # Save the coinbase for later
         self.block1 = block
         self.tip = block.hash_int
@@ -104,6 +114,7 @@ class AssumeValidTest(BitcoinTestFramework):
         for _ in range(100):
             block = create_block(self.tip, height=height, ntime=self.block_time)
             block.solve()
+            register_block_hash(height, block.hash_int)
             self.blocks.append(block)
             self.tip = block.hash_int
             self.block_time += 1
@@ -117,16 +128,21 @@ class AssumeValidTest(BitcoinTestFramework):
         block102 = create_block(self.tip, height=height, ntime=self.block_time, txlist=[tx])
         self.block_time += 1
         block102.solve()
+        register_block_hash(height, block102.hash_int)
         self.blocks.append(block102)
         self.tip = block102.hash_int
         self.block_time += 1
         height += 1
 
-        # Bury the assumed valid block 2100 deep
-        for _ in range(2100):
+        # Bury the assumed valid block BURY deep
+        self.log.info(f"Build {BURY} more blocks in Python (RandomX: this takes a while)")
+        for i in range(BURY):
             block = create_block(self.tip, height=height, ntime=self.block_time)
             block.solve()
+            register_block_hash(height, block.hash_int)
             self.blocks.append(block)
+            if i % 2000 == 1999:
+                self.log.info(f"  {i + 1} blocks")
             self.tip = block.hash_int
             self.block_time += 1
             height += 1
@@ -142,7 +158,6 @@ class AssumeValidTest(BitcoinTestFramework):
         self.log.info("Send blocks to node0. Block 102 will be rejected.")
         p2p0 = self.nodes[0].add_p2p_connection(BaseNode())
         p2p0.send_header_for_blocks(self.blocks[0:2000])
-        p2p0.send_header_for_blocks(self.blocks[2000:])
         with self.nodes[0].assert_debug_log(expected_msgs=[
             f"Enabling script verification at block #1 ({block_1_hash}): assumevalid=0 (always verify).",
         ]):
@@ -154,13 +169,20 @@ class AssumeValidTest(BitcoinTestFramework):
                 p2p0.send_without_ping(msg_block(self.blocks[i]))
             p2p0.wait_for_disconnect()
             assert_equal(self.nodes[0].getblockcount(), COINBASE_MATURITY + 1)
-            assert_equal(next(filter(lambda x: x["hash"] == self.blocks[-1].hash_hex, self.nodes[0].getchaintips()))["status"], "invalid")
+            assert_equal(next(filter(lambda x: x["hash"] == self.blocks[1999].hash_hex, self.nodes[0].getchaintips()))["status"], "invalid")
 
         # nodes[1]
-        self.log.info("Send all blocks to node1. All blocks will be accepted.")
+        self.log.info(f"Send all {len(self.blocks)} headers and the first {BLOCKS_TO_NODE1} blocks to node1. All blocks will be accepted.")
+        # PQCH: each batch of 2000 RandomX headers takes the node about a minute to check, and with
+        # one-minute blocks the block download timeout is ten times shorter than Bitcoin's. Freeze
+        # node1's clock while it reads the headers, so it does not drop this peer for not sending
+        # the blocks it asks for in the meantime.
+        self.nodes[1].setmocktime(int(time.time()))
         p2p1 = self.nodes[1].add_p2p_connection(BaseNode())
-        p2p1.send_header_for_blocks(self.blocks[0:2000])
-        p2p1.send_header_for_blocks(self.blocks[2000:])
+        for i in range(0, len(self.blocks), 2000):
+            p2p1.send_header_for_blocks(self.blocks[i:i + 2000])
+            p2p1.sync_with_ping(timeout=1800)
+        assert_equal(self.nodes[1].getblockheader(self.blocks[-1].hash_hex)["height"], len(self.blocks))
         with self.nodes[1].assert_debug_log(expected_msgs=[
             f"Disabling script verification at block #1 ({self.blocks[0].hash_hex}).",
         ]):
@@ -168,11 +190,10 @@ class AssumeValidTest(BitcoinTestFramework):
         with self.nodes[1].assert_debug_log(expected_msgs=[
             f"Enabling script verification at block #103 ({self.blocks[102].hash_hex}): block height above assumevalid height.",
         ]):
-            for i in range(1, 2202):
+            for i in range(1, BLOCKS_TO_NODE1):
                 p2p1.send_without_ping(msg_block(self.blocks[i]))
-            # Syncing 2200 blocks can take a while on slow systems. Give it plenty of time to sync.
             p2p1.sync_with_ping(timeout=960)
-            assert_equal(self.nodes[1].getblockcount(), 2202)
+            assert_equal(self.nodes[1].getblockcount(), BLOCKS_TO_NODE1)
 
         # nodes[2]
         self.log.info("Send blocks to node2. Block 102 will be rejected.")

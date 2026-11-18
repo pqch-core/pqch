@@ -85,13 +85,14 @@ TEST_EXIT_SKIPPED = 77
 TEST_FRAMEWORK_UNIT_TESTS = 'feature_framework_unit_tests.py'
 
 EXTENDED_SCRIPTS = [
+    # PQCH: buries a block under two weeks of one-minute RandomX blocks (20200), tens of minutes
+    'feature_assumevalid.py',
     # These tests are not run by default.
     # Longest test should go first, to favor running tests in parallel
     'feature_pruning.py',
     'feature_block.py',
     # PQCH: assumevalid needs the bad block buried under two weeks of work, 20,160 one-minute blocks;
     # the test still builds Bitcoin's 2,100 and must be adapted (too slow for the default set).
-    'feature_assumevalid.py',
     'feature_dbcrash.py',
     'feature_index_prune.py',
     'feature_utxo_abort_on_error.py',

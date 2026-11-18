@@ -8,8 +8,9 @@ The node checks RandomX_v2(key = seed block hash, input = 80-byte header) <= tar
 calls the RandomX library through build/lib/libpqch_randomx_py.so (built with the tests).
 
 Seed schedule (src/pow_randomx.h): the key is the genesis block hash up to height
-interval + lag = 4096 + 64 = 4160 on regtest, which covers the functional tests. Above that the
-framework would need the chain's block hashes, so it refuses.
+interval + lag = 4096 + 64 = 4160 on regtest, which covers most functional tests. Above that the key
+is the hash of an earlier block of the same chain: a test that builds such a chain registers its
+block hashes with register_block_hash (feature_assumevalid.py does).
 """
 import ctypes
 import os
@@ -35,11 +36,32 @@ def _load():
     return _lib
 
 
+# Block hashes (internal byte order) by height, for keys above height 4160. A test that builds a
+# longer chain in Python registers its blocks with register_block_hash as it solves them.
+_known_hashes = {}
+
+
+def register_block_hash(height, hash_int):
+    """Remember the hash of the block at `height`, so later blocks can find their RandomX key."""
+    _known_hashes[height] = hash_int.to_bytes(32, "little")
+
+
+def seed_height(height):
+    """Height of the key block for a block at `height` (GetRandomXSeedHeight in src/pow_randomx.cpp)."""
+    if height <= RANDOMX_SEED_INTERVAL + RANDOMX_SEED_LAG:
+        return 0
+    return (height - RANDOMX_SEED_LAG - 1) & ~(RANDOMX_SEED_INTERVAL - 1)
+
+
 def seed_for_height(height):
     """RandomX key (internal byte order) for a block at `height` on regtest."""
-    if height is None or height <= RANDOMX_SEED_INTERVAL + RANDOMX_SEED_LAG:
+    if height is None or seed_height(height) == 0:
         return REGTEST_GENESIS_HASH
-    raise NotImplementedError("PQCH test framework: RandomX key above height 4160 needs the chain's block hashes")
+    try:
+        return _known_hashes[seed_height(height)]
+    except KeyError:
+        raise NotImplementedError(f"PQCH test framework: the RandomX key of height {height} is the hash of block "
+                                  f"{seed_height(height)}; register it with randomx.register_block_hash") from None
 
 
 def randomx_hash(key, data):
