@@ -21,6 +21,9 @@ echo "== Avisos da vigilância (últimas 24 h)"
 a="$(journalctl -t pqch-vigia --since '24 hours ago' --no-pager -q -o cat | tail -10)"
 echo "${a:-nenhum}"
 echo
+echo "== Calibração (etapa 4)"
+cat /var/lib/pqch-vigia/calibracao.txt 2>/dev/null || echo "ainda sem dados"
+echo
 echo "== Fuzzing"
 echo "serviço: $(systemctl is-active pqch-fuzz)   commit compilado: $(cut -c1-9 /var/lib/pqch-fuzz/commit 2>/dev/null || echo '-')"
 journalctl -u pqch-fuzz --no-pager -q -n 3 -o cat

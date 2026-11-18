@@ -126,6 +126,7 @@ if (( RAM_GB < 12 )); then FUZZ_JOBS=2; FUZZ_RSS=2000; else FUZZ_JOBS=$(( NPROC 
 (( FUZZ_JOBS <= NPROC )) || FUZZ_JOBS=$NPROC
 install -m 0755 "$AQUI/fuzz-ciclo.sh" /usr/local/lib/pqch-fuzz-ciclo
 install -m 0755 "$AQUI/vigia.sh" /usr/local/lib/pqch-vigia
+install -m 0755 "$AQUI/calibracao.py" /usr/local/lib/pqch-calibracao
 
 cat > /etc/systemd/system/pqch-fuzz.service <<UNIT
 [Unit]
@@ -185,6 +186,8 @@ After=pqch-vigia-no.service
 Type=oneshot
 User=pqch-vigia
 ExecStart=/usr/local/lib/pqch-vigia
+# Dados para a calibracao da etapa 4 (CALIBRACAO.md); uma falha aqui nao e uma falha da vigilancia.
+ExecStart=-/usr/local/lib/pqch-calibracao
 UNIT
 
 cat > /etc/systemd/system/pqch-vigia.timer <<UNIT

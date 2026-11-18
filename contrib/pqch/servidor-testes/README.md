@@ -44,6 +44,12 @@ como faria qualquer pessoa. De hora a hora, `vigia.sh` escreve uma linha em
 Não guarda endereços IP, só contagens. Cada problema também vai para o registo do sistema
 (`journalctl -t pqch-vigia`).
 
+Depois da vigilância, `calibracao.py` lê os blocos novos e guarda os dados para a calibração da
+etapa 4 (`CALIBRACAO.md`): `blocos.csv` (altura, hora, intervalo, dificuldade, se foi minerado em
+conjunto com o Monero e a chave Monero), `forks.csv` (cadeias concorrentes vistas e o comprimento) e
+um resumo em `calibracao.txt`, que o `pqch-estado` mostra. Se a cadeia se reorganizar, volta a ler
+os últimos 100 blocos.
+
 ## 3. Mineração (`pqch-minerar-testnet.service`)
 
 Um nó de testnet sem portas abertas e o minerador: espera que o nó sincronize, cria a carteira
