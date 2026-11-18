@@ -3,7 +3,7 @@
 O fuzzing corre com libFuzzer e com os sanitizers ASan e UBSan (`cmake --preset=libfuzzer`).
 
 ```
-cmake --preset=libfuzzer -DENABLE_WALLET=OFF -DENABLE_IPC=OFF
+cmake --preset=libfuzzer -DENABLE_WALLET=ON -DBUILD_GUI=OFF -DENABLE_IPC=OFF
 cmake --build build_fuzz -j$(nproc)
 FUZZ=pqch_auxpow_header build_fuzz/bin/fuzz -max_total_time=600 corpus/pqch_auxpow_header
 ```
@@ -81,6 +81,25 @@ Nenhum dos alvos encontrou um erro no código do nó nesta ronda.
 | Alvo | Execuções | Resultado |
 | --- | --- | --- |
 | `pqch_bip39` (novo) | ~163 mil em 10 minutos | sem erros; corpus de 313 entradas |
+
+**Alvos da carteira (17 nov. 2026).** Até aqui o fuzzing era compilado sem a carteira
+(`ENABLE_WALLET=OFF`), por isso os 13 alvos da carteira nunca tinham corrido. Compilados com a
+carteira, passaram todos 500 execuções. Nas redes PQCH a carteira só aceita descritores `p2mr()`,
+`p2mr_vault()`, `addr()` e `raw()`, e os descritores simulados do fuzzing só tinham chaves de curva
+elíptica: o `scriptpubkeyman` quase não passava da recusa. O conversor simulado
+(`test/fuzz/util/descriptor.cpp`) passou a ter sementes pós-quânticas: `%qNN` dá `pqprv(SEMENTE)` e
+`%pNN` dá `pqseed(ID)`.
+
+| Alvo | Execuções | Cobertura | Resultado |
+| --- | --- | --- | --- |
+| `scriptpubkeyman` (com sementes PQ) | ~483 mil em 5 min | 2.806 → 8.101 | sem erros |
+| `mocked_descriptor_parse` (com sementes PQ) | ~3,2 milhões em 5 min | 3.695 → 10.510 | sem erros |
+| `spkm_migration` | ~200 mil em 5 min | | sem erros |
+| `coincontrol` | ~2,2 milhões em 5 min | | sem erros |
+| `wallet_create_transaction` | ~19 mil em 5 min | | sem erros |
+| os outros 8 alvos da carteira | 500 cada | | sem erros |
+
+A partir daqui o CI e a máquina de testes compilam o fuzzing com a carteira.
 
 ## Pendente
 

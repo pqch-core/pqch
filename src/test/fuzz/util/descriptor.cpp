@@ -7,6 +7,7 @@
 #include <key.h>
 #include <key_io.h>
 #include <pubkey.h>
+#include <script/p2mr.h>
 #include <span.h>
 #include <util/strencodings.h>
 
@@ -46,6 +47,12 @@ void MockedDescriptorConverter::Init()
                 keys_str[i] = EncodeExtPubKey(ext_pubkey);
             }
         }
+        // PQCH: a post-quantum wallet seed for the p2mr() and p2mr_vault() descriptors.
+        std::vector<unsigned char> seed_bytes(32, 2);
+        seed_bytes[31] = static_cast<unsigned char>(i);
+        const p2mr::PQSeed seed{seed_bytes};
+        pq_prv_str[i] = "pqprv(" + HexStr(seed_bytes) + ")";
+        pq_seed_str[i] = "pqseed(" + HexStr(seed.Id()) + ")";
     }
 }
 
@@ -66,7 +73,15 @@ std::optional<std::string> MockedDescriptorConverter::GetDescriptor(std::string_
 
     // Replace all occurrences of '%' followed by two hex characters with the corresponding key.
     for (size_t i = 0; i < mocked_desc.size();) {
-        if (mocked_desc[i] == '%') {
+        if (mocked_desc[i] == '%' && i + 4 < mocked_desc.size() && (mocked_desc[i + 1] == 'q' || mocked_desc[i + 1] == 'p')) {
+            // PQCH: "%qNN" is a post-quantum seed (pqprv) and "%pNN" its public id (pqseed).
+            if (const auto idx = IdxFromHex(mocked_desc.substr(i + 2, 2))) {
+                desc += mocked_desc[i + 1] == 'q' ? pq_prv_str[*idx] : pq_seed_str[*idx];
+                i += 4;
+            } else {
+                return {};
+            }
+        } else if (mocked_desc[i] == '%') {
             if (i + 3 >= mocked_desc.size()) return {};
             if (const auto idx = IdxFromHex(mocked_desc.substr(i + 1, 2))) {
                 desc += keys_str[*idx];

@@ -41,7 +41,7 @@ apt-get update -q
 apt-get install -y -q --no-install-recommends curl ca-certificates gnupg tar python3 bsdextrautils
 if [[ "$FUNCAO" == vigiar ]]; then
     apt-get install -y -q --no-install-recommends \
-        build-essential cmake pkgconf libevent-dev libboost-dev ccache clang llvm git
+        build-essential cmake pkgconf libevent-dev libboost-dev libsqlite3-dev ccache clang llvm git
     CLANG_MAJOR="$(clang --version | sed -n 's/.*clang version \([0-9]*\).*/\1/p' | head -1)"
     apt-get install -y -q --no-install-recommends "libclang-rt-${CLANG_MAJOR}-dev"
 fi

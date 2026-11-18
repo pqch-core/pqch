@@ -6,7 +6,7 @@
 #   build-test   pushes to main and pull requests: build with the wallet, unit tests, wallet validation,
 #                and the essential functional tests.
 #   sanitizers   pull requests and pushes to main: unit tests with ASan + UBSan (clang).
-#   fuzz         pull requests and pushes to main: the PQCH fuzz targets, one minute each.
+#   fuzz         pull requests and pushes to main: the PQCH fuzz targets and the wallet's descriptor targets, one minute each.
 #   tsan         weekly and by hand: unit tests with ThreadSanitizer.
 # The inherited Bitcoin Core matrix (ci.yml) only runs by hand.
 #
@@ -149,12 +149,12 @@ jobs:
           key: ccache-fuzz-${{ github.sha }}
           restore-keys: ccache-fuzz-
       - name: Configure
-        run: cmake --preset=libfuzzer -DENABLE_WALLET=OFF -DENABLE_IPC=OFF -DWITH_CCACHE=ON
+        run: cmake --preset=libfuzzer -DENABLE_WALLET=ON -DBUILD_GUI=OFF -DENABLE_IPC=OFF -DWITH_CCACHE=ON
       - name: Build
         run: cmake --build build_fuzz -j$(nproc)
       - name: Fuzz
         run: |
-          for t in pqch_auxpow_header pqch_auxpow_monero_block pqch_monero_primitives pqch_pq_verify pqch_p2mr_descriptor pqch_bip39 headers_sync_state psbt; do
+          for t in pqch_auxpow_header pqch_auxpow_monero_block pqch_monero_primitives pqch_pq_verify pqch_p2mr_descriptor pqch_bip39 headers_sync_state psbt mocked_descriptor_parse scriptpubkeyman; do
             mkdir -p corpus/$t
             echo "::group::$t"
             FUZZ=$t build_fuzz/bin/fuzz -max_total_time=60 -timeout=20 -rss_limit_mb=3000 corpus/$t

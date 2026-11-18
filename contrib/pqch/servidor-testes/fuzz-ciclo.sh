@@ -17,7 +17,7 @@ MIN_HERDADO="${PQCH_FUZZ_MIN_HERDADO:-15}" # minutos por alvo herdado do Bitcoin
 RSS="${PQCH_FUZZ_RSS:-3000}"               # memória máxima por processo (MB)
 
 ALVOS_PQCH="pqch_pq_verify pqch_p2mr_descriptor pqch_bip39 pqch_auxpow_header pqch_auxpow_monero_block pqch_monero_primitives"
-ALVOS_HERDADOS="headers_sync_state block_header pow pow_transition connect_block descriptor_parse mocked_descriptor_parse script_sign psbt script script_flags script_interpreter signature_checker miniscript_string miniscript_smart key"
+ALVOS_HERDADOS="scriptpubkeyman mocked_descriptor_parse wallet_create_transaction spkm_migration coincontrol headers_sync_state block_header pow pow_transition connect_block descriptor_parse mocked_descriptor_parse script_sign psbt script script_flags script_interpreter signature_checker miniscript_string miniscript_smart key"
 
 registo() { echo "[fuzz] $*"; }
 
@@ -29,7 +29,7 @@ atualizar() {
     fi
     registo "a compilar ${novo:0:9}"
     git -C "$SRC" checkout -q --detach "$novo"
-    ( cd "$SRC" && cmake --preset=libfuzzer -DENABLE_WALLET=OFF -DENABLE_IPC=OFF -DWITH_CCACHE=ON >/dev/null \
+    ( cd "$SRC" && cmake --preset=libfuzzer -DENABLE_WALLET=ON -DBUILD_GUI=OFF -DENABLE_IPC=OFF -DWITH_CCACHE=ON >/dev/null \
         && cmake --build build_fuzz -j"$JOBS" >/dev/null ) || { registo "a compilação falhou; continuo com o binário anterior"; return 0; }
     echo "$novo" > "$ESTADO/commit"
     registo "binário novo: ${novo:0:9}"

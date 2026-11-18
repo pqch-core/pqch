@@ -28,6 +28,9 @@ private:
     static constexpr size_t TOTAL_KEYS_GENERATED{std::numeric_limits<uint8_t>::max() + 1};
     //! 256 keys of various types.
     std::array<std::string, TOTAL_KEYS_GENERATED> keys_str;
+    //! PQCH: 256 post-quantum seeds, as pqprv(SEED) for "%qNN" and as pqseed(ID) for "%pNN".
+    std::array<std::string, TOTAL_KEYS_GENERATED> pq_prv_str;
+    std::array<std::string, TOTAL_KEYS_GENERATED> pq_seed_str;
 
 public:
     // We derive the type of key to generate from the 1-byte id parsed from hex.
