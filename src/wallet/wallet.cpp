@@ -474,7 +474,9 @@ std::shared_ptr<CWallet> CreateWallet(WalletContext& context, const std::string&
     if (options.create_pq_mnemonic) {
         bilingual_str restore_error;
         {
-            LOCK(wallet->cs_wallet);
+            // Same order as Lock() / EncryptWallet(): m_relock_mutex first (also keeps the wallet from being
+            // locked by its timer in the middle of the restore).
+            LOCK2(wallet->m_relock_mutex, wallet->cs_wallet);
             if (born_encrypted && !wallet->Unlock(passphrase)) {
                 restore_error = Untranslated("Error: Wallet created but could not be unlocked to restore the recovery words.");
             } else if (auto res{wallet->SetupFromPQMnemonic(*options.create_pq_mnemonic, options.create_pq_mnemonic_passphrase)}; !res) {

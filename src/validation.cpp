@@ -1148,6 +1148,11 @@ bool MemPoolAccept::PolicyScriptChecks(Workspace& ws)
     if (DeploymentActiveAfter(m_active_chainstate.m_chain.Tip(), m_active_chainstate.m_chainman, Consensus::DEPLOYMENT_PQRULES)) {
         scriptVerifyFlags |= SCRIPT_VERIFY_P2MR;
     }
+    // PQCH: once the ML-DSA emergency soft fork applies to the next block, policy refuses ML-DSA too (as
+    // consensus does): otherwise such a spend passes policy and only fails the consensus re-check below.
+    if (DeploymentActiveAfter(m_active_chainstate.m_chain.Tip(), m_active_chainstate.m_chainman, Consensus::DEPLOYMENT_MLDSA_EMERGENCY)) {
+        scriptVerifyFlags |= SCRIPT_VERIFY_MLDSA_DISABLED;
+    }
 
     // Check input scripts and signatures.
     // This is done last to help prevent CPU exhaustion denial-of-service attacks.

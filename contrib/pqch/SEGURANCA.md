@@ -78,3 +78,14 @@ próxima versão da app, com a opção de recuperação que já existe no núcle
 recusada no mempool e num bloco, nos dois nós; a carteira gasta sozinha pela folha B (`send`,
 `sendtoaddress`, `sendall`). E `pqch_pq_tests/p2mr_two_leaves_slhdsa_recovery`: com a regra, a folha A
 falha e a folha B passa.
+
+## Falhas encontradas pela automação
+
+| Data | Onde | O quê | Correção |
+| --- | --- | --- | --- |
+| 19 nov. 2026 | Soft fork ML-DSA (mempool) | Depois da ativação, a política do mempool não sabia que o ML-DSA estava desligado: a transação passava a política e só falhava a verificação de consenso. Numa compilação normal era só recusada com "BUG!" no registo; em Debug parava o nó. | A política junta `SCRIPT_VERIFY_MLDSA_DISABLED` quando o soft fork se aplica ao bloco seguinte. |
+| 19 nov. 2026 | Carteira (restauro pelas 24 palavras) | Ordem de bloqueio invertida (`cs_wallet` antes de `m_relock_mutex`): risco de bloqueio mútuo com o temporizador que volta a trancar a carteira. | Mesma ordem que o resto da carteira; o temporizador também já não tranca a carteira a meio do restauro. |
+| 19 nov. 2026 | Testes | `pqch_presync_tests` falhava ao acaso (0,2%); `wallet_pqch_vault.py` dependia da velocidade do nó. | 1000 cabeçalhos (falha < 2e-7); o teste espera que as carteiras vejam a transação. |
+
+As duas primeiras só aparecem numa compilação Debug (verificação de ordem de bloqueios e `Assume`), que é
+a do trabalho noturno com ASan + UBSan. Por isso esse trabalho corre os testes funcionais em Debug.
