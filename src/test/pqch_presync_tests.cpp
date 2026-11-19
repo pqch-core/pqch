@@ -148,9 +148,10 @@ BOOST_AUTO_TEST_CASE(presync_checks_proof_of_work)
         auto state{State(1)};
         BOOST_CHECK(!state.ProcessNextHeaders(headers, true).success);
     }
-    // Sampled (1 in 64): a long chain of fake headers is caught (miss probability (63/64)^400 < 2e-3).
+    // Sampled (1 in 64): a long chain of fake headers is caught (miss probability (63/64)^1000 < 2e-7;
+    // with 400 headers the 2e-3 chance did show up in CI).
     {
-        const auto headers{Chain(400, /*fake_from=*/0)};
+        const auto headers{Chain(1000, /*fake_from=*/0)};
         auto state{State(64)};
         BOOST_CHECK(!state.ProcessNextHeaders(headers, true).success);
     }
