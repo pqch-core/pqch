@@ -61,6 +61,7 @@ private:
     void applyStyle();
     QLabel* addStat(class QGridLayout* grid, int column, const QString& caption, const QString& accent, QLabel** sub);
     void workerFinished();
+    void maybeAutoStart();
     void refresh();
     void updateControls();
 
@@ -69,6 +70,8 @@ private:
 
     QSpinBox* m_threads{nullptr};
     QCheckBox* m_fast{nullptr};
+    QCheckBox* m_autostart{nullptr};
+    bool m_autostarted{false};
     QPushButton* m_button{nullptr};
     QLabel* m_status{nullptr};
     QLabel* m_hashrate{nullptr};

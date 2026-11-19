@@ -4,6 +4,7 @@
 
 #include <bitcoin-build-config.h> // IWYU pragma: keep
 
+#include <common/args.h>
 #include <interfaces/node.h>
 #include <qt/createwalletdialog.h>
 #include <qt/forms/ui_createwalletdialog.h>
@@ -24,6 +25,12 @@ CreateWalletDialog::CreateWalletDialog(QWidget* parent) :
     connect(ui->wallet_name_line_edit, &QLineEdit::textEdited, [this](const QString& text) {
         ui->buttonBox->button(QDialogButtonBox::Ok)->setEnabled(!text.isEmpty());
     });
+
+    // PQCH: the one-click mining app suggests a name, so the first wallet is one click away.
+    if (gArgs.GetBoolArg("-minerapp", false)) {
+        ui->wallet_name_line_edit->setText(tr("Mining"));
+        ui->buttonBox->button(QDialogButtonBox::Ok)->setEnabled(true);
+    }
 
     connect(ui->encrypt_wallet_checkbox, &QCheckBox::toggled, [this](bool checked) {
         // Disable the disable_privkeys_checkbox and external_signer_checkbox when isEncryptWalletChecked is

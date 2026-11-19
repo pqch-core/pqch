@@ -168,6 +168,7 @@ jobs:
           rmdir "stage/${NAME}/libexec" "stage/${NAME}/share" 2>/dev/null || true
           cp COPYING "stage/${NAME}/COPYING"
           cp doc/README_windows.txt "stage/${NAME}/README.txt"
+          install -m 755 contrib/pqch/pqch-miner.desktop contrib/pqch/pqch-miner.sh "stage/${NAME}/"
           mkdir -p out
           tar -C stage --owner=0 --group=0 --numeric-owner --sort=name --mtime="@$(git log -1 --format=%ct)" \
             -czf "out/${NAME}-x86_64-linux-gnu.tar.gz" "${NAME}"

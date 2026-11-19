@@ -35,6 +35,7 @@
 
 #include <chain.h>
 #include <chainparams.h>
+#include <common/args.h>
 #include <common/system.h>
 #include <interfaces/handler.h>
 #include <interfaces/node.h>
@@ -840,6 +841,22 @@ void BitcoinGUI::setWalletController(WalletController* wallet_controller, bool s
     });
 
     auto activity = new LoadWalletsActivity(m_wallet_controller, this);
+    // PQCH: one-click mining mode: on the first run (no wallet yet) create one, with its 24 words.
+    if (gArgs.GetBoolArg("-minerapp", false)) {
+        connect(activity, &WalletControllerActivity::finished, this, [this] {
+            if (m_wallet_selector->count() != 0) return;
+            // A wallet already on disk (not on the start-up list) is opened; a new one only if there is none.
+            for (const auto& [path, info] : m_wallet_controller->listWalletDir()) {
+                if (info.first || info.second == "bdb") continue;
+                auto open = new OpenWalletActivity(m_wallet_controller, this);
+                connect(open, &OpenWalletActivity::opened, this, &BitcoinGUI::setCurrentWallet, Qt::QueuedConnection);
+                connect(open, &OpenWalletActivity::opened, rpcConsole, &RPCConsole::setCurrentWallet, Qt::QueuedConnection);
+                open->open(path);
+                return;
+            }
+            createWallet();
+        });
+    }
     activity->load(show_loading_minimized);
 }
 
@@ -884,6 +901,8 @@ void BitcoinGUI::addWallet(WalletModel* walletModel)
     wallet_view->setPrivacy(isPrivacyModeActivated());
     const QString display_name = walletModel->getDisplayName();
     m_wallet_selector->addItem(display_name, QVariant::fromValue(walletModel));
+    // PQCH: the one-click mining mode opens on the Mining tab.
+    if (gArgs.GetBoolArg("-minerapp", false)) QTimer::singleShot(0, this, [this] { gotoMiningPage(); });
 }
 
 bool BitcoinGUI::askPasswordToOpen(WalletModel* walletModel)

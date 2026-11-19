@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=PQCH Miner (testnet)
+Comment=One-click PQCH mining: creates a wallet on the first run and mines on the test network
+Exec=sh -c '"$(dirname "%k")/bin/pqch-qt" -testnet -minerapp'
+Terminal=false
+Categories=Finance;Network;

@@ -5,6 +5,7 @@
 #include <qt/miningpage.h>
 
 #include <chainparams.h>
+#include <common/args.h>
 #include <interfaces/node.h>
 #include <net.h>
 #include <outputtype.h>
@@ -162,6 +163,13 @@ MiningPage::MiningPage(const PlatformStyle* platform_style, QWidget* parent) : Q
     settings_layout->addSpacing(8);
     settings_layout->addWidget(m_fast);
     settings_layout->addStretch(1);
+    // PQCH: in the one-click mining app, mining can start by itself when the app opens.
+    m_autostart = new QCheckBox(tr("Start mining when PQCH opens"));
+    m_autostart->setToolTip(tr("Mining starts by itself every time this program opens, with these settings."));
+    m_autostart->setChecked(settings.value("MiningAutoStart", false).toBool());
+    m_autostart->setVisible(gArgs.GetBoolArg("-minerapp", false));
+    connect(m_autostart, &QCheckBox::toggled, this, [](bool on) { QSettings().setValue("MiningAutoStart", on); });
+    settings_layout->addWidget(m_autostart);
     m_button = new QPushButton(tr("Start mining"));
     m_button->setObjectName("startButton");
     m_button->setCursor(Qt::PointingHandCursor);
@@ -313,12 +321,24 @@ void MiningPage::setClientModel(ClientModel* client_model)
 {
     m_client_model = client_model;
     updateControls();
+    maybeAutoStart();
 }
 
 void MiningPage::setWalletModel(WalletModel* wallet_model)
 {
     m_wallet_model = wallet_model;
     updateControls();
+    maybeAutoStart();
+}
+
+void MiningPage::maybeAutoStart()
+{
+    // PQCH: one-click mining app with "Start mining when PQCH opens" ticked. The worker itself waits
+    // for the node to sync and find peers before it mines.
+    if (m_autostarted || !m_client_model || !m_wallet_model || isMining()) return;
+    if (!gArgs.GetBoolArg("-minerapp", false) || !QSettings().value("MiningAutoStart", false).toBool()) return;
+    m_autostarted = true;
+    QTimer::singleShot(1000, this, [this] { startMining(); });
 }
 
 void MiningPage::post(std::function<void()> fn)

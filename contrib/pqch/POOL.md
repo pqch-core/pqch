@@ -85,6 +85,20 @@ Tecnologia: Qt e C++, como o PQCH Core. Reaproveita a compilação para Windows 
 assinatura das versões, as traduções e o código da carteira. A aplicação em si fica com licença MIT;
 o `pqch-pool` é um programa à parte com licença GPL-3, distribuído com o código-fonte.
 
+### Versão 0 (já feita): modo `-minerapp` do PQCH Core
+
+Antes do pool, a aplicação de um clique já existe dentro do `pqch-qt`, a minerar a solo:
+
+- `pqch-qt -testnet -minerapp`, com atalho **PQCH Miner (testnet)** no menu Iniciar e no ambiente
+  de trabalho (instalador Windows) e `pqch-miner.sh` / `pqch-miner.desktop` no pacote Linux;
+- não pergunta a pasta de dados (usa a de origem);
+- se não houver carteira, abre uma que exista no disco; se não houver nenhuma, abre a criação com o
+  nome "Mining" já preenchido (palavra-passe obrigatória e as 24 palavras, como sempre);
+- abre no separador **Mineração**; a opção "Start mining when PQCH opens" faz a mineração arrancar
+  sozinha nas aberturas seguintes (o minerador espera pela sincronização e pelas ligações).
+
+Quando o `pqch-pool` existir (fases A–C), o mesmo modo passa a minerar no pool em vez de a solo.
+
 ## 3. Fases
 
 | Fase | Quando | O quê | Critério |

@@ -136,7 +136,17 @@ bool Intro::showIfNeeded(bool& did_show_intro, int64_t& prune_MiB)
     /* 2) Allow QSettings to override default dir */
     dataDir = settings.value("strDataDir", dataDir).toString();
 
-    if(!fs::exists(GUIUtil::QStringToPath(dataDir)) || gArgs.GetBoolArg("-choosedatadir", DEFAULT_CHOOSE_DATADIR) || settings.value("fReset", false).toBool() || gArgs.GetBoolArg("-resetguisettings", false))
+    // PQCH: the one-click mining mode never asks: it uses the default data directory.
+    if (gArgs.GetBoolArg("-minerapp", false) && !gArgs.GetBoolArg("-choosedatadir", false)) {
+        try {
+            TryCreateDirectories(GUIUtil::QStringToPath(dataDir) / "wallets");
+        } catch (const fs::filesystem_error&) {
+            QMessageBox::critical(nullptr, CLIENT_NAME, tr("Error: Specified data directory \"%1\" cannot be created.").arg(dataDir));
+            return false;
+        }
+        settings.setValue("strDataDir", dataDir);
+        settings.setValue("fReset", false);
+    } else if(!fs::exists(GUIUtil::QStringToPath(dataDir)) || gArgs.GetBoolArg("-choosedatadir", DEFAULT_CHOOSE_DATADIR) || settings.value("fReset", false).toBool() || gArgs.GetBoolArg("-resetguisettings", false))
     {
         /* Use selectParams here to guarantee Params() can be used by node interface */
         try {
