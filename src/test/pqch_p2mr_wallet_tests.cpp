@@ -6,7 +6,9 @@
 #include <key_io.h>
 #include <policy/policy.h>
 #include <primitives/transaction.h>
+#include <random.h>
 #include <script/bip39.h>
+#include <script/bip39_english.h>
 #include <script/descriptor.h>
 #include <script/interpreter.h>
 #include <script/p2mr.h>
@@ -15,6 +17,11 @@
 #include <test/util/setup_common.h>
 #include <util/strencodings.h>
 #include <util/string.h>
+
+#include <algorithm>
+#include <bit>
+#include <cmath>
+#include <set>
 
 #include <boost/test/unit_test.hpp>
 
@@ -429,6 +436,46 @@ BOOST_AUTO_TEST_CASE(p2mr_vault_descriptor)
         BOOST_REQUIRE(p2mr::DeriveRecoveryPubKey(owner, p2mr::VaultKeyPath(true, 1), other_pub));
         BOOST_CHECK(other_pub != owner_pub);
     }
+}
+
+BOOST_AUTO_TEST_CASE(bip39_new_words_entropy)
+{
+    // PQCH: the 24 words of a new wallet come from GetStrongRandBytes, the same call in the node's
+    // wallet (CWallet::SetupDescriptorScriptPubKeyMans) and in libpqchwallet (NewMnemonic, used by
+    // the Android app). A seed generator that repeats or leans (the Coldcard sweep of July 2026 came
+    // from recreatable recovery words) must fail here. This is a sanity check of the whole path, not
+    // a statistical proof of the generator.
+    constexpr int N{4096};
+    std::set<std::string> seen;
+    std::array<int, 2048> word_count{};
+    uint64_t ones{0};
+    for (int i = 0; i < N; ++i) {
+        std::array<unsigned char, bip39::ENTROPY_SIZE> entropy;
+        GetStrongRandBytes(entropy);
+        for (unsigned char b : entropy) ones += std::popcount(b);
+        const std::string words{bip39::MnemonicFromEntropy(entropy)};
+        BOOST_REQUIRE(seen.insert(words).second); // never the same words twice
+        const auto back{bip39::EntropyFromMnemonic(words)};
+        BOOST_REQUIRE(back && *back == entropy);
+        const auto list{util::SplitString(words, ' ')};
+        BOOST_REQUIRE_EQUAL(list.size(), bip39::WORD_COUNT);
+        // The first 23 words are pure entropy; the 24th carries the checksum.
+        for (size_t w = 0; w + 1 < list.size(); ++w) {
+            const auto it{std::find(bip39::ENGLISH.begin(), bip39::ENGLISH.end(), list[w])};
+            BOOST_REQUIRE(it != bip39::ENGLISH.end());
+            ++word_count[it - bip39::ENGLISH.begin()];
+        }
+    }
+    // Bits: N * 256 fair coin flips; mean N*128, standard deviation sqrt(N*64) = 512. Allow 6 sigma.
+    const double bits_mean{N * 128.0};
+    BOOST_CHECK_LT(std::abs(double(ones) - bits_mean), 6 * 512.0);
+    // Words: chi-square over the 2048 words with N*23 samples, 2047 degrees of freedom (mean 2047,
+    // standard deviation ~64). Allow 6 sigma either way: too uneven or suspiciously even both fail.
+    const double expected{N * 23.0 / 2048};
+    double chi2{0};
+    for (int c : word_count) chi2 += (c - expected) * (c - expected) / expected;
+    BOOST_CHECK_GT(chi2, 2047 - 6 * 64.0);
+    BOOST_CHECK_LT(chi2, 2047 + 6 * 64.0);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

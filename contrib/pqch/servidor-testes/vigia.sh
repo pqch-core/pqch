@@ -52,6 +52,34 @@ if [[ -n "$altura" && -n "$altura_api" ]] && (( altura - altura_api > 5 || altur
     avisos+=("a API está em $altura_api e o nó local em $altura")
 fi
 
+# Oferta total: a soma das moedas existentes nunca pode passar a emissão máxima até esta altura
+# (7 PQCH por bloco na testnet, metade a cada 4.207.000 blocos; o génesis não conta). Um erro de
+# consenso que crie moedas a mais, como o do Liquid em set. 2026, é apanhado na primeira hora.
+oferta="$("${CLI[@]}" gettxoutsetinfo none 2>/dev/null | python3 -c '
+import json, sys
+from decimal import Decimal
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    print("? ?"); sys.exit()
+h, total = d["height"], Decimal(str(d["total_amount"]))
+COIN, INTERVALO, INICIAL = 100_000_000, 4_207_000, 7 * 100_000_000
+maximo, inicio, era = 0, 1, 0
+while inicio <= h and era < 64:
+    fim = min(h, (era + 1) * INTERVALO - 1)
+    maximo += (fim - inicio + 1) * (INICIAL >> era)
+    inicio, era = fim + 1, era + 1
+print(total, Decimal(maximo) / COIN)
+')"
+read -r oferta_total oferta_maxima <<< "$oferta"
+if [[ "$oferta_total" == "?" || -z "$oferta_total" ]]; then
+    avisos+=("não foi possível ler a oferta total (gettxoutsetinfo)")
+elif python3 -c "import sys; from decimal import Decimal as D; sys.exit(0 if D('$oferta_total') <= D('$oferta_maxima') else 1)"; then
+    :
+else
+    avisos+=("OFERTA ACIMA DO MÁXIMO: $oferta_total PQCH existentes, máximo $oferta_maxima")
+fi
+
 f="$ESTADO/estado.csv"
 [[ -s "$f" ]] || echo "hora_utc,altura,altura_api,ligacoes,nos_conhecidos,versoes_ligadas,sementes_ok,torneira,avisos" > "$f"
 echo "$(date -u +%FT%TZ),$altura,$altura_api,$ligacoes,$conhecidos,$versoes,$portas,$torneira,${#avisos[@]}" >> "$f"

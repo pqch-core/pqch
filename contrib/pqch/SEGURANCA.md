@@ -1,6 +1,8 @@
 # Segurança antes do lançamento
 
-Estado a 19 nov. 2026 dos quatro pontos de segurança do cronograma, e o que corre sozinho.
+Estado a 19 nov. 2026 dos quatro pontos de segurança do cronograma, e o que corre sozinho. O levantamento dos
+ataques de mai. a nov. 2026 e da exposição do PQCH a cada um está no documento «PQCH — Ataques de mai. a nov. 2026
+e a nossa exposição».
 
 ## O que corre automaticamente
 
@@ -13,6 +15,9 @@ Estado a 19 nov. 2026 dos quatro pontos de segurança do cronograma, e o que cor
 | Os mesmos 10 alvos de fuzzing, 15 min cada, com o corpus guardado de noite para noite | todas as noites | `seguranca.yml`, job `fuzz-long` |
 | Testes funcionais da carteira PQCH, P2MR e validação de blocos com ASan + UBSan | todas as noites | `seguranca.yml`, job `asan-functional` |
 | Fuzzing contínuo (alvos PQCH 45 min, herdados 15 min, em ciclo) | sempre | máquina de vigilância (Mac), `servidor-testes/fuzz-ciclo.sh` |
+| Oferta total: a soma das moedas existentes nunca passa a emissão máxima até à altura atual | de hora a hora | máquina de vigilância, `servidor-testes/vigia.sh` (alerta «OFERTA ACIMA DO MÁXIMO») |
+| Entropia das 24 palavras: 4.096 sementes novas, sem repetidas, bits e palavras sem desvio | cada push (testes unitários) | `pqch_p2mr_wallet_tests/bip39_new_words_entropy` |
+| Ações do GitHub fixadas por hash, atualizadas por pull request semanal | sempre | `.github/dependabot.yml` |
 
 Uma falha em qualquer destes trabalhos é tratada como relato de segurança: não se publica o input
 nem o detalhe; segue-se o `SECURITY.md`.
