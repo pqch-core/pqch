@@ -1,0 +1,126 @@
+# Copyright (c) 2026 The PQCH developers
+# Distributed under the MIT software license, see the accompanying
+# file COPYING or https://opensource.org/license/mit.
+
+# PQCH nightly security checks (contrib/pqch/SEGURANCA.md). They complement pqch.yml, which runs
+# ASan + UBSan unit tests and one minute of fuzzing per target on every push:
+#   codeql          static analysis of the C++ code (results in the repository's Security tab).
+#   fuzz-long       the PQCH fuzz targets for 15 minutes each; the corpus is kept between runs.
+#   asan-functional the node and the PQCH wallet functional tests built with ASan + UBSan.
+# Runs every night and by hand, always on GitHub's runners (never on a self-hosted runner).
+
+name: PQCH security (nightly)
+on:
+  schedule:
+    - cron: '23 2 * * *'  # every day 02:23 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pqch-security
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  DEPS: build-essential cmake pkgconf python3 libevent-dev libboost-dev libsqlite3-dev ccache
+
+jobs:
+  codeql:
+    name: 'CodeQL (C++)'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install packages
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends $DEPS
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: c-cpp
+          build-mode: manual
+          queries: security-extended
+      - name: Build
+        run: |
+          cmake -B build -DENABLE_WALLET=ON -DENABLE_IPC=OFF -DBUILD_GUI=OFF -DBUILD_TESTS=OFF
+          cmake --build build -j$(nproc) --target bitcoind
+      - uses: github/codeql-action/analyze@v4
+        with:
+          category: pqch-cpp
+
+  fuzz-long:
+    name: 'Fuzz, 15 min per target'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 330
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install packages
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends $DEPS clang libclang-rt-18-dev
+      - name: Restore the corpus from earlier nights
+        uses: actions/cache/restore@v5
+        with:
+          path: corpus
+          key: pqch-fuzz-corpus-${{ github.run_id }}
+          restore-keys: pqch-fuzz-corpus-
+      - name: Configure
+        run: cmake --preset=libfuzzer -DENABLE_WALLET=ON -DBUILD_GUI=OFF -DENABLE_IPC=OFF
+      - name: Build
+        run: cmake --build build_fuzz -j$(nproc)
+      - name: Fuzz
+        run: |
+          for t in pqch_auxpow_header pqch_auxpow_monero_block pqch_monero_primitives pqch_pq_verify \
+                   pqch_p2mr_descriptor pqch_bip39 headers_sync_state psbt mocked_descriptor_parse scriptpubkeyman; do
+            mkdir -p corpus/$t
+            echo "::group::$t"
+            FUZZ=$t build_fuzz/bin/fuzz -max_total_time=900 -timeout=20 -rss_limit_mb=3000 -jobs=1 corpus/$t
+            echo "::endgroup::"
+          done
+      - name: Save the corpus
+        if: always()
+        uses: actions/cache/save@v5
+        with:
+          path: corpus
+          key: pqch-fuzz-corpus-${{ github.run_id }}
+      - name: Keep crashing inputs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: fuzz-crashes-${{ github.run_id }}
+          path: |
+            crash-*
+            timeout-*
+            leak-*
+          retention-days: 30
+
+  asan-functional:
+    name: 'Functional tests with ASan + UBSan'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 330
+    env:
+      ASAN_OPTIONS: detect_leaks=1:detect_stack_use_after_return=1
+      LSAN_OPTIONS: suppressions=${{ github.workspace }}/test/sanitizer_suppressions/lsan
+      UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1:suppressions=${{ github.workspace }}/test/sanitizer_suppressions/ubsan
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install packages
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends $DEPS clang
+      - name: Configure
+        run: |
+          cmake -B build -DSANITIZERS=address,undefined -DCMAKE_BUILD_TYPE=Debug -DENABLE_WALLET=ON -DENABLE_IPC=OFF \
+            -DBUILD_GUI=OFF -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+      - name: Build
+        run: cmake --build build -j$(nproc)
+      - name: Functional tests (PQCH wallet, P2MR and consensus essentials)
+        run: |
+          # A sanitized node is several times slower and larger: one test at a time, long timeouts.
+          build/test/functional/test_runner.py --jobs=1 --timeout-factor=10 \
+            wallet_pqch_locked.py wallet_pqch_recovery.py wallet_pqch_recovery_words.py \
+            wallet_pqch_lightwallet.py wallet_pqch_vault.py \
+            mining_basic.py p2p_invalid_block.py p2p_invalid_tx.py p2p_invalid_messages.py \
+            mempool_accept.py rpc_psbt.py wallet_send.py
