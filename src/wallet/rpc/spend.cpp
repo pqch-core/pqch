@@ -1416,6 +1416,7 @@ RPCMethod sendall()
 
             CCoinControl coin_control;
             if (options.exists("p2mr_recovery")) coin_control.m_p2mr_recovery = options["p2mr_recovery"].get_bool(); // PQCH
+            coin_control.m_mldsa_disabled = pwallet->IsMLDSADisabled(); // PQCH: emergency soft fork
 
             SetFeeEstimateMode(*pwallet, coin_control, options["conf_target"], options["estimate_mode"], options["fee_rate"], /*override_min_fee=*/false);
 

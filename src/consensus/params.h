@@ -41,6 +41,7 @@ constexpr bool ValidDeployment(BuriedDeployment dep) { return dep <= DEPLOYMENT_
 
 enum DeploymentPos : uint16_t {
     DEPLOYMENT_TESTDUMMY,
+    DEPLOYMENT_MLDSA_EMERGENCY, // PQCH: emergency soft fork of ML-DSA (SCRIPT_VERIFY_MLDSA_DISABLED)
     // NOTE: Also add new deployments to VersionBitsDeploymentInfo in deploymentinfo.cpp
     // Removing an entry may require bumping MinBIP9WarningHeight.
     MAX_VERSION_BITS_DEPLOYMENTS
@@ -70,6 +71,12 @@ struct BIP9Deployment {
      * Examples: 1916 for 95%, 1512 for testchains.
      */
     uint32_t threshold{1916};
+    /**
+     * PQCH: whether nodes signal for this deployment on their own while it is STARTED. False for the
+     * ML-DSA emergency soft fork: miners signal only with -signalmldsaemergency, so the rule can never
+     * activate by accident, only when 90% of the hashrate chooses it.
+     */
+    bool signal_by_default{true};
 
     /** Constant for nTimeout very far in the future. */
     static constexpr int64_t NO_TIMEOUT = std::numeric_limits<int64_t>::max();

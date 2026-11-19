@@ -171,6 +171,14 @@ public:
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].min_activation_height = 0; // No activation delay
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].threshold = 1815; // 90%
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].period = 2016;
+        // PQCH: ML-DSA emergency soft fork, ready from genesis: 90% of a day of blocks (1,296 of 1,440)
+        consensus.vDeployments[Consensus::DEPLOYMENT_MLDSA_EMERGENCY].bit = 1;
+        consensus.vDeployments[Consensus::DEPLOYMENT_MLDSA_EMERGENCY].nStartTime = 0;
+        consensus.vDeployments[Consensus::DEPLOYMENT_MLDSA_EMERGENCY].nTimeout = Consensus::BIP9Deployment::NO_TIMEOUT;
+        consensus.vDeployments[Consensus::DEPLOYMENT_MLDSA_EMERGENCY].min_activation_height = 0;
+        consensus.vDeployments[Consensus::DEPLOYMENT_MLDSA_EMERGENCY].threshold = 1296;
+        consensus.vDeployments[Consensus::DEPLOYMENT_MLDSA_EMERGENCY].period = 1440;
+        consensus.vDeployments[Consensus::DEPLOYMENT_MLDSA_EMERGENCY].signal_by_default = false; // only with -signalmldsaemergency
 
         ApplyDeploymentOptions(opts.dep_opts);
 
@@ -286,6 +294,14 @@ public:
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].min_activation_height = 0; // No activation delay
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].threshold = 1512; // 75%
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].period = 2016;
+        // PQCH: ML-DSA emergency soft fork, as on mainnet
+        consensus.vDeployments[Consensus::DEPLOYMENT_MLDSA_EMERGENCY].bit = 1;
+        consensus.vDeployments[Consensus::DEPLOYMENT_MLDSA_EMERGENCY].nStartTime = 0;
+        consensus.vDeployments[Consensus::DEPLOYMENT_MLDSA_EMERGENCY].nTimeout = Consensus::BIP9Deployment::NO_TIMEOUT;
+        consensus.vDeployments[Consensus::DEPLOYMENT_MLDSA_EMERGENCY].min_activation_height = 0;
+        consensus.vDeployments[Consensus::DEPLOYMENT_MLDSA_EMERGENCY].threshold = 1296;
+        consensus.vDeployments[Consensus::DEPLOYMENT_MLDSA_EMERGENCY].period = 1440;
+        consensus.vDeployments[Consensus::DEPLOYMENT_MLDSA_EMERGENCY].signal_by_default = false; // only with -signalmldsaemergency
 
         ApplyDeploymentOptions(opts.dep_opts);
 
@@ -369,6 +385,14 @@ public:
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].min_activation_height = 0; // No activation delay
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].threshold = 1512; // 75%
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].period = 2016;
+        // PQCH: ML-DSA emergency soft fork, not used on this inherited network
+        consensus.vDeployments[Consensus::DEPLOYMENT_MLDSA_EMERGENCY].bit = 1;
+        consensus.vDeployments[Consensus::DEPLOYMENT_MLDSA_EMERGENCY].nStartTime = Consensus::BIP9Deployment::NEVER_ACTIVE;
+        consensus.vDeployments[Consensus::DEPLOYMENT_MLDSA_EMERGENCY].nTimeout = Consensus::BIP9Deployment::NO_TIMEOUT;
+        consensus.vDeployments[Consensus::DEPLOYMENT_MLDSA_EMERGENCY].min_activation_height = 0;
+        consensus.vDeployments[Consensus::DEPLOYMENT_MLDSA_EMERGENCY].threshold = 1815;
+        consensus.vDeployments[Consensus::DEPLOYMENT_MLDSA_EMERGENCY].period = 2016;
+        consensus.vDeployments[Consensus::DEPLOYMENT_MLDSA_EMERGENCY].signal_by_default = false; // only with -signalmldsaemergency
 
         ApplyDeploymentOptions(opts.dep_opts);
 
@@ -520,6 +544,14 @@ public:
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].min_activation_height = 0; // No activation delay
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].threshold = 1815; // 90%
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].period = 2016;
+        // PQCH: ML-DSA emergency soft fork, not used on this inherited network
+        consensus.vDeployments[Consensus::DEPLOYMENT_MLDSA_EMERGENCY].bit = 1;
+        consensus.vDeployments[Consensus::DEPLOYMENT_MLDSA_EMERGENCY].nStartTime = Consensus::BIP9Deployment::NEVER_ACTIVE;
+        consensus.vDeployments[Consensus::DEPLOYMENT_MLDSA_EMERGENCY].nTimeout = Consensus::BIP9Deployment::NO_TIMEOUT;
+        consensus.vDeployments[Consensus::DEPLOYMENT_MLDSA_EMERGENCY].min_activation_height = 0;
+        consensus.vDeployments[Consensus::DEPLOYMENT_MLDSA_EMERGENCY].threshold = 1815;
+        consensus.vDeployments[Consensus::DEPLOYMENT_MLDSA_EMERGENCY].period = 2016;
+        consensus.vDeployments[Consensus::DEPLOYMENT_MLDSA_EMERGENCY].signal_by_default = false; // only with -signalmldsaemergency
 
         ApplyDeploymentOptions(options.dep_opts);
 
@@ -619,6 +651,14 @@ public:
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].min_activation_height = 0; // No activation delay
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].threshold = 108; // 75%
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].period = 144; // Faster than normal for regtest (144 instead of 2016)
+        // PQCH: ML-DSA emergency soft fork, 90% of 144 blocks; -vbparams=mldsaemergency:... to change
+        consensus.vDeployments[Consensus::DEPLOYMENT_MLDSA_EMERGENCY].bit = 1;
+        consensus.vDeployments[Consensus::DEPLOYMENT_MLDSA_EMERGENCY].nStartTime = 0;
+        consensus.vDeployments[Consensus::DEPLOYMENT_MLDSA_EMERGENCY].nTimeout = Consensus::BIP9Deployment::NO_TIMEOUT;
+        consensus.vDeployments[Consensus::DEPLOYMENT_MLDSA_EMERGENCY].min_activation_height = 0;
+        consensus.vDeployments[Consensus::DEPLOYMENT_MLDSA_EMERGENCY].threshold = 130;
+        consensus.vDeployments[Consensus::DEPLOYMENT_MLDSA_EMERGENCY].period = 144;
+        consensus.vDeployments[Consensus::DEPLOYMENT_MLDSA_EMERGENCY].signal_by_default = false; // only with -signalmldsaemergency
 
         consensus.nMinimumChainWork = uint256{};
         consensus.defaultAssumeValid = uint256{};

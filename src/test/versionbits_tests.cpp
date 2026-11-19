@@ -278,6 +278,10 @@ void check_computeblockversion(VersionBitsCache& versionbitscache, const Consens
     // should not be any signalling for first block
     BOOST_CHECK_EQUAL(versionbitscache.ComputeBlockVersion(nullptr, params), VERSIONBITS_TOP_BITS);
 
+    // PQCH: a deployment signalled only by choice (signal_by_default false, the ML-DSA emergency soft
+    // fork) never sets its bit here; feature_pqch_mldsa_emergency.py tests its activation.
+    if (!params.vDeployments[dep].signal_by_default) return;
+
     // always/never active deployments shouldn't need to be tested further
     if (nStartTime == Consensus::BIP9Deployment::ALWAYS_ACTIVE ||
         nStartTime == Consensus::BIP9Deployment::NEVER_ACTIVE)

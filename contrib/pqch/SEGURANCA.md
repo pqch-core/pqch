@@ -33,7 +33,48 @@ nem o detalhe; segue-se o `SECURITY.md`.
    community@pqch.org (assunto «security») estão abertos.
 3. **Sanitizers e fuzzing.** Automatizados (tabela acima). Falta: alvos de fuzzing para o ASERT e
    para a regra das chaves RandomX no AuxPoW.
-4. **Soft fork de emergência do ML-DSA.** O mecanismo ainda não existe no código. Primeiro o
-   desenho (que gastos passam a exigir a folha SLH-DSA, como se ativa, a sinalização de 90%); depois
-   um teste funcional em regtest que ativa o soft fork e confirma que os gastos só com ML-DSA são
-   recusados e os de recuperação com SLH-DSA continuam válidos.
+4. **Soft fork de emergência do ML-DSA.** Implementado e testado (19 nov. 2026); desenho abaixo.
+
+## Soft fork de emergência do ML-DSA
+
+**Para quê.** Se o ML-DSA for quebrado (um erro no algoritmo ou na implementação), quem o quebre
+ainda precisa da assinatura Schnorr da mesma folha. Mas se o ML-DSA cair *e* existir um computador
+quântico capaz de quebrar o Schnorr, a folha A de todas as moedas fica aberta. Este soft fork fecha-a:
+a partir da ativação, só a folha B (SLH-DSA, baseada em hashes) gasta moedas.
+
+**A regra (`SCRIPT_VERIFY_MLDSA_DISABLED`).** Com o soft fork ativo, `OP_CHECKSIGMLDSA` e
+`OP_CHECKSIGMLDSAVERIFY` falham com qualquer assinatura não vazia (erro `SCRIPT_ERR_MLDSA_DISABLED`).
+É um soft fork: só torna inválido o que antes era válido, por isso nós antigos continuam a seguir a
+cadeia. Uma transação assinada pela folha A antes da ativação deixa de entrar em blocos.
+
+**A ativação (BIP9, implantação `mldsaemergency`, bit 1).**
+
+| Rede | Período | Limiar | Início | Fim |
+|---|---|---|---|---|
+| Principal e testnet | 1.440 blocos (~1 dia) | 1.296 (90%) | desde o génesis | nunca expira |
+| Regtest | 144 blocos | 130 (90%) | desde o génesis | nunca expira |
+
+Os nós **nunca sinalizam sozinhos** (`signal_by_default = false`): um bloco só leva o bit se o
+mineiro arrancar o nó com `-signalmldsaemergency=1`. Assim a regra não pode ativar por acidente. Com
+90% de um período a sinalizar, fica `locked_in`; um período depois fica `active`. Na rede principal,
+do primeiro dia de sinalização à ativação vão cerca de 2 a 3 dias. Os blocos que sinalizam não geram
+o aviso de «regras desconhecidas» nos nós desta versão.
+
+**As carteiras.** Quando a regra está ativa, a carteira do PQCH Core passa a gastar pela folha de
+recuperação sem nada a configurar (`send`, `sendtoaddress`, `sendall`, PSBT), e calcula a taxa para o
+tamanho maior da assinatura SLH-DSA (~7,9 kB). A carteira Android ainda não muda sozinha: fica para a
+próxima versão da app, com a opção de recuperação que já existe no núcleo.
+
+**Procedimento, se for preciso usá-lo.**
+1. Confirmar a falha com a equipa e com quem a reportou (canal privado, `SECURITY.md`).
+2. Anunciar nos canais oficiais e no site: o que se passa, que as moedas estão seguras e que os
+   mineiros devem arrancar o nó com `-signalmldsaemergency=1`.
+3. Vigiar `getdeploymentinfo` → `mldsaemergency` até `active`.
+4. Depois da ativação, as carteiras atualizadas continuam a funcionar; quem usar outro software
+   gasta com `p2mr_recovery`.
+
+**Testes.** `feature_pqch_mldsa_emergency.py` (regtest, 2 nós): ninguém sinaliza por defeito; com
+`-signalmldsaemergency` a implantação ativa; uma transação pela folha A assinada antes da ativação é
+recusada no mempool e num bloco, nos dois nós; a carteira gasta sozinha pela folha B (`send`,
+`sendtoaddress`, `sendall`). E `pqch_pq_tests/p2mr_two_leaves_slhdsa_recovery`: com a regra, a folha A
+falha e a folha B passa.

@@ -90,6 +90,9 @@ public:
     bool m_include_unsafe_inputs = false;
     //! PQCH: spend P2MR inputs through the recovery leaf (SLH-DSA): sizes and signing.
     bool m_p2mr_recovery = false;
+    //! PQCH: set by the wallet once the ML-DSA emergency soft fork is active: size the inputs for the
+    //! recovery leaf (the signer switches by itself), without listing vault copies as m_p2mr_recovery does.
+    bool m_mldsa_disabled = false;
     //! If true, the selection process can add extra unselected inputs from the wallet
     //! while requires all selected inputs be used
     bool m_allow_other_inputs = true;

@@ -129,6 +129,8 @@ std::string ScriptErrorString(const ScriptError serror)
             return "Invalid post-quantum signature";
         case SCRIPT_ERR_PQ_SIG_REQUIRED:
             return "A script that checks an elliptic-curve signature must also check a post-quantum signature";
+        case SCRIPT_ERR_MLDSA_DISABLED:
+            return "ML-DSA signatures are disabled by the emergency soft fork; spend through the SLH-DSA recovery leaf";
         case SCRIPT_ERR_OP_CODESEPARATOR:
             return "Using OP_CODESEPARATOR in non-witness script";
         case SCRIPT_ERR_SIG_FINDANDDELETE:

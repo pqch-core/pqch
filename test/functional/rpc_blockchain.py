@@ -246,6 +246,29 @@ class BlockchainTest(BitcoinTestFramework):
                 },
                 'active': False
             },
+            # PQCH: the ML-DSA emergency soft fork: started, but no node signals it unless told to
+            # (-signalmldsaemergency), so its bit is never set in these blocks.
+            'mldsaemergency': {
+                'type': 'bip9',
+                'bip9': {
+                    'bit': 1,
+                    'start_time': 0,
+                    'timeout': 0x7fffffffffffffff,
+                    'min_activation_height': 0,
+                    'status': 'started',
+                    'status_next': 'started',
+                    'since': 144,
+                    'statistics': {
+                        'period': 144,
+                        'threshold': 130,
+                        'elapsed': height - 143,
+                        'count': 0,
+                        'possible': (144 - (height - 143)) >= 130,
+                    },
+                    'signalling': '-'*(height-143),
+                },
+                'active': False
+            },
           }
         })
 

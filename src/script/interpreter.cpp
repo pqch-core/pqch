@@ -1141,6 +1141,8 @@ bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& 
                     if (pubkey.size() != (slh ? pqc::SLHDSA128S_PUBKEY_SIZE : pqc::MLDSA44_PUBKEY_SIZE)) {
                         return set_error(serror, SCRIPT_ERR_PQ_PUBKEY_SIZE);
                     }
+                    // PQCH: after the ML-DSA emergency soft fork, an ML-DSA signature is never valid.
+                    if (success && !slh && (flags & SCRIPT_VERIFY_MLDSA_DISABLED)) return set_error(serror, SCRIPT_ERR_MLDSA_DISABLED);
                     if (success) {
                         if (!checker.CheckPQSignature(sig, pubkey, algo, sigversion, execdata, serror)) return false; // serror is set
                         ++execdata.m_pq_sigs_checked;
@@ -2350,6 +2352,7 @@ const std::map<std::string, script_verify_flag_name>& ScriptFlagNamesToEnum()
         FLAG_NAME(DISCOURAGE_OP_SUCCESS),
         FLAG_NAME(DISCOURAGE_UPGRADABLE_TAPROOT_VERSION),
         FLAG_NAME(P2MR),
+        FLAG_NAME(MLDSA_DISABLED),
     };
 #undef FLAG_NAME
     return g_names_to_enum;

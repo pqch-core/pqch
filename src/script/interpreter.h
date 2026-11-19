@@ -152,6 +152,11 @@ enum class script_verify_flag_name : uint8_t {
     // signatures need a post-quantum one beside them).
     SCRIPT_VERIFY_P2MR,
 
+    // PQCH: emergency soft fork of ML-DSA (contrib/pqch/SEGURANCA.md). Once active, OP_CHECKSIGMLDSA
+    // and OP_CHECKSIGMLDSAVERIFY fail with any non-empty signature, so the hybrid leaf (A) of every
+    // P2MR output can no longer be spent and coins move through the SLH-DSA recovery leaf (B).
+    SCRIPT_VERIFY_MLDSA_DISABLED,
+
     // Constants to point to the highest flag in use. Add new flags above this line.
     //
     SCRIPT_VERIFY_END_MARKER

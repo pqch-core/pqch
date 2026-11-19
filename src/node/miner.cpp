@@ -151,6 +151,13 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock()
     nHeight = pindexPrev->nHeight + 1;
 
     pblock->nVersion = m_chainstate.m_chainman.m_versionbitscache.ComputeBlockVersion(pindexPrev, chainparams.GetConsensus());
+    // PQCH: the ML-DSA emergency soft fork is signalled only by miners who choose it.
+    if (gArgs.GetBoolArg("-signalmldsaemergency", false)) {
+        const auto status{m_chainstate.m_chainman.m_versionbitscache.GBTStatus(*pindexPrev, chainparams.GetConsensus())};
+        for (const auto* group : {&status.signalling, &status.locked_in}) {
+            if (const auto it{group->find("mldsaemergency")}; it != group->end()) pblock->nVersion |= it->second.mask;
+        }
+    }
     // -regtest only: allow overriding block.nVersion with
     // -blockversion=N to test forking scenarios
     if (chainparams.MineBlocksOnDemand()) {

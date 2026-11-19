@@ -123,4 +123,4 @@ jobs:
             wallet_pqch_locked.py wallet_pqch_recovery.py wallet_pqch_recovery_words.py \
             wallet_pqch_lightwallet.py wallet_pqch_vault.py \
             mining_basic.py p2p_invalid_block.py p2p_invalid_tx.py p2p_invalid_messages.py \
-            mempool_accept.py rpc_psbt.py wallet_send.py
+            mempool_accept.py rpc_psbt.py wallet_send.py feature_pqch_mldsa_emergency.py

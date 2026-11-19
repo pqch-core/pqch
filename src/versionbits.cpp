@@ -262,12 +262,15 @@ bool VersionBitsCache::IsActiveAfter(const CBlockIndex* pindexPrev, const Consen
     return ThresholdState::ACTIVE == VersionBitsConditionChecker(params, pos).GetStateFor(pindexPrev, m_caches[pos]);
 }
 
-static int32_t ComputeBlockVersion(const CBlockIndex* pindexPrev, const Consensus::Params& params, std::array<ThresholdConditionCache, Consensus::MAX_VERSION_BITS_DEPLOYMENTS>& caches)
+// PQCH: all_known also sets the bits of deployments that are signalled only by choice
+// (signal_by_default false), so that blocks signalling them do not raise "unknown rules" warnings.
+static int32_t ComputeBlockVersion(const CBlockIndex* pindexPrev, const Consensus::Params& params, std::array<ThresholdConditionCache, Consensus::MAX_VERSION_BITS_DEPLOYMENTS>& caches, bool all_known = false)
 {
     int32_t nVersion = VERSIONBITS_TOP_BITS;
 
     for (int i = 0; i < (int)Consensus::MAX_VERSION_BITS_DEPLOYMENTS; i++) {
         Consensus::DeploymentPos pos = static_cast<Consensus::DeploymentPos>(i);
+        if (!all_known && !params.vDeployments[pos].signal_by_default) continue;
         VersionBitsConditionChecker checker(params, pos);
         ThresholdState state = checker.GetStateFor(pindexPrev, caches[pos]);
         if (state == ThresholdState::LOCKED_IN || state == ThresholdState::STARTED) {
@@ -325,7 +328,7 @@ public:
         return pindex->nHeight >= m_params.MinBIP9WarningHeight &&
                ((pindex->nVersion & VERSIONBITS_TOP_MASK) == VERSIONBITS_TOP_BITS) &&
                ((pindex->nVersion >> m_bit) & 1) != 0 &&
-               ((::ComputeBlockVersion(pindex->pprev, m_params, m_caches) >> m_bit) & 1) == 0;
+               ((::ComputeBlockVersion(pindex->pprev, m_params, m_caches, /*all_known=*/true) >> m_bit) & 1) == 0;
     }
 };
 } // anonymous namespace

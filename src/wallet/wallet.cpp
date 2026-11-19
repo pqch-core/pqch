@@ -2287,6 +2287,8 @@ bool CWallet::SignTransaction(CMutableTransaction& tx, bool p2mr_recovery) const
 
 bool CWallet::SignTransaction(CMutableTransaction& tx, const std::map<COutPoint, Coin>& coins, int sighash, std::map<int, bilingual_str>& input_errors, bool p2mr_recovery) const
 {
+    // PQCH: after the ML-DSA emergency soft fork only the recovery leaf can be spent.
+    if (IsMLDSADisabled()) p2mr_recovery = true;
     // Try to sign with all ScriptPubKeyMans
     for (ScriptPubKeyMan* spk_man : GetAllScriptPubKeyMans()) {
         // spk_man->SignTransaction will return true if the transaction is complete,
@@ -2300,8 +2302,11 @@ bool CWallet::SignTransaction(CMutableTransaction& tx, const std::map<COutPoint,
     return false;
 }
 
-std::optional<PSBTError> CWallet::FillPSBT(PartiallySignedTransaction& psbtx, const common::PSBTFillOptions& options, bool& complete, size_t* n_signed) const
+std::optional<PSBTError> CWallet::FillPSBT(PartiallySignedTransaction& psbtx, const common::PSBTFillOptions& fill_options, bool& complete, size_t* n_signed) const
 {
+    // PQCH: after the ML-DSA emergency soft fork only the recovery leaf can be spent.
+    common::PSBTFillOptions options{fill_options};
+    if (options.sign && IsMLDSADisabled()) options.p2mr_recovery = true;
     if (n_signed) {
         *n_signed = 0;
     }

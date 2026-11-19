@@ -337,6 +337,14 @@ BOOST_AUTO_TEST_CASE(p2mr_two_leaves_slhdsa_recovery)
     Spend wrong{MakeTree({CScript() << daily.pubkey << OP_CHECKSIGSLHDSA})};
     wrong.SetWitness(0, {slh_sig});
     CHECK_ERR(wrong.Verify(), SCRIPT_ERR_PQ_PUBKEY_SIZE);
+
+    // ML-DSA emergency soft fork (SCRIPT_VERIFY_MLDSA_DISABLED): leaf A can no longer be spent,
+    // however valid its signature; leaf B still can.
+    const auto emergency{SCRIPT_VERIFY_P2SH | SCRIPT_VERIFY_WITNESS | SCRIPT_VERIFY_TAPROOT | SCRIPT_VERIFY_P2MR | SCRIPT_VERIFY_MLDSA_DISABLED};
+    s.SetWitness(0, {SignMLDSA(daily.seckey, s.SigHash(0, PQAlgorithm::ML_DSA_44))});
+    CHECK_ERR(s.Verify(emergency), SCRIPT_ERR_MLDSA_DISABLED);
+    s.SetWitness(1, {slh_sig});
+    CHECK_ERR(s.Verify(emergency), SCRIPT_ERR_OK);
 }
 
 // Timelocks work inside PQ-script leaves (they are ordinary tapscript opcodes there), so a P2MR

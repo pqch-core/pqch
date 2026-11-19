@@ -14,6 +14,7 @@
 #include <consensus/amount.h>
 #include <consensus/merkle.h>
 #include <consensus/validation.h>
+#include <deploymentstatus.h>
 #include <external_signer.h>
 #include <httprpc.h>
 #include <index/blockfilterindex.h>
@@ -779,6 +780,12 @@ public:
         return GetPruneHeight(chainman().m_blockman, chainman().ActiveChain());
     }
     bool isReadyToBroadcast() override { return !chainman().m_blockman.LoadingBlocks() && !isInitialBlockDownload(); }
+    bool isMLDSADisabled() override
+    {
+        LOCK(::cs_main);
+        const CBlockIndex* tip{chainman().ActiveChain().Tip()};
+        return tip && DeploymentActiveAfter(tip, chainman(), Consensus::DEPLOYMENT_MLDSA_EMERGENCY);
+    }
     bool isInitialBlockDownload() override
     {
         return chainman().IsInitialBlockDownload();

@@ -495,6 +495,9 @@ public:
 
     /** Interface to assert chain access */
     bool HaveChain() const { return m_chain ? true : false; }
+    //! PQCH: whether the ML-DSA emergency soft fork is active (then the wallet signs P2MR inputs
+    //! through the SLH-DSA recovery leaf). False without a chain.
+    bool IsMLDSADisabled() const { return m_chain && m_chain->isMLDSADisabled(); }
 
     /** Map from txid to CWalletTx for all transactions this wallet is
      * interested in, including received and sent transactions. */

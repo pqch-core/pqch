@@ -2304,6 +2304,11 @@ script_verify_flags GetBlockScriptFlags(const CBlockIndex& block_index, const Ch
         flags |= SCRIPT_VERIFY_P2MR;
     }
 
+    // PQCH: ML-DSA emergency soft fork (contrib/pqch/SEGURANCA.md).
+    if (DeploymentActiveAt(block_index, chainman, Consensus::DEPLOYMENT_MLDSA_EMERGENCY)) {
+        flags |= SCRIPT_VERIFY_MLDSA_DISABLED;
+    }
+
     return flags;
 }
 

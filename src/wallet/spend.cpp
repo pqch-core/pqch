@@ -72,7 +72,7 @@ static std::optional<int64_t> MaxInputWeight(const Descriptor& desc, const std::
                                              const CCoinControl* coin_control, const bool tx_is_segwit,
                                              const bool can_grind_r) {
     // PQCH: a spend through the P2MR recovery leaf is about twice the size of the hybrid one.
-    const auto recovery{coin_control && coin_control->m_p2mr_recovery ? desc.MaxP2MRRecoverySatisfaction() : std::nullopt};
+    const auto recovery{coin_control && (coin_control->m_p2mr_recovery || coin_control->m_mldsa_disabled) ? desc.MaxP2MRRecoverySatisfaction() : std::nullopt};
     if (const auto sat_weight = recovery ? std::optional<int64_t>{recovery->first} : desc.MaxSatisfactionWeight(!can_grind_r || UseMaxSig(txin, coin_control))) {
         if (const auto elems_count = recovery ? std::optional<int64_t>{recovery->second} : desc.MaxSatisfactionElems()) {
             const bool is_segwit = IsSegwit(desc);
@@ -1478,6 +1478,13 @@ util::Result<CreatedTransactionResult> CreateTransaction(
     }
 
     LOCK(wallet.cs_wallet);
+
+    // PQCH: after the ML-DSA emergency soft fork, size every P2MR input for the recovery leaf.
+    if (!coin_control.m_mldsa_disabled && wallet.IsMLDSADisabled()) {
+        CCoinControl cc{coin_control};
+        cc.m_mldsa_disabled = true;
+        return CreateTransaction(wallet, vecSend, change_pos, cc, sign);
+    }
 
     auto res = CreateTransactionInternal(wallet, vecSend, change_pos, coin_control, sign);
     TRACEPOINT(coin_selection, normal_create_tx_internal,
