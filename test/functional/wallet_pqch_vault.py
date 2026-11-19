@@ -76,7 +76,10 @@ class PQCHWalletVaultTest(BitcoinTestFramework):
         for a in (addr, change):
             assert agent.getaddressinfo(a)["ismine"]
             assert owner.getaddressinfo(a)["ismine"]
-        funder.send({addr: 5}, fee_rate=FEE_RATE)
+        txid = funder.send({addr: 5}, fee_rate=FEE_RATE)["txid"]
+        # The wallets learn of the mempool transaction asynchronously (slow under sanitizers): wait for it.
+        for wallet in (owner, agent):
+            self.wait_until(lambda: txid in {t["txid"] for t in wallet.listtransactions("*", 100)})
 
         self.log.info("A coin not yet confirmed shows in listvaults (both sides) and waits in recovervault")
         for wallet, role in ((owner, "owner"), (agent, "agent")):

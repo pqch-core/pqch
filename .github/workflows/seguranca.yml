@@ -119,8 +119,27 @@ jobs:
       - name: Functional tests (PQCH wallet, P2MR and consensus essentials)
         run: |
           # A sanitized node is several times slower and larger: one test at a time, long timeouts.
+          # wallet_pqch_lightwallet.py stays out: Python loads the light wallet library with ctypes, and a
+          # sanitized library needs the sanitizer runtime preloaded (it runs in the normal CI).
           build/test/functional/test_runner.py --jobs=1 --timeout-factor=10 \
             wallet_pqch_locked.py wallet_pqch_recovery.py wallet_pqch_recovery_words.py \
-            wallet_pqch_lightwallet.py wallet_pqch_vault.py \
+            wallet_pqch_vault.py \
             mining_basic.py p2p_invalid_block.py p2p_invalid_tx.py p2p_invalid_messages.py \
             mempool_accept.py rpc_psbt.py wallet_send.py feature_pqch_mldsa_emergency.py
+      - name: Sanitizer reports and node logs of the failed tests
+        if: failure()
+        run: |
+          # The test framework keeps each node's stderr (where ASan / UBSan / assertions write) in the test folder.
+          for f in $(find /tmp/test_runner_* -path '*/stderr/*' -type f -size +0 2>/dev/null); do
+            echo "::group::$f"; tail -n 120 "$f"; echo "::endgroup::"
+          done
+          for f in $(find /tmp/test_runner_* -name debug.log 2>/dev/null); do
+            echo "::group::$f (last 60 lines)"; tail -n 60 "$f"; echo "::endgroup::"
+          done
+      - name: Keep the failed test folders
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: asan-functional-logs
+          path: /tmp/test_runner_*
+          retention-days: 7
