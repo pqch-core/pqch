@@ -148,6 +148,23 @@ Cuidados: nenhuma porta nova aberta no router (o P2Pool e o Monero só fazem lig
 `--in-peers 0`); a carteira Monero recebe valores reais, por isso a semente dessa carteira fica no
 Bitwarden e nunca no server.
 
+### Resultados
+
+**19 nov. 2026: primeiro merged mining com o P2Pool real e o Monero da rede principal.** Monero
+v0.18.5.4 sincronizado (altura 3 809 855), P2Pool v4.18.1 (rede `mini`, binário conferido: SHA256 da
+lista assinada pela chave `1FCAAB4D3DC3310D16CBD508C47F82B54DA87ADF`, a mesma na conta GitHub do autor
+e em keys.openpgp.org). Em vez do `xmrig`, o minerador incorporado do P2Pool (`--start-mining 2`); o
+nó PQCH com `randomxfastmining` desligado durante o teste, para deixar os 2 GB do conjunto RandomX ao
+P2Pool. Serviço `p2pool` com `--no-upnp`, stratum só em `127.0.0.1` e utilizador próprio sem shell.
+
+- Primeira prova às 15:14:47: `Miner AUX BLOCK FOUND` com o `chain_id` da testnet PQCH
+  (`aa9c5d46…07b3`) e `merge_mining_submit_solution to 127.0.0.1:39332: accepted`.
+- Entre as 15:14 e as 15:51, 6 provas aceites, nenhuma recusada; dificuldade PQCH entre 247 046 e
+  249 820. A altura PQCH passou de 19 790 (manhã) para 19 895.
+- Shares do Monero: ainda nenhuma (esperado com 2 threads de um portátil na rede `mini`).
+- O `debug.log` do `pqchd` não regista as chamadas RPC sem `-debug=rpc`; a contagem das provas faz-se
+  pelo registo do P2Pool e pelo `auxpow` dos cabeçalhos.
+
 ## 5. Calendário
 
 | Quando | O quê |
