@@ -262,9 +262,12 @@ fi
 echo "== 6/6 Arrancar"
 systemctl daemon-reload
 if [[ "$FUNCAO" == vigiar ]]; then
+    # Numa atualização o nó já está a correr: reiniciar para usar os binários novos.
+    systemctl is-active -q pqch-vigia-no.service && systemctl restart pqch-vigia-no.service
     systemctl enable --now pqch-vigia-no.service pqch-vigia.timer pqch-fuzz.service
     echo "Fuzzing: ${FUZZ_JOBS} processos de ${FUZZ_RSS} MB. A primeira compilação demora (journalctl -u pqch-fuzz -f)."
 else
+    systemctl is-active -q pqchd-testnet.service && systemctl restart pqchd-testnet.service
     systemctl enable --now pqch-desempenho.service pqchd-testnet.service pqch-minerar-testnet.service
     echo "O nó sincroniza primeiro; depois o minerador arranca sozinho (journalctl -u pqch-minerar-testnet -f)."
 fi
