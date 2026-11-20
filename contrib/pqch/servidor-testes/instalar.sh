@@ -101,6 +101,10 @@ CONF
 chown pqch-vigia:pqch-vigia /var/lib/pqch-vigia/no/pqch.conf
 else
 THREADS="${PQCH_THREADS:-$(( $(nproc) / 2 > 0 ? $(nproc) / 2 : 1 ))}"
+# Numa atualização, manter a API de merged mining se já estava ligada (CALIBRACAO.md, secção 4).
+MERGEMINING=""
+grep -qx 'mergemining=1' /var/lib/pqch-minerador/pqch.conf 2>/dev/null && MERGEMINING="mergemining=1"
+[[ -f /var/lib/pqch-minerador/pqch.conf ]] && cp -p /var/lib/pqch-minerador/pqch.conf /var/lib/pqch-minerador/pqch.conf.anterior
 cat > /var/lib/pqch-minerador/pqch.conf <<CONF
 # Minerador da testnet: sem portas abertas; entra pelas sementes públicas. Só moedas de teste.
 testnet=1
@@ -113,6 +117,7 @@ randomxfastmining=1
 randomxminingthreads=${THREADS}
 rpcbind=127.0.0.1
 rpcallowip=127.0.0.1
+${MERGEMINING}
 CONF
 chown pqch-minerador:pqch-minerador /var/lib/pqch-minerador/pqch.conf
 echo "minerador: ${THREADS} threads (uma por núcleo físico; o RandomX quer ~2 MB de cache L3 por thread)"
