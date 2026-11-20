@@ -188,7 +188,7 @@ jobs:
           (cd stage && zip -X -r "../out/${NAME}-win64.zip" "${NAME}")
           unzip -l "out/${NAME}-win64.zip"
 
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: pqch-${{ steps.version.outputs.version }}-${{ matrix.name }}
           path: out/*
@@ -221,7 +221,7 @@ jobs:
           cd dl
           sha256sum pqch-* | sort -k2 > SHA256SUMS
           cat SHA256SUMS
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: pqch-release-${{ github.ref_name }}-${{ github.run_number }}
           path: dl/*
