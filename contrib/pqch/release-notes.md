@@ -3,74 +3,22 @@
 **PQCH {{VERSION}}**
 
 **Changes**
-In v0.3.0 (prepares the public testnet; no consensus change):
-- Android light wallet: release APKs are signed with the PQCH app release key. Check it with
-  `apksigner verify --print-certs pqch-wallet-<version>.apk`; the certificate SHA-256 must be
-  `39:86:31:73:B5:7A:8D:95:92:E4:FF:5C:84:D8:6D:87:27:82:BC:51:8A:7C:90:DE:F9:E2:F0:E7:3B:F3:D2:ED`.
-  Test APKs (debug key) must be uninstalled before installing a release APK.
-- Testnet: fixed seeds for the project's two public nodes (187.127.89.83 and 72.61.20.80, port
-  39333). A new testnet node with an empty address list finds the network without `-addnode`. Team
-  nodes with `fixedseeds=0` are unaffected.
-- P2P: a merged mined header that brings a Monero RandomX key no valid header has used, and that is
-  not cached, is only checked when it comes from an outbound peer (or one with `noban`). Building
-  the key's RandomX cache costs about 0.5 s and 256 MiB before fake work can be refused, so inbound
-  peers could otherwise stall the node for free. From inbound peers such headers (and compact or
-  unrequested blocks) are ignored without penalty until an outbound peer relays them; a real new
-  key appears about once every 3 days.
-- Help texts and messages name PQCH's programs (`pqchd`, `pqch-cli`, `pqch-qt`, `pqch-wallet`) and
-  the PQCH network instead of Bitcoin's; examples use `pqc1p…` addresses and RPC port 29332; the
-  list of output types no longer offers `witness_v1_taproot` (on PQCH a witness v1 output is `p2mr`);
-  the default signature hash is described as DEFAULT for P2MR.
-- Wallet: an unencrypted wallet checks its address cache against its post-quantum seed every time
-  it is loaded (encrypted wallets already did at `walletpassphrase`). A wallet file whose cache holds
-  another seed's keys is refused, so it never hands out addresses it cannot spend from. About 0.25 s
-  per load with the default 1,000 + 1,000 addresses.
-- Wallet (PQCH-Qt): the Mining tab gives the network's coinbase maturity (100 blocks on testnet,
-  720 on mainnet) instead of a fixed 720.
-- Android light wallet (testnet), `pqch-wallet-0.3.0.apk`: keeps only the 24 words (encrypted on
-  the phone, PIN, locks when leaving the app) and reads the chain from `https://api-testnet.pqch.org/api`.
-  Create or restore a wallet, receive (address and QR code), send (paste or **scan a QR code**, fee
-  choice, confirmation screen; "send the whole balance" is shown and confirmed as such). Its core
-  (`libpqchwallet`) is PQCH Core's own code: the same 24 words give the same addresses on the phone
-  and in PQCH Core.
-- Testnet services: faucet `https://faucet-testnet.pqch.org` (4 test coins per address and per
-  connection a day) and the API above for light wallets. The explorer stays for the real network.
-- Security reports: `SECURITY.md` now points to PQCH (GitHub private vulnerability reporting, or
-  community@pqch.org with the subject "security") instead of Bitcoin Core.
-
-Earlier, in v0.2.10:
-- Mining: `generatetoaddress` / `generatetodescriptor` start each search at a random nonce instead of 0
-  (regtest keeps 0). Two machines preparing the same block (same tip, same payout address, same
-  second) no longer try the same nonces in the same order, where the slower one only repeated the
-  faster one's work: on the testnet the MacBook won under half its share of blocks.
-- A block found on the last allowed try (`maxtries`) is no longer thrown away.
-- Wallet (PQCH-Qt): new **Mining** tab (Alt+5). Mines with this computer's processor to a new address
-  of the open wallet: choose threads and fast mode, then Start / Stop. Shows your hash rate, the
-  network's, your share and the expected time between your blocks. It waits while the node has no
-  peers or is still catching up, so it never mines on an old tip. One wallet can mine at a time.
-- Wallet (PQCH-Qt): new look in the PQCH colours: tab bar with a highlighted tab, the balance in a
-  gradient card, white cards with soft shadows, gradient Send / Receive buttons, cleaner tables.
-
-Earlier, in v0.2.9:
-- `getmininginfo` gains `localhashps`: hashes per second of this node's own miner (generate*),
-  over the time it spent searching in the last 10 minutes. Compare it with `networkhashps` to see
-  the share of blocks a machine should win.
-
-Earlier, from v0.2.4 to v0.2.8:
-- Mining: `generatetoaddress` / `generatetodescriptor` stop searching as soon as another block
-  arrives and start again on top of it. Before, a slow miner kept hashing on the old tip for up to
-  an hour, so with 1-minute blocks almost all of its work went to orphans (on the testnet a laptop
-  with 2 threads won 1 block in 600).
-- Agent vaults (`contrib/pqch/COFRE.md`): an agent's coins in a P2MR vault that its owner can take back
-  with a post-quantum recovery key, at once or after a timelock of up to 65,535 blocks. New RPCs
-  `getvaultkey`, `createvault`, `listvaults`, `recovervault`, and the dialog **Settings → Agent Vaults…**.
-- `recovervault` never fails for want of a fee estimate: it falls back to 10 quanta/vB and reports
-  where the fee rate came from (`fee_source`).
-- `listvaults` shows vault coins not yet confirmed (`unconfirmed`); they are never recovered.
-- A wallet can no longer make a vault with its own recovery key, and a recovery never sends the coins
-  back into a vault (the default address is a new `p2mr()` address of the owner).
-- The dialog shows the wallet's name and hides the owner's import data (it holds the vault's seed)
-  behind *Show* / *Copy*.
+In v0.3.1 (testnet; one soft fork that stays inactive unless miners signal for it):
+- Mining: `getblocktemplate` works on every network. Its internal placeholder coinbase paid `OP_TRUE`, which
+  the post-quantum output rule (coinbase included) rejects, so it failed on testnet and mainnet. Pools and
+  external miners use it; the decentralised pool (pqch-pool) needs this version.
+- Consensus (soft fork, inactive by default): ML-DSA emergency deployment `mldsaemergency` (version bit 1,
+  90% of a 1440-block period). If ML-DSA-44 were ever broken, miners can activate it to make ML-DSA
+  signatures invalid; coins stay spendable through the SLH-DSA recovery leaf of every P2MR output, and the
+  wallet switches to it by itself. Nodes do not signal unless started with `-signalmldsaemergency`.
+- Fixes found by the new nightly Debug and sanitizer runs: the mempool now applies the emergency rule as
+  consensus does once it is active; restoring a wallet from the 24 words takes its locks in the same order
+  as the rest of the wallet (a potential deadlock with the auto-lock timer).
+- PQCH-Qt: `-minerapp` one-click mining mode (no data directory dialog, a wallet is created or opened on the
+  first run, opens on the Mining tab, can start mining by itself). Windows installer and Linux package add a
+  "PQCH Miner (testnet)" launcher.
+- Security automation: nightly CodeQL, long fuzzing and functional tests under ASan/UBSan; supply check
+  against the issuance schedule in the test monitor; GitHub Actions pinned by commit hash.
 
 **Verify before installing**
 1. Import the release key (`pqch-releases.asc`) and check its fingerprint:
