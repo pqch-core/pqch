@@ -89,3 +89,19 @@ falha e a folha B passa.
 
 As duas primeiras só aparecem numa compilação Debug (verificação de ordem de bloqueios e `Assume`), que é
 a do trabalho noturno com ASan + UBSan. Por isso esse trabalho corre os testes funcionais em Debug.
+
+## Triagem dos alertas do CodeQL (20 nov. 2026)
+
+Primeira análise: 46 alertas "High", todos em código herdado, nenhum em código escrito pelo PQCH. Fechados como
+"Won't fix" com o comentário "Código herdado (Bitcoin Core v32.1 / RandomX / SLH-DSA de referência), revisto em 20 nov. 2026".
+
+| Alertas | Onde | Porque não é falha |
+| --- | --- | --- |
+| 32 | Bitcoin Core v32.1 (linhas iguais ao original, confirmadas pela etiqueta `v32.1`) | Caminhos vindos da configuração e da linha de comandos do próprio utilizador; ficheiros criados com `umask 0077` (definido no arranque em `common/system.cpp`); `!` em inteiros de propósito na secp256k1; tamanhos limitados antes da alocação. São avisos conhecidos e aceites no Bitcoin Core. |
+| 10 | RandomX (`argon2_avx2.c`, `argon2_ssse3.c`, `randomx.cpp`) | Aritmética de ponteiros SIMD intencional; o `new` está dentro de `try`/`catch (std::exception&)`, a verificação de nulo a seguir é só redundante. |
+| 2 | SLH-DSA de referência (`slh_dsa.c`) | Multiplicações de parâmetros fixos e pequenos (n ≤ 32, d ≤ 22): não há transbordo. |
+| 1 | `univalue_write.cpp` | Indentação do JSON, valor pequeno. |
+| 1 | `muhash.cpp` | Aritmética de 64 bits intencional na multiplicação modular. |
+
+Regra para os próximos: um alerta novo em ficheiro com alterações PQCH (`src/pqch*`, `src/crypto/pqc` fora de `slhdsa-c`/`mldsa`,
+`src/script/interpreter.cpp`, `src/wallet`, `src/node/miner.cpp`, `src/pow*`, `src/auxpow*`) é analisado antes de ser fechado.
