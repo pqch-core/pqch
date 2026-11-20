@@ -28,6 +28,9 @@ class PQCHMLDSAEmergencyTest(BitcoinTestFramework):
         self.setup_clean_chain = True
         self.legacy_bitcoin_scripts = False  # post-quantum rules from genesis (P2MR only)
         self.wallet_names = []
+        # Spends through the SLH-DSA recovery leaf sign several times while the wallet settles the fee
+        # (SLH-DSA-128s signatures are slow): over the default 30 s per call on slow machines.
+        self.rpc_timeout = 120
 
     def skip_test_if_missing_module(self):
         self.skip_if_no_wallet()

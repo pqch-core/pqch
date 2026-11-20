@@ -304,6 +304,7 @@ BASE_SCRIPTS = [
     'wallet_importdescriptors.py',
     'wallet_crosschain.py',
     'mining_basic.py',
+    'mining_pqch_getblocktemplate.py',
     'mining_mainnet.py',
     # PQCH: no signet ('feature_signet.py' removed)
     'p2p_mutated_blocks.py',

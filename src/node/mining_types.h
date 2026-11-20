@@ -83,7 +83,9 @@ struct BlockCreateOptions {
      * The size and sigops are not checked against
      * coinbase_max_additional_weight and coinbase_output_max_additional_sigops.
      */
-    CScript coinbase_output_script{CScript() << OP_TRUE};
+    // PQCH: a dummy that the post-quantum output rule accepts (OP_TRUE is rejected, coinbase included,
+    // so getblocktemplate failed on every network). Whoever mines replaces the coinbase anyway.
+    CScript coinbase_output_script{CScript() << OP_RETURN};
     /**
      * Whether to call TestBlockValidity() at the end of CreateNewBlock().
      * Should only be disabled for tests / benchmarks.
