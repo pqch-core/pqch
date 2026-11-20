@@ -103,11 +103,31 @@ Quando o `pqch-pool` existir (fases A–C), o mesmo modo passa a minerar no pool
 
 | Fase | Quando | O quê | Critério |
 | --- | --- | --- | --- |
-| A. Fork e cadeia principal | dez. 2026 (3 semanas) | Repositório `pqch-core/pqch-pool`; modelo de bloco, coinbase, prova de trabalho e envio de blocos com o `pqchd`; um só nó do pool em regtest | O pool encontra blocos em regtest e a coinbase paga certo |
+| A. Fork e cadeia principal | **feita a 20 nov. 2026** | Repositório `pqch-core/pqch-pool`; modelo de bloco, coinbase, prova de trabalho e envio de blocos com o `pqchd`; um só nó do pool em regtest | O pool encontra blocos em regtest e a coinbase paga certo |
 | B. Rede do pool | dez. 2026 – jan. 2027 (3 semanas) | Cadeia de partilhas entre vários nós; PPLNS; parâmetros PQCH | 3 nós do pool na testnet (âncora, server, Kali) a dividir os pagamentos certo |
 | C. Minerador | jan. 2027 (2 semanas) | Minerador próprio com stratum | Minerar no pool a partir de outra máquina |
 | D. Aplicação | jan. – fev. 2027 (3 semanas) | Aplicação de um clique, Windows e Linux; instaladores assinados | Pessoas de fora a minerar no pool da testnet com a aplicação |
 | E. Testes e auditoria | fev. 2027 | Testes com mineiros de fora; o pool e a aplicação entram no âmbito da auditoria | Sem falhas graves por corrigir |
+
+**Fase A feita (20 nov. 2026)**, em `pqch-core/pqch-pool`:
+
+- ligação ao `pqchd` (`getblocktemplate` a cada segundo, `submitblock`, cookie); `--pqchd-check` para
+  confirmar que o pool funciona com um nó;
+- bloco PQCH completo: moradas P2MR, divisão PPLNS, coinbase (altura, identificador da partilha,
+  extranonce, compromisso SegWit), Merkle, cabeçalho de 80 bytes;
+- prova de trabalho RandomX v2 igual à do `pqchd` (vetores oficiais);
+- cadeia de partilhas com as regras do P2Pool (partilha a cada 10 s, PPLNS de 2.160 partilhas, dificuldade
+  que segue o ritmo). **Decisão:** é uma cadeia de partilhas própria da PQCH, e não o `side_chain.cpp` do
+  P2Pool adaptado, porque esse está cosido ao formato do Monero (chaves de uso único, saídas derivadas,
+  provas de merged mining). A rede entre nós, o stratum e o resto do P2Pool continuam a ser aproveitados nas
+  fases B e C;
+- critério cumprido: um nó do pool em regtest encontra blocos e cada coinbase, tal como ficou gravada pelo
+  `pqchd`, é a divisão PPLNS exata das partilhas (verificado em Python, independente do código do pool;
+  também no CI do `pqch-pool`, que compila o `pqchd` a partir deste repositório).
+
+Encontrou-se pelo caminho uma falha no `pqchd`: o `getblocktemplate` falhava em todas as redes (coinbase
+provisória `OP_TRUE`, proibida pela regra pós-quântica). Corrigido em `c31466e`, com o teste
+`mining_pqch_getblocktemplate.py`. Os nós dos servidores precisam desta versão antes da fase B.
 
 O pool não faz parte do consenso: pode continuar a ser melhorado depois de o código do nó congelar
 (1 de março), desde que esteja pronto no dia do lançamento.
