@@ -104,7 +104,7 @@ Quando o `pqch-pool` existir (fases A–C), o mesmo modo passa a minerar no pool
 | Fase | Quando | O quê | Critério |
 | --- | --- | --- | --- |
 | A. Fork e cadeia principal | **feita a 20 nov. 2026** | Repositório `pqch-core/pqch-pool`; modelo de bloco, coinbase, prova de trabalho e envio de blocos com o `pqchd`; um só nó do pool em regtest | O pool encontra blocos em regtest e a coinbase paga certo |
-| B. Rede do pool | dez. 2026 – jan. 2027 (3 semanas) | Cadeia de partilhas entre vários nós; PPLNS; parâmetros PQCH | 3 nós do pool na testnet (âncora, server, Kali) a dividir os pagamentos certo |
+| B. Rede do pool | **feita a 20 nov. 2026** | Cadeia de partilhas entre vários nós; PPLNS; parâmetros PQCH | Nós do pool na testnet (âncora e Kali) na mesma cadeia e a dividir os pagamentos certo |
 | C. Minerador | jan. 2027 (2 semanas) | Minerador próprio com stratum | Minerar no pool a partir de outra máquina |
 | D. Aplicação | jan. – fev. 2027 (3 semanas) | Aplicação de um clique, Windows e Linux; instaladores assinados | Pessoas de fora a minerar no pool da testnet com a aplicação |
 | E. Testes e auditoria | fev. 2027 | Testes com mineiros de fora; o pool e a aplicação entram no âmbito da auditoria | Sem falhas graves por corrigir |
@@ -128,6 +128,20 @@ Quando o `pqch-pool` existir (fases A–C), o mesmo modo passa a minerar no pool
 Encontrou-se pelo caminho uma falha no `pqchd`: o `getblocktemplate` falhava em todas as redes (coinbase
 provisória `OP_TRUE`, proibida pela regra pós-quântica). Corrigido em `c31466e`, com o teste
 `mining_pqch_getblocktemplate.py`. Os nós dos servidores precisam desta versão antes da fase B.
+
+**Fase B feita (20 nov. 2026)**, com o `pqchd` 0.3.1 nas três máquinas:
+
+- rede própria entre nós do pool (TCP, porta 37890): partilhas com o ramo de Merkle da coinbase, pedido de
+  partilhas em falta, escolha do ramo com mais trabalho; cada nó confere a coinbase de cada partilha recebida;
+- na testnet: a âncora escuta (1 núcleo) e o Kali minera só pelo pool (8 núcleos, modo rápido;
+  `--substituir-minerador` trava o minerador direto). O server ficou com o merged mining do Monero, para
+  os blocos do pool competirem com outros mineiros como na rede real;
+- em 15 minutos: uma só cadeia de 150 partilhas nos dois nós, dificuldade ajustada de 1.000 para ~50.000
+  (uma partilha a cada 10 s) e os blocos 21777–21782 da testnet encontrados pelos dois nós, cada um a pagar
+  aos dois mineiros;
+- critério cumprido: `deploy/verificar_pool_testnet.py` (independente do código do pool) deu 6 blocos em 6
+  com a divisão PPLNS exata, corrido em cada nó com o seu próprio registo de partilhas. Antes, em regtest e
+  no CI: dois nós e um terceiro que entra a meio, na mesma cadeia e a pagarem-se um ao outro.
 
 O pool não faz parte do consenso: pode continuar a ser melhorado depois de o código do nó congelar
 (1 de março), desde que esteja pronto no dia do lançamento.
