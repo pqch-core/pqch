@@ -198,6 +198,15 @@ jobs:
           mkdir -p out
           tar -C stage --owner=0 --group=0 --numeric-owner --sort=name --mtime="@$(git log -1 --format=%ct)" \
             -czf "out/${NAME}-x86_64-linux-gnu.tar.gz" "${NAME}"
+          # Debug symbols, apart: the shipped programs are stripped; with these, a stack of a program that
+          # hangs on someone's machine names the functions (gdb: symbol-file <name>.dbg; same build id).
+          mkdir -p "dbg/${NAME}-debug"
+          for b in pqchd pqch-qt pqch-cli pqch-wallet pqch-tx pqch-util pqch; do
+            [[ -f "build/bin/$b" ]] && objcopy --only-keep-debug --compress-debug-sections "build/bin/$b" "dbg/${NAME}-debug/$b.dbg"
+          done
+          tar -C dbg --owner=0 --group=0 --numeric-owner --sort=name --mtime="@$(git log -1 --format=%ct)" \
+            -czf "out/${NAME}-x86_64-linux-gnu-debug.tar.gz" "${NAME}-debug"
+          ls -la "dbg/${NAME}-debug"
           tar -tzf "out/${NAME}-x86_64-linux-gnu.tar.gz"
 
       - name: Package (Windows)
