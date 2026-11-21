@@ -3,22 +3,16 @@
 **PQCH {{VERSION}}**
 
 **Changes**
-In v0.3.1 (testnet; one soft fork that stays inactive unless miners signal for it):
-- Mining: `getblocktemplate` works on every network. Its internal placeholder coinbase paid `OP_TRUE`, which
-  the post-quantum output rule (coinbase included) rejects, so it failed on testnet and mainnet. Pools and
-  external miners use it; the decentralised pool (pqch-pool) needs this version.
-- Consensus (soft fork, inactive by default): ML-DSA emergency deployment `mldsaemergency` (version bit 1,
-  90% of a 1440-block period). If ML-DSA-44 were ever broken, miners can activate it to make ML-DSA
-  signatures invalid; coins stay spendable through the SLH-DSA recovery leaf of every P2MR output, and the
-  wallet switches to it by itself. Nodes do not signal unless started with `-signalmldsaemergency`.
-- Fixes found by the new nightly Debug and sanitizer runs: the mempool now applies the emergency rule as
-  consensus does once it is active; restoring a wallet from the 24 words takes its locks in the same order
-  as the rest of the wallet (a potential deadlock with the auto-lock timer).
-- PQCH-Qt: `-minerapp` one-click mining mode (no data directory dialog, a wallet is created or opened on the
-  first run, opens on the Mining tab, can start mining by itself). Windows installer and Linux package add a
-  "PQCH Miner (testnet)" launcher.
-- Security automation: nightly CodeQL, long fuzzing and functional tests under ASan/UBSan; supply check
-  against the issuance schedule in the test monitor; GitHub Actions pinned by commit hash.
+In v0.3.2 (testnet; no consensus changes from v0.3.1):
+- PQCH-Qt, Mining tab: **pool mode**. Choose "Pool (shared rewards)" and a pool node (on testnet the public
+  pool node 187.127.89.83:37889 is filled in); the wallet makes a new address and runs the pool miner, and
+  shows its hash rate and accepted shares. The pool pays a share of every block it finds, by PPLNS, to every
+  miner, instead of whole blocks rarely.
+- The pool miner is `pqch-pool` v0.1.0 (the PQCH decentralised pool, derived from P2Pool, GPL-3.0), shipped as
+  its own program next to pqch-qt (`pqch-pool.exe` on Windows, `bin/pqch-pool` on Linux) and taken from its
+  signed release (https://github.com/pqch-core/pqch-pool/releases/tag/v0.1.0) by version and SHA256.
+  `-poolminer=<path>` points the wallet at another copy. Antivirus programs often flag mining software:
+  check the files with SHA256SUMS below.
 
 **Verify before installing**
 1. Import the release key (`pqch-releases.asc`) and check its fingerprint:

@@ -1,0 +1,5 @@
+# version 0.1.0
+# SHA256SUMS of pqch-pool v0.1.0 (https://github.com/pqch-core/pqch-pool/releases/tag/v0.1.0), signed by the
+# PQCH release key (SHA256SUMS.asc there). The wallet release ships the miner from these files only.
+b39da771dfc4811985d91b13f65eee4792f274ef161b793fa2f2d0f5b33b874c  pqch-pool-0.1.0-win64.zip
+a7a7e52044f448436ab7b6e6b46adc2bbd1e72e1bdaf387a48b024a3a5f2c298  pqch-pool-0.1.0-x86_64-linux-gnu.tar.gz
