@@ -208,7 +208,7 @@ Dois nós vão servir de entrada à testnet aberta. São também as sementes fix
 
 | Nó | IP público | Na VPN | Notas |
 |---|---|---|---|
-| Âncora | 187.127.89.83 | 10.77.0.1 | centro da VPN; mina |
+| Âncora | 187.127.89.83 | 10.77.0.1 | centro da VPN e da rede do pool (porta 37890, stratum público 37889); **não mina** (VPS com CPU por créditos: acima de 60% esgota-os em ~3 h e fica limitada a 30%) |
 | VPS pública | 72.61.20.80 | 10.77.0.20 | partilha a máquina com um site (nginx); não mina, sem carteira |
 
 **Fase A (agora):** a VPS é um membro da VPN como os outros. O nó escuta só em `10.77.0.20`, não
