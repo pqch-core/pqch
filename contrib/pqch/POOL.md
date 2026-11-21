@@ -106,7 +106,7 @@ Quando o `pqch-pool` existir (fases A–C), o mesmo modo passa a minerar no pool
 | A. Fork e cadeia principal | **feita a 20 nov. 2026** | Repositório `pqch-core/pqch-pool`; modelo de bloco, coinbase, prova de trabalho e envio de blocos com o `pqchd`; um só nó do pool em regtest | O pool encontra blocos em regtest e a coinbase paga certo |
 | B. Rede do pool | **feita a 20 nov. 2026** | Cadeia de partilhas entre vários nós; PPLNS; parâmetros PQCH | Nós do pool na testnet (âncora e Kali) na mesma cadeia e a dividir os pagamentos certo |
 | C. Minerador | **feita a 21 nov. 2026** | Minerador próprio com stratum | Minerar no pool a partir de outra máquina |
-| D. Aplicação | jan. – fev. 2027 (3 semanas) | Aplicação de um clique, Windows e Linux; instaladores assinados | Pessoas de fora a minerar no pool da testnet com a aplicação |
+| D. Aplicação | **em curso (desde 21 nov. 2026)** | Aplicação de um clique, Windows e Linux; instaladores assinados | Pessoas de fora a minerar no pool da testnet com a aplicação |
 | E. Testes e auditoria | fev. 2027 | Testes com mineiros de fora; o pool e a aplicação entram no âmbito da auditoria | Sem falhas graves por corrigir |
 
 **Fase A feita (20 nov. 2026)**, em `pqch-core/pqch-pool`:
@@ -148,6 +148,17 @@ por agora só na rede local) e o mesmo programa faz de minerador (`pqch-pool --p
 minerador recebe trabalho com a sua morada na coinbase e é pago por PPLNS; o nó recalcula cada hash recebido.
 Na testnet, o server (sem nó do pool, 2 núcleos, 80 H/s) minerou pelo stratum do Kali: 435 blocos do pool nos
 últimos 500, todos com a divisão PPLNS exata e a morada do server paga em cada bloco recente.
+
+**Fase D (em curso, 21 nov. 2026):** a página "Mineração" da carteira ganhou o modo **Pool**: escolhe-se o nó do
+pool (na testnet, o stratum público da âncora, 187.127.89.83:37889, já preenchido) e a carteira arranca o
+programa `pqch-pool --pqch-miner <nó> <morada nova da carteira>` que vem ao lado do pqch-qt, e mostra a
+velocidade e as partilhas aceites. Programa separado, não código dentro da carteira: o pqch-pool é GPL-3.0 (do
+P2Pool) e a carteira MIT, e se o minerador falhar a carteira não vai abaixo nem ele lhe chega às chaves. O
+pqch-pool tem releases próprias (Linux e Windows, SHA256SUMS assinado com a chave de releases); a release da
+carteira vai buscá-las pela versão e pelo SHA256 fixados em `contrib/pqch/pqch-pool.sha256`. Antes de abrir o
+stratum à Internet, o nó ganhou limites por endereço (8 ligações, 20 novas por minuto, recusa de 10 minutos a
+quem não cumprir o protocolo, 10 verificações de partilhas por segundo) e deixou de dar trabalho enquanto
+sincroniza a cadeia de partilhas. A âncora deixou de minerar (créditos de CPU da Hostinger).
 
 O pool não faz parte do consenso: pode continuar a ser melhorado depois de o código do nó congelar
 (1 de março), desde que esteja pronto no dia do lançamento.
