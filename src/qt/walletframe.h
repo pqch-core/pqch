@@ -43,6 +43,9 @@ public:
     bool handlePaymentRequest(const SendCoinsRecipient& recipient);
 
     void showOutOfSyncWarning(bool fShow);
+    //! PQCH: while the block headers download, creating or opening a wallet waits for the node; say so
+    //! and disable the button instead of leaving a "Creating Wallet" dialog with no explanation.
+    void setWalletCreationBlocked(bool blocked, const QString& reason);
 
     QSize sizeHint() const override { return m_size_hint; }
 
@@ -53,6 +56,8 @@ Q_SIGNALS:
 
 private:
     QStackedWidget *walletStack;
+    class QPushButton* m_create_wallet_button{nullptr};
+    class QLabel* m_wait_label{nullptr};
     ClientModel *clientModel;
     QMap<WalletModel*, WalletView*> mapWalletViews;
 

@@ -15,6 +15,8 @@
 #include <consensus/amount.h>
 
 #include <QLabel>
+
+#include <functional>
 #include <QMainWindow>
 #include <QMap>
 #include <QMenu>
@@ -162,6 +164,11 @@ private:
     QMenu* m_open_wallet_menu{nullptr};
     QAction* m_restore_wallet_action{nullptr};
     QAction* m_restore_words_action{nullptr};
+    //! PQCH: the block headers are still downloading (the node then holds the chain for long stretches, so
+    //! creating, opening or restoring a wallet would sit waiting): those actions wait, with a message.
+    bool m_headers_syncing{false};
+    std::function<void()> m_after_headers;
+    void setHeadersSyncing(bool syncing, const QString& reason);
     QAction* m_show_words_action{nullptr};
     QAction* m_vaults_action{nullptr}; //!< PQCH: agent vaults
     QAction* m_close_wallet_action{nullptr};

@@ -825,11 +825,11 @@ void BitcoinGUI::setWalletController(WalletController* wallet_controller, bool s
 
     m_wallet_controller = wallet_controller;
 
-    m_create_wallet_action->setEnabled(true);
-    m_open_wallet_action->setEnabled(true);
+    m_create_wallet_action->setEnabled(!m_headers_syncing);
+    m_open_wallet_action->setEnabled(!m_headers_syncing);
     m_open_wallet_action->setMenu(m_open_wallet_menu);
-    m_restore_wallet_action->setEnabled(true);
-    m_restore_words_action->setEnabled(true);
+    m_restore_wallet_action->setEnabled(!m_headers_syncing);
+    m_restore_words_action->setEnabled(!m_headers_syncing);
     m_migrate_wallet_action->setEnabled(true);
     m_migrate_wallet_action->setMenu(m_migrate_wallet_menu);
 
@@ -845,6 +845,11 @@ void BitcoinGUI::setWalletController(WalletController* wallet_controller, bool s
     if (gArgs.GetBoolArg("-minerapp", false)) {
         connect(activity, &WalletControllerActivity::finished, this, [this] {
             if (m_wallet_selector->count() != 0) return;
+            // While the block headers download, wait for them (the window says so) before making the wallet.
+            if (m_headers_syncing) {
+                m_after_headers = [this] { if (m_wallet_selector->count() == 0) createWallet(); };
+                return;
+            }
             // A wallet already on disk (not on the start-up list) is opened; a new one only if there is none.
             for (const auto& [path, info] : m_wallet_controller->listWalletDir()) {
                 if (info.first || info.second == "bdb") continue;
@@ -1264,6 +1269,26 @@ void BitcoinGUI::openOptionsDialogWithTab(OptionsDialog::Tab tab)
     GUIUtil::ShowModalDialogAsynchronously(dlg);
 }
 
+void BitcoinGUI::setHeadersSyncing(bool syncing, const QString& reason)
+{
+    const bool changed{syncing != m_headers_syncing};
+    m_headers_syncing = syncing;
+#ifdef ENABLE_WALLET
+    if (walletFrame) walletFrame->setWalletCreationBlocked(syncing, reason);
+    if (changed && m_wallet_controller) {
+        for (QAction* a : {m_create_wallet_action, m_open_wallet_action, m_restore_wallet_action, m_restore_words_action}) {
+            a->setEnabled(!syncing);
+            a->setToolTip(syncing ? reason : QString());
+        }
+    }
+    if (changed && !syncing && m_after_headers) {
+        auto after{std::move(m_after_headers)};
+        m_after_headers = nullptr;
+        QTimer::singleShot(0, this, after);
+    }
+#endif
+}
+
 void BitcoinGUI::setNumBlocks(int count, const QDateTime& blockDate, double nVerificationProgress, SyncType synctype, SynchronizationState sync_state)
 {
 // Disabling macOS App Nap on initial sync, disk and reindex operations.
@@ -1281,6 +1306,18 @@ void BitcoinGUI::setNumBlocks(int count, const QDateTime& blockDate, double nVer
             modalOverlay->setKnownBestHeight(count, blockDate, synctype == SyncType::HEADER_PRESYNC);
         else
             modalOverlay->tipUpdate(count, blockDate, nVerificationProgress);
+    }
+    {
+        // PQCH: headers far behind the clock are still downloading (block sync comes after them).
+        const qint64 behind{blockDate.secsTo(QDateTime::currentDateTime())};
+        const bool syncing{synctype != SyncType::BLOCK_SYNC && behind > 2 * 60 * 60};
+        QString reason;
+        if (syncing) {
+            const int left{static_cast<int>(behind / Params().GetConsensus().nPowTargetSpacing)};
+            const QString pct{QString::number(100.0 * count / std::max(1, count + left), 'f', 1)};
+            reason = tr("PQCH is downloading the block headers (%1%). You can create or open a wallet as soon as this finishes, usually in a few minutes.").arg(pct);
+        }
+        setHeadersSyncing(syncing, reason);
     }
     if (!clientModel)
         return;

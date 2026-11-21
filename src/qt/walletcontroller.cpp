@@ -264,7 +264,8 @@ void CreateWalletActivity::createWallet()
         tr("Create Wallet"),
         /*: Descriptive text of the create wallet progress window which indicates
             to the user which wallet is currently being created. */
-        tr("Creating Wallet <b>%1</b>…").arg(m_create_wallet_dialog->walletName().toHtmlEscaped()));
+        tr("Creating Wallet <b>%1</b>…").arg(m_create_wallet_dialog->walletName().toHtmlEscaped()) + QStringLiteral("<br><small>") +
+        tr("This takes a moment. If PQCH is still downloading the block headers, it waits for them to finish.") + QStringLiteral("</small>"));
 
     std::string name = m_create_wallet_dialog->walletName().toStdString();
     uint64_t flags = 0;

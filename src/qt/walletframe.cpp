@@ -47,15 +47,28 @@ WalletFrame::WalletFrame(const PlatformStyle* _platformStyle, QWidget* parent)
     no_wallet_layout->addWidget(noWallet, 0, Qt::AlignHCenter | Qt::AlignBottom);
 
     // A button for create wallet dialog
-    QPushButton* create_wallet_button = new QPushButton(tr("Create a new wallet"), walletStack);
-    connect(create_wallet_button, &QPushButton::clicked, this, &WalletFrame::createWalletButtonClicked);
-    no_wallet_layout->addWidget(create_wallet_button, 0, Qt::AlignHCenter | Qt::AlignTop);
+    m_create_wallet_button = new QPushButton(tr("Create a new wallet"), walletStack);
+    connect(m_create_wallet_button, &QPushButton::clicked, this, &WalletFrame::createWalletButtonClicked);
+    no_wallet_layout->addWidget(m_create_wallet_button, 0, Qt::AlignHCenter | Qt::AlignTop);
+    m_wait_label = new QLabel(walletStack);
+    m_wait_label->setAlignment(Qt::AlignCenter);
+    m_wait_label->setWordWrap(true);
+    m_wait_label->setMaximumWidth(460);
+    m_wait_label->setVisible(false);
+    no_wallet_layout->addWidget(m_wait_label, 0, Qt::AlignHCenter | Qt::AlignTop);
     no_wallet_group->setLayout(no_wallet_layout);
 
     walletStack->addWidget(no_wallet_group);
 }
 
 WalletFrame::~WalletFrame() = default;
+
+void WalletFrame::setWalletCreationBlocked(bool blocked, const QString& reason)
+{
+    m_create_wallet_button->setEnabled(!blocked);
+    m_wait_label->setText(reason);
+    m_wait_label->setVisible(blocked);
+}
 
 void WalletFrame::setClientModel(ClientModel *_clientModel)
 {
