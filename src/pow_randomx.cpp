@@ -13,6 +13,7 @@
 #include <span.h>
 #include <streams.h>
 #include <sync.h>
+#include <util/hasher.h>
 #include <util/time.h>
 
 #include <randomx.h>
@@ -25,6 +26,7 @@
 #include <mutex>
 #include <stdexcept>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 
 std::atomic<bool> g_randomx_fast_mining{false};
@@ -59,6 +61,7 @@ struct RxContext {
     randomx_vm* vm{nullptr};    //!< RandomX v2
     randomx_vm* vm_v1{nullptr}; //!< original RandomX (Monero blocks before hard fork 17)
     std::mutex vm_mutex;
+    bool jit{false};            //!< flags the cache was made with (extra VMs must match them)
 
     explicit RxContext(std::span<const unsigned char> k) : key(k.begin(), k.end())
     {
@@ -68,7 +71,10 @@ struct RxContext {
             randomx_init_cache(cache, key.data(), key.size());
             vm = randomx_create_vm(VmFlags(jit, /*full_mem=*/false), cache, nullptr);
             vm_v1 = randomx_create_vm(VmFlags(jit, /*full_mem=*/false, /*v2=*/false), cache, nullptr);
-            if (vm && vm_v1) return;
+            if (vm && vm_v1) {
+                this->jit = jit;
+                return;
+            }
             if (vm) randomx_destroy_vm(vm);
             if (vm_v1) randomx_destroy_vm(vm_v1);
             vm = vm_v1 = nullptr;
@@ -188,6 +194,96 @@ uint256 MoneroPowHash(const uint256& seed, std::span<const unsigned char> blob)
     return v2 ? RandomXCommitment(blob, hash) : hash;
 }
 
+namespace {
+// PQCH: headers whose direct RandomX proof of work was checked ahead of validation, outside cs_main
+// (PreverifyHeadersPow). Keyed by the header id (SHA256d of all 80 bytes, nBits and nonce included),
+// with the key it was checked under: the fact "RandomX(seed, header) meets header.nBits" depends on
+// nothing else, so validation can use it instead of hashing again. Bounded, oldest out first.
+constexpr size_t MAX_PREVERIFIED{20000};
+std::mutex g_preverified_mutex;
+std::unordered_map<uint256, uint256, SaltedUint256Hasher> g_preverified;
+std::deque<uint256> g_preverified_order;
+
+bool TakePreverified(const uint256& id, const uint256& seed)
+{
+    std::lock_guard<std::mutex> lock(g_preverified_mutex);
+    auto it{g_preverified.find(id)};
+    if (it == g_preverified.end() || it->second != seed) return false;
+    g_preverified.erase(it); // used once: validation stores the header in the index anyway
+    return true;
+}
+
+void AddPreverified(const uint256& id, const uint256& seed)
+{
+    std::lock_guard<std::mutex> lock(g_preverified_mutex);
+    if (!g_preverified.emplace(id, seed).second) return;
+    g_preverified_order.push_back(id);
+    while (g_preverified_order.size() > MAX_PREVERIFIED) {
+        g_preverified.erase(g_preverified_order.front());
+        g_preverified_order.pop_front();
+    }
+}
+} // namespace
+
+std::vector<uint256> RandomXSeedsForHeaders(int prev_height, const std::function<uint256(int)>& ancestor_hash,
+                                            std::span<const CBlockHeader> headers, const Consensus::Params& params)
+{
+    std::vector<uint256> seeds;
+    seeds.reserve(headers.size());
+    for (size_t i = 0; i < headers.size(); ++i) {
+        if (i > 0 && headers[i].hashPrevBlock != headers[i - 1].GetHash()) break; // not one run
+        const int height{prev_height + 1 + static_cast<int>(i)};
+        const int seed_height{GetRandomXSeedHeight(height, params)};
+        seeds.push_back(seed_height <= prev_height ? ancestor_hash(seed_height) : headers[seed_height - prev_height - 1].GetHash());
+    }
+    return seeds;
+}
+
+size_t PreverifyHeadersPow(std::span<const CBlockHeader> headers, std::span<const uint256> seeds,
+                           const Consensus::Params& params, unsigned threads)
+{
+    const size_t n{std::min(headers.size(), seeds.size())};
+    if (!params.fPowUseRandomX || n == 0) return 0;
+    threads = std::clamp<unsigned>(threads, 1, 64);
+    std::atomic<size_t> next{0};
+    std::atomic<bool> failed{false};
+    std::atomic<size_t> verified{0};
+    auto work = [&] {
+        std::shared_ptr<RxContext> ctx;
+        randomx_vm* vm{nullptr};
+        while (!failed.load()) {
+            const size_t i{next.fetch_add(1)};
+            if (i >= n) break;
+            const CBlockHeader& h{headers[i]};
+            if (h.IsAuxPow() || seeds[i].IsNull()) continue; // merged mined: checked in validation
+            const std::span<const unsigned char> key{seeds[i].data(), seeds[i].size()};
+            if (!ctx || !std::ranges::equal(ctx->key, key)) {
+                if (vm) randomx_destroy_vm(vm);
+                vm = nullptr;
+                ctx = GetContext(key); // builds the 256 MiB cache once per key, shared by all threads
+                // Each thread its own VM on the shared cache: a VM is not thread-safe, a cache is read-only.
+                vm = randomx_create_vm(VmFlags(ctx->jit, /*full_mem=*/false), ctx->cache, nullptr);
+                if (!vm) break; // out of memory: validation will hash these itself
+            }
+            const auto input{SerializeHeader(h)};
+            uint256 pow;
+            randomx_calculate_hash(vm, input.data(), input.size(), pow.data());
+            if (!CheckProofOfWork(pow, h.nBits, params)) {
+                failed = true; // invalid from here: validation rejects it, no need to hash the rest
+                break;
+            }
+            AddPreverified(h.GetHash(), seeds[i]);
+            ++verified;
+        }
+        if (vm) randomx_destroy_vm(vm);
+    };
+    std::vector<std::thread> pool;
+    for (unsigned t = 1; t < threads && t < n; ++t) pool.emplace_back(work);
+    work();
+    for (auto& t : pool) t.join();
+    return verified.load();
+}
+
 uint256 GetRandomXPowHash(const CBlockHeader& header, const uint256& seed)
 {
     const auto input{SerializeHeader(header)};
@@ -224,6 +320,7 @@ bool CheckHeaderProofOfWork(const CBlockHeader& header, int height, const uint25
         error = "high-hash";
         return false;
     }
+    if (TakePreverified(header.GetHash(), seed)) return true; // PQCH: already hashed, outside cs_main
     if (CheckProofOfWork(GetRandomXPowHash(header, seed), header.nBits, params)) return true;
     error = "high-hash";
     return false;

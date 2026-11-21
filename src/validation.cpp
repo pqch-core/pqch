@@ -78,6 +78,7 @@
 #include <ranges>
 #include <span>
 #include <string>
+#include <thread>
 #include <tuple>
 #include <utility>
 
@@ -4360,6 +4361,29 @@ bool ChainstateManager::AcceptBlockHeader(const CBlockHeader& block, BlockValida
 bool ChainstateManager::ProcessNewBlockHeaders(std::span<const CBlockHeader> headers, bool min_pow_checked, BlockValidationState& state, const CBlockIndex** ppindex)
 {
     AssertLockNotHeld(cs_main);
+    // PQCH: hash the RandomX proof of work of the batch first, in parallel and without cs_main (each
+    // hash is ~25 ms: a batch of 2000 under cs_main held the node, and any wallet or GUI call waiting
+    // for it, for a minute). AcceptBlockHeader below then finds them checked; nothing else changes.
+    if (GetConsensus().fPowUseRandomX && headers.size() > 1) {
+        std::vector<uint256> seeds;
+        std::span<const CBlockHeader> todo{headers};
+        {
+            LOCK(cs_main);
+            const CBlockIndex* prev{m_blockman.LookupBlockIndex(headers.front().hashPrevBlock)};
+            // Headers the index already has are not hashed again by validation: skip a known prefix.
+            size_t known{0};
+            while (known < headers.size() && m_blockman.LookupBlockIndex(headers[known].GetHash())) ++known;
+            if (known > 0 && known < headers.size()) prev = m_blockman.LookupBlockIndex(headers[known].hashPrevBlock);
+            if (prev && known < headers.size()) {
+                todo = headers.subspan(known);
+                seeds = RandomXSeedsForHeaders(prev->nHeight, [prev](int h) { return prev->GetAncestor(h)->GetBlockHash(); }, todo, GetConsensus());
+            }
+        }
+        if (seeds.size() > 1) {
+            const unsigned threads{std::clamp(std::thread::hardware_concurrency() / 2, 1u, 8u)};
+            PreverifyHeadersPow(todo.first(seeds.size()), seeds, GetConsensus(), threads);
+        }
+    }
     {
         LOCK(cs_main);
         for (const CBlockHeader& header : headers) {

@@ -13,6 +13,7 @@
 #include <functional>
 #include <memory>
 #include <span>
+#include <vector>
 
 class CBlockHeader;
 class CBlockIndex;
@@ -86,6 +87,27 @@ bool CheckBlockProofOfWork(const CBlockHeader& header, const CBlockIndex* pindex
  * mined headers, which carry their Monero key). For headers outside the block index (presync).
  */
 bool CheckHeaderProofOfWork(const CBlockHeader& header, int height, const uint256& seed, const Consensus::Params& params, std::string& error);
+
+/**
+ * PQCH: the direct RandomX keys of a run of headers that extends a block at `prev_height`: the key of a
+ * header is the hash of the block at its seed height, from the chain (`ancestor_hash(height)`) when that
+ * is at or below prev_height, from the run itself otherwise. Stops where the run is not one chain (a
+ * header that does not build on the one before), so the result can be shorter than `headers`.
+ */
+std::vector<uint256> RandomXSeedsForHeaders(int prev_height, const std::function<uint256(int)>& ancestor_hash,
+                                            std::span<const CBlockHeader> headers, const Consensus::Params& params);
+
+/**
+ * PQCH: checks the direct RandomX proof of work of many headers at once with `threads` threads, each
+ * with its own VM on the shared light-mode cache, and remembers the ones that pass, so that validation
+ * (CheckHeaderProofOfWork with the same key) does not hash them again. Meant to run before cs_main is
+ * taken: hashing a batch of 2000 headers under cs_main held the node (and any wallet or GUI waiting for
+ * it) for a minute. Stops at the first header that fails (validation rejects it; the rest would be
+ * wasted work). Merged mined headers are skipped (validation checks them). Returns how many passed.
+ * Only an optimisation: what validation accepts or rejects is unchanged.
+ */
+size_t PreverifyHeadersPow(std::span<const CBlockHeader> headers, std::span<const uint256> seeds,
+                           const Consensus::Params& params, unsigned threads);
 
 /**
  * PQCH: Monero key rule for a merged mined header at pindexPrev->nHeight + 1 using `seed`

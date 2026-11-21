@@ -204,6 +204,107 @@ BOOST_AUTO_TEST_CASE(presync_merged_mined_headers)
     }
 }
 
+// PQCH: the RandomX keys of a run of headers, from the chain and from the run itself.
+BOOST_AUTO_TEST_CASE(randomx_seeds_for_headers)
+{
+    Consensus::Params p{params};
+    p.nRandomXSeedInterval = 4;
+    p.nRandomXSeedLag = 1;
+    // A run of 8 headers on a block at height 3 (heights 4..11).
+    std::vector<CBlockHeader> run;
+    uint256 prev_hash{Tagged(0x99)};
+    for (int i = 0; i < 8; ++i) {
+        CBlockHeader h;
+        h.hashPrevBlock = prev_hash;
+        h.nNonce = i;
+        run.push_back(h);
+        prev_hash = h.GetHash();
+    }
+    auto ancestor = [](int height) { return Tagged(static_cast<uint8_t>(height)); };
+    const auto seeds{RandomXSeedsForHeaders(3, ancestor, run, p)};
+    BOOST_REQUIRE_EQUAL(seeds.size(), 8U);
+    for (int i = 0; i < 8; ++i) {
+        const int height{4 + i};
+        const int seed_height{GetRandomXSeedHeight(height, p)};
+        const uint256 expected{seed_height <= 3 ? ancestor(seed_height) : run[seed_height - 4].GetHash()};
+        BOOST_CHECK(seeds[i] == expected);
+    }
+    // Heights 10 and 11 take their key from the run (height 8, the header at index 4).
+    BOOST_CHECK_EQUAL(GetRandomXSeedHeight(10, p), 8);
+    BOOST_CHECK(seeds[6] == run[4].GetHash());
+    // A header that does not build on the one before ends the run.
+    auto broken{run};
+    broken[5].hashPrevBlock = Tagged(0x01);
+    BOOST_CHECK_EQUAL(RandomXSeedsForHeaders(3, ancestor, broken, p).size(), 5U);
+}
+
+// PQCH: headers hashed ahead of validation (outside cs_main) are accepted exactly as before, and an
+// invalid one in the middle is still rejected, with the ones before it accepted.
+BOOST_AUTO_TEST_CASE(preverified_headers_validate_the_same)
+{
+    ChainstateManager& chainman{*m_node.chainman};
+    const auto seeds_of = [&](const std::vector<CBlockHeader>& hs) {
+        return RandomXSeedsForHeaders(tip->nHeight, [&](int h) { return tip->GetAncestor(h)->GetBlockHash(); }, hs, params);
+    };
+    {
+        const auto headers{Chain(40)};
+        BOOST_CHECK_EQUAL(PreverifyHeadersPow(headers, seeds_of(headers), params, /*threads=*/4), 40U);
+        BlockValidationState state;
+        const CBlockIndex* last{nullptr};
+        BOOST_CHECK(chainman.ProcessNewBlockHeaders(headers, /*min_pow_checked=*/true, state, &last));
+        BOOST_REQUIRE(last);
+        BOOST_CHECK(last->GetBlockHash() == headers.back().GetHash());
+    }
+    {
+        // A fork from the same tip with a bad proof of work at index 25.
+        auto headers{Chain(40, /*fake_from=*/25)};
+        for (auto& h : headers) h.hashMerkleRoot = Tagged(0xee); // another chain than the one above
+        // Re-mine with the new merkle root (Chain mined the old one).
+        CBlockHeader prev{tip->GetBlockHeader()};
+        for (size_t i = 0; i < headers.size(); ++i) {
+            CBlockHeader h{Next(prev, tip->nHeight + 1 + i, i >= 25)};
+            h.hashMerkleRoot = Tagged(0xee);
+            const uint256 seed{tip->GetAncestor(GetRandomXSeedHeight(tip->nHeight + 1 + i, params))->GetBlockHash()};
+            for (uint32_t n = 0;; ++n) {
+                h.nNonce = n;
+                std::string error;
+                if (CheckHeaderProofOfWork(h, tip->nHeight + 1 + i, seed, params, error) != (i >= 25)) break;
+            }
+            headers[i] = h;
+            prev = h;
+        }
+        const size_t pre{PreverifyHeadersPow(headers, seeds_of(headers), params, /*threads=*/4)};
+        BOOST_CHECK(pre <= 25); // stops at the bad one (threads may have done a few after it in order)
+        BlockValidationState state;
+        BOOST_CHECK(!chainman.ProcessNewBlockHeaders(headers, /*min_pow_checked=*/true, state, nullptr));
+        BOOST_CHECK_EQUAL(state.GetRejectReason(), "high-hash");
+        LOCK(cs_main);
+        BOOST_CHECK(chainman.m_blockman.LookupBlockIndex(headers[24].GetHash()));
+        BOOST_CHECK(!chainman.m_blockman.LookupBlockIndex(headers[25].GetHash()));
+    }
+    {
+        // Through ProcessNewBlockHeaders alone (it preverifies itself): a fresh honest fork.
+        CBlockHeader prev{tip->GetBlockHeader()};
+        std::vector<CBlockHeader> headers;
+        for (int i = 0; i < 30; ++i) {
+            CBlockHeader h{Next(prev, tip->nHeight + 1 + i)};
+            h.hashMerkleRoot = Tagged(0x77);
+            const uint256 seed{tip->GetAncestor(GetRandomXSeedHeight(tip->nHeight + 1 + i, params))->GetBlockHash()};
+            for (uint32_t n = 0;; ++n) {
+                h.nNonce = n;
+                std::string error;
+                if (CheckHeaderProofOfWork(h, tip->nHeight + 1 + i, seed, params, error)) break;
+            }
+            headers.push_back(h);
+            prev = h;
+        }
+        BlockValidationState state;
+        BOOST_CHECK(chainman.ProcessNewBlockHeaders(headers, /*min_pow_checked=*/true, state, nullptr));
+        LOCK(cs_main);
+        BOOST_CHECK(chainman.m_blockman.LookupBlockIndex(headers.back().GetHash()));
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 /** The exact ASERT target, on the main network's parameters (regtest has a fixed target). */
