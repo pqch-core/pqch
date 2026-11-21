@@ -3,6 +3,16 @@
 **PQCH {{VERSION}}**
 
 **Changes**
+In v0.3.3 (testnet; no consensus changes):
+- Header sync no longer stalls the node: the RandomX proof of work of each batch of headers is checked
+  before the chain lock is taken, in parallel on up to 8 cores, instead of under the lock (a minute per
+  2000 headers, during which wallet creation, the GUI and RPC calls waited; a wallet created during the
+  first sync on the testnet stalled). The same headers are accepted and rejected as before.
+- PQCH-Qt: while the block headers download, "Create a new wallet" and File > Create / Open / Restore
+  wallet wait, with a line saying why and the progress; -minerapp makes its wallet when they finish.
+- Linux: debug symbols in their own archive (pqch-0.3.3-x86_64-linux-gnu-debug.tar.gz), to read the
+  stack of a program that hangs (not needed to run PQCH).
+
 In v0.3.2 (testnet; no consensus changes from v0.3.1):
 - PQCH-Qt, Mining tab: **pool mode**. Choose "Pool (shared rewards)" and a pool node (on testnet the public
   pool node 187.127.89.83:37889 is filled in); the wallet makes a new address and runs the pool miner, and
