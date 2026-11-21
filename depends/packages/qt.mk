@@ -150,7 +150,7 @@ $(package)_config_opts_darwin += -no-feature-freetype
 $(package)_config_opts_darwin += -no-pkg-config
 
 $(package)_config_opts_linux := -fontconfig
-$(package)_config_opts_linux += -no-feature-process
+# PQCH: QProcess stays enabled on Linux (as on Windows): the Mining tab runs the pool miner (pqch-pool) with it.
 $(package)_config_opts_linux += -no-feature-xlib
 $(package)_config_opts_linux += -no-xcb-xlib
 $(package)_config_opts_linux += -pkg-config
