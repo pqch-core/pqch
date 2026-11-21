@@ -156,6 +156,28 @@ jobs:
         if: matrix.host == 'x86_64-pc-linux-gnu'
         run: build/bin/test_pqch --run_test='pqch_*' --log_level=test_suite
 
+      # The pool miner for "Mining > Pool" (phase D of POOL.md): pqch-pool's own signed release, taken by the
+      # version and SHA256 pinned in contrib/pqch/pqch-pool.sha256 (a copy of its SHA256SUMS). A separate
+      # program (GPL-3.0), shipped next to pqch-qt, not linked into it.
+      - name: Pool miner (pinned version and SHA256)
+        run: |
+          PIN=contrib/pqch/pqch-pool.sha256
+          if [[ ! -f "$PIN" ]]; then echo "::warning::$PIN missing: no pool miner in this build"; exit 0; fi
+          VER="$(sed -n 's/^# version //p' "$PIN")"
+          if [[ "${{ matrix.host }}" == *mingw32 ]]; then F="pqch-pool-${VER}-win64.zip"; else F="pqch-pool-${VER}-x86_64-linux-gnu.tar.gz"; fi
+          rm -rf pool && mkdir pool
+          curl -fsSL --proto '=https' -o "pool/$F" "https://github.com/pqch-core/pqch-pool/releases/download/v${VER}/${F}"
+          (cd pool && grep -E "^[0-9a-f]{64}  ${F}\$" "../$PIN" | sha256sum -c -)
+          if [[ "$F" == *.zip ]]; then
+            (cd pool && unzip -q "$F")
+            mkdir -p build/release
+            cp "pool/pqch-pool-${VER}/pqch-pool.exe" build/release/pqch-pool.exe
+            cp "pool/pqch-pool-${VER}/COPYING.txt" build/release/COPYING-pqch-pool.txt
+          else
+            tar -C pool -xzf "pool/$F"
+          fi
+          echo "POOL_DIR=pool/pqch-pool-${VER}" >> "$GITHUB_ENV"
+
       - name: Package (Linux)
         if: matrix.host == 'x86_64-pc-linux-gnu'
         run: |
@@ -169,6 +191,10 @@ jobs:
           cp COPYING "stage/${NAME}/COPYING"
           cp doc/README_windows.txt "stage/${NAME}/README.txt"
           install -m 755 contrib/pqch/pqch-miner.desktop contrib/pqch/pqch-miner.sh "stage/${NAME}/"
+          if [[ -n "${POOL_DIR:-}" ]]; then
+            install -m 755 "${POOL_DIR}/pqch-pool" "stage/${NAME}/bin/pqch-pool"
+            cp "${POOL_DIR}/COPYING" "stage/${NAME}/COPYING-pqch-pool"
+          fi
           mkdir -p out
           tar -C stage --owner=0 --group=0 --numeric-owner --sort=name --mtime="@$(git log -1 --format=%ct)" \
             -czf "out/${NAME}-x86_64-linux-gnu.tar.gz" "${NAME}"
@@ -183,6 +209,7 @@ jobs:
           mkdir -p out "stage/${NAME}"
           mv build/pqch-win64-setup.exe "out/${NAME}-win64-setup.exe"
           cp build/release/pqch*.exe "stage/${NAME}/"
+          [[ -f build/release/COPYING-pqch-pool.txt ]] && cp build/release/COPYING-pqch-pool.txt "stage/${NAME}/"
           cp COPYING "stage/${NAME}/COPYING.txt"
           cp doc/README_windows.txt "stage/${NAME}/README.txt"
           (cd stage && zip -X -r "../out/${NAME}-win64.zip" "${NAME}")

@@ -13,6 +13,7 @@
 #include <qt/bitcoinunits.h>
 #include <qt/clientmodel.h>
 #include <qt/optionsmodel.h>
+#include <qt/miningpage.h>
 #include <qt/overviewpage.h>
 #include <qt/platformstyle.h>
 #include <qt/qvalidatedlineedit.h>
@@ -37,6 +38,10 @@
 #include <QAction>
 #include <QApplication>
 #include <QCheckBox>
+#include <QComboBox>
+#include <QFile>
+#include <QLineEdit>
+#include <QTemporaryDir>
 #include <QClipboard>
 #include <QObject>
 #include <QPushButton>
@@ -380,6 +385,61 @@ void TestGUI(interfaces::Node& node, const std::shared_ptr<CWallet>& wallet)
 
     // Check removal from wallet
     QCOMPARE(walletModel.wallet().getAddressReceiveRequests().size(), size_t{0});
+
+#ifndef WIN32
+    // PQCH: pool mining on the Mining tab runs the pool miner as a separate program and reads its output.
+    // A stand-in program records its arguments and prints what pqch-pool --pqch-miner prints.
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString args_file{dir.filePath("args")};
+        const QString fake{dir.filePath("pqch-pool")};
+        {
+            QFile f{fake};
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(QStringLiteral("#!/bin/sh\n"
+                                   "echo \"$@\" > '%1'\n"
+                                   "printf '\\033[0;36m2026-11-21 12:00:00.0000\\033[0m PqchMiner logged in; rewards go to %s\\n' \"$3\"\n"
+                                   "printf 'PqchMiner share accepted by the pool (1 accepted)\\n'\n"
+                                   "printf 'PqchMiner hashrate 123 H/s; shares: 7 accepted, 1 stale, 0 rejected\\n'\n"
+                                   "exec sleep 60\n").arg(args_file).toUtf8());
+            f.close();
+            QVERIFY(f.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner));
+        }
+        gArgs.ForceSetArg("-poolminer", fake.toStdString());
+        MiningPage mining(platformStyle.get());
+        mining.setClientModel(mini_gui.clientModel.get());
+        mining.setWalletModel(&walletModel);
+        auto* mode = mining.findChild<QComboBox*>("miningMode");
+        auto* pool = mining.findChild<QLineEdit*>("miningPool");
+        auto* button = mining.findChild<QPushButton*>("startButton");
+        QVERIFY(mode && pool && button);
+        mode->setCurrentIndex(mode->findData(QStringLiteral("pool")));
+        pool->setText(QStringLiteral("127.0.0.1:37889"));
+        button->click();
+        QVERIFY(mining.isMining());
+        for (int i = 0; i < 100 && mining.sharesAccepted() != 7; ++i) {
+            qApp->processEvents();
+            QTest::qWait(50);
+        }
+        QCOMPARE(mining.sharesAccepted(), 7);
+        QCOMPARE(mining.poolHashrate(), 123.0);
+        QFile a{args_file};
+        QVERIFY(a.open(QIODevice::ReadOnly));
+        const QStringList args{QString::fromUtf8(a.readAll()).trimmed().split(' ')};
+        QCOMPARE(args.value(0), QStringLiteral("--pqch-miner"));
+        QCOMPARE(args.value(1), QStringLiteral("127.0.0.1:37889"));
+        QVERIFY(args.value(2).startsWith(QStringLiteral("pqcrt1p"))); // a new P2MR address of this wallet
+        QCOMPARE(args.value(3), QStringLiteral("--threads"));
+        button->click(); // stop
+        for (int i = 0; i < 100 && mining.isMining(); ++i) {
+            qApp->processEvents();
+            QTest::qWait(50);
+        }
+        QVERIFY(!mining.isMining());
+        gArgs.ForceSetArg("-poolminer", "");
+    }
+#endif
 }
 
 void TestGUIWatchOnly(interfaces::Node& node, TestChain100Setup& test)

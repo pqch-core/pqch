@@ -20,6 +20,13 @@
 #include <QApplication>
 #include <QCheckBox>
 #include <QColor>
+#include <QComboBox>
+#include <QCoreApplication>
+#include <QDir>
+#include <QFileInfo>
+#include <QLineEdit>
+#include <QProcess>
+#include <QRegularExpression>
 #include <QEvent>
 #include <QGraphicsDropShadowEffect>
 #include <QGridLayout>
@@ -53,6 +60,22 @@ QString FormatRate(double hps)
     if (hps >= 1e6) return QObject::tr("%1 MH/s").arg(hps / 1e6, 0, 'f', 2);
     if (hps >= 1e3) return QObject::tr("%1 kH/s").arg(hps / 1e3, 0, 'f', 2);
     return QObject::tr("%1 H/s").arg(hps, 0, 'f', 0);
+}
+
+//! Pool node to offer by default: the testnet anchor's public stratum; none on main (there is no pool yet).
+QString DefaultPool()
+{
+    return Params().GetChainType() == ChainType::TESTNET ? QStringLiteral("187.127.89.83:37889") : QString();
+}
+
+//! "ip:port" with an IPv4 address or a [bracketed] IPv6 one: what pqch-pool --pqch-miner takes.
+bool ValidPool(const QString& pool)
+{
+    static const QRegularExpression re{QStringLiteral(R"(^((\d{1,3}\.){3}\d{1,3}|\[[0-9A-Fa-f:.]+\]):(\d{1,5})$)")};
+    const auto m{re.match(pool.trimmed())};
+    if (!m.hasMatch()) return false;
+    const int port{m.captured(3).toInt()};
+    return port > 0 && port < 65536;
 }
 
 QString FormatDuration(double seconds)
@@ -157,6 +180,27 @@ MiningPage::MiningPage(const PlatformStyle* platform_style, QWidget* parent) : Q
     m_fast->setChecked(settings.value("MiningFastMode", false).toBool());
     auto* threads_of = new QLabel(tr("of %1").arg(cores));
     threads_of->setObjectName("caption");
+    m_mode = new QComboBox;
+    m_mode->setObjectName("miningMode");
+    m_mode->addItem(tr("This computer alone (solo)"), QStringLiteral("solo"));
+    m_mode->addItem(tr("Pool (shared rewards)"), QStringLiteral("pool"));
+    m_mode->setToolTip(tr("Solo: this node mines whole blocks, rarely. Pool: you mine shares with other miners and get a small part of every block the pool finds, much more often."));
+    m_mode->setCurrentIndex(settings.value("MiningMode", "solo").toString() == "pool" ? 1 : 0);
+    m_pool_caption = new QLabel(tr("Pool node"));
+    m_pool_caption->setObjectName("caption");
+    m_pool = new QLineEdit(settings.value(QStringLiteral("MiningPool_%1").arg(QString::fromStdString(ChainTypeToString(Params().GetChainType()))), DefaultPool()).toString());
+    m_pool->setObjectName("miningPool");
+    m_pool->setPlaceholderText(tr("ip:37889"));
+    m_pool->setMinimumWidth(170);
+    m_pool->setToolTip(tr("The IP address and stratum port of a PQCH pool node. Every node of the pool pays by the same rules."));
+    connect(m_mode, qOverload<int>(&QComboBox::currentIndexChanged), this, [this] {
+        QSettings().setValue("MiningMode", m_mode->currentData().toString());
+        updateControls();
+    });
+    settings_layout->addWidget(m_mode);
+    settings_layout->addWidget(m_pool_caption);
+    settings_layout->addWidget(m_pool);
+    settings_layout->addSpacing(8);
     settings_layout->addWidget(threads_caption);
     settings_layout->addWidget(m_threads);
     settings_layout->addWidget(threads_of);
@@ -186,7 +230,7 @@ MiningPage::MiningPage(const PlatformStyle* platform_style, QWidget* parent) : Q
     m_hashrate = addStat(grid, 0, tr("Your hash rate"), CYAN, &m_hashrate_sub);
     m_network = addStat(grid, 1, tr("Network hash rate"), VIOLET, &m_network_sub);
     m_share = addStat(grid, 2, tr("Your share"), ORANGE, &m_share_sub);
-    m_found = addStat(grid, 3, tr("Blocks found"), PINK, &m_found_sub);
+    m_found = addStat(grid, 3, tr("Blocks found"), PINK, &m_found_sub, &m_found_caption);
     m_hashrate_sub->setText(tr("this computer"));
     m_network_sub->setText(tr("all miners"));
     m_share_sub->setText(tr("of the network"));
@@ -230,7 +274,7 @@ MiningPage::MiningPage(const PlatformStyle* platform_style, QWidget* parent) : Q
     m_timer->start(2000);
 }
 
-QLabel* MiningPage::addStat(QGridLayout* grid, int column, const QString& caption, const QString& accent, QLabel** sub)
+QLabel* MiningPage::addStat(QGridLayout* grid, int column, const QString& caption, const QString& accent, QLabel** sub, QLabel** caption_out)
 {
     auto* card = new QFrame;
     card->setObjectName("card");
@@ -248,6 +292,7 @@ QLabel* MiningPage::addStat(QGridLayout* grid, int column, const QString& captio
     column_layout->setSpacing(2);
     auto* caption_label = new QLabel(caption.toUpper());
     caption_label->setObjectName("caption");
+    if (caption_out) *caption_out = caption_label;
     auto* value = new QLabel(QStringLiteral("—"));
     value->setObjectName("value");
     value->setStyleSheet(QStringLiteral("QLabel { color: %1; }").arg(accent));
@@ -290,7 +335,7 @@ void MiningPage::applyStyle()
         #value { font-size: 24px; font-weight: 700; }
         #address { color: %4; font-size: 13px; }
         #address[filled="true"] { font-family: monospace; font-size: 14px; font-weight: 600; }
-        QCheckBox, QSpinBox { color: %4; }
+        QCheckBox, QSpinBox, QComboBox, QLineEdit { color: %4; }
         #startButton { color: white; font-size: 15px; font-weight: 700; border: none; border-radius: 12px; padding: 0 22px; }
         #startButton[mining="false"] { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #22d3ee, stop:1 #8b5cf6); }
         #startButton[mining="false"]:hover { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #67e8f9, stop:1 #a78bfa); }
@@ -310,11 +355,38 @@ void MiningPage::changeEvent(QEvent* e)
 
 MiningPage::~MiningPage()
 {
+    if (m_process) {
+        m_process->disconnect(this);
+        m_process->kill();
+        m_process->waitForFinished(3000);
+        g_gui_mining = false;
+    }
     m_stop = true;
     if (m_thread.joinable()) {
         m_thread.join();
         g_gui_mining = false;
     }
+}
+
+bool MiningPage::isMining() const
+{
+    return m_thread.joinable() || m_process != nullptr;
+}
+
+bool MiningPage::poolMode() const
+{
+    return m_mode && m_mode->currentData().toString() == QStringLiteral("pool");
+}
+
+QString MiningPage::poolMinerPath()
+{
+    const std::string arg{gArgs.GetArg("-poolminer", "")};
+    if (!arg.empty()) return QString::fromStdString(arg);
+#ifdef WIN32
+    return QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("pqch-pool.exe"));
+#else
+    return QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("pqch-pool"));
+#endif
 }
 
 void MiningPage::setClientModel(ClientModel* client_model)
@@ -367,6 +439,19 @@ void MiningPage::startMining()
         QMessageBox::information(this, tr("Mining"), tr("Another wallet is already mining. Stop it there first."));
         return;
     }
+    if (poolMode()) {
+        const QString pool{m_pool->text().trimmed()};
+        if (!ValidPool(pool)) {
+            g_gui_mining = false;
+            QMessageBox::warning(this, tr("Mining"), tr("Enter the pool node as an IP address and port, for example 187.127.89.83:37889."));
+            return;
+        }
+        if (!QFileInfo(poolMinerPath()).isExecutable()) {
+            g_gui_mining = false;
+            QMessageBox::critical(this, tr("Mining"), tr("The pool miner (%1) is missing. It comes with PQCH: reinstall PQCH, or mine without the pool.").arg(QDir::toNativeSeparators(poolMinerPath())));
+            return;
+        }
+    }
     // A new P2MR address of this wallet (asks for the passphrase if the wallet is locked).
     const QString address{m_wallet_model->getAddressTableModel()->addRow(AddressTableModel::Receive, tr("Mining"), QString(), OutputType::BECH32M)};
     if (address.isEmpty()) {
@@ -379,6 +464,11 @@ void MiningPage::startMining()
     m_address->setProperty("filled", true);
     m_address->style()->unpolish(m_address);
     m_address->style()->polish(m_address);
+
+    if (poolMode()) {
+        startPoolMiner(address);
+        return;
+    }
 
     const unsigned threads{static_cast<unsigned>(m_threads->value())};
     QSettings settings;
@@ -396,6 +486,13 @@ void MiningPage::startMining()
 void MiningPage::stopMining()
 {
     if (!isMining()) return;
+    if (m_process) {
+        m_pool_stopping = true;
+        setStatus(tr("Stopping"), Tone::Waiting, tr("Stopping the pool miner…"));
+        m_button->setEnabled(false);
+        m_process->kill(); // it keeps no state: nothing to save
+        return;
+    }
     m_stop = true;
     setStatus(tr("Stopping"), Tone::Waiting, tr("Finishing the current round, a few seconds…"));
     m_button->setEnabled(false);
@@ -475,11 +572,23 @@ void MiningPage::updateControls()
     m_button->setEnabled(m_client_model && m_wallet_model && !(mining && m_stop));
     m_threads->setEnabled(!mining);
     m_fast->setEnabled(!mining);
+    m_mode->setEnabled(!mining);
+    m_pool->setEnabled(!mining);
+    m_pool->setVisible(poolMode());
+    m_pool_caption->setVisible(poolMode());
+    if (m_pool_stopping) m_button->setEnabled(false);
+    const bool pool{poolMode()};
+    m_found_caption->setText((pool ? tr("Shares accepted") : tr("Blocks found")).toUpper());
+    if (!mining) {
+        m_found->setText(QString::number(pool ? m_shares_accepted : m_blocks_found));
+        m_found_sub->setText(pool ? tr("paid by PPLNS from the pool's blocks") : tr("this session"));
+        m_hashrate_sub->setText(pool ? tr("this computer, mining for the pool") : tr("this computer"));
+    }
 }
 
 void MiningPage::refresh()
 {
-    const double local{RandomXMiningHashrate()};
+    const double local{m_process ? m_pool_hashps : RandomXMiningHashrate()};
     m_hashrate->setText(isMining() || local > 0 ? FormatRate(local) : QStringLiteral("—"));
     if (!m_client_model || !isVisible()) return;
     // The network's rate changes slowly: ask the node every 10 seconds.
@@ -501,4 +610,93 @@ void MiningPage::refresh()
         m_share->setText(QStringLiteral("—"));
         m_share_sub->setText(tr("of the network"));
     }
+}
+
+void MiningPage::startPoolMiner(const QString& address)
+{
+    const QString pool{m_pool->text().trimmed()};
+    QSettings settings;
+    settings.setValue("MiningThreads", m_threads->value());
+    settings.setValue("MiningFastMode", m_fast->isChecked());
+    settings.setValue(QStringLiteral("MiningPool_%1").arg(QString::fromStdString(ChainTypeToString(Params().GetChainType()))), pool);
+
+    m_pool_hashps = 0;
+    m_shares_accepted = m_shares_stale = m_shares_rejected = 0;
+    m_pool_stopping = false;
+    m_process_buffer.clear();
+    m_process = new QProcess(this);
+    m_process->setProcessChannelMode(QProcess::MergedChannels);
+    connect(m_process, &QProcess::readyReadStandardOutput, this, &MiningPage::onPoolOutput);
+    connect(m_process, &QProcess::finished, this, &MiningPage::onPoolFinished);
+    connect(m_process, &QProcess::errorOccurred, this, [this](QProcess::ProcessError error) {
+        if (error == QProcess::FailedToStart) onPoolFinished();
+    });
+    // Arguments as a list: no shell is involved.
+    QStringList args{QStringLiteral("--pqch-miner"), pool, address, QStringLiteral("--threads"), QString::number(m_threads->value())};
+    if (m_fast->isChecked()) args << QStringLiteral("--fast");
+    setStatus(tr("Starting"), Tone::Waiting, tr("Connecting to the pool node %1…").arg(pool));
+    m_found->setText(QStringLiteral("0"));
+    m_found_sub->setText(tr("paid by PPLNS from the pool's blocks"));
+    m_hashrate_sub->setText(tr("this computer, mining for the pool"));
+    m_process->start(poolMinerPath(), args);
+    updateControls();
+}
+
+void MiningPage::onPoolOutput()
+{
+    if (!m_process) return;
+    static const QRegularExpression ansi{QStringLiteral("\\x1b\\[[0-9;]*m")};
+    static const QRegularExpression rate{QStringLiteral("hashrate (\\d+) H/s; shares: (\\d+) accepted, (\\d+) stale, (\\d+) rejected")};
+    m_process_buffer += QString::fromUtf8(m_process->readAllStandardOutput());
+    if (m_process_buffer.size() > 1 << 20) m_process_buffer = m_process_buffer.right(4096); // never grows without bound
+    int nl;
+    while ((nl = m_process_buffer.indexOf(QLatin1Char('\n'))) >= 0) {
+        QString line{m_process_buffer.left(nl).trimmed()};
+        m_process_buffer.remove(0, nl + 1);
+        line.remove(ansi);
+        const QString pool{m_pool->text().trimmed()};
+        if (line.contains(QLatin1String("logged in;"))) {
+            setStatus(tr("● Mining"), Tone::Active, tr("Mining for the pool at %1 with %2 thread(s). Rewards come in the pool's blocks.").arg(pool).arg(m_threads->value()));
+        } else if (line.contains(QLatin1String("cannot connect to the pool")) || line.contains(QLatin1String("closed the connection"))) {
+            setStatus(tr("Waiting"), Tone::Waiting, tr("Cannot reach the pool node %1. Trying again every 10 seconds.").arg(pool));
+        } else if (line.contains(QLatin1String("refused the login"))) {
+            const QString why{line.section(QLatin1String("refused the login: "), 1)};
+            setStatus(tr("Error"), Tone::Error, tr("The pool refused this wallet's address: %1").arg(why));
+        } else if (line.contains(QLatin1String("preparing the RandomX dataset"))) {
+            setStatus(tr("Starting"), Tone::Waiting, tr("Preparing fast mode, up to a minute…"));
+        } else if (line.contains(QLatin1String("share accepted by the pool"))) {
+            ++m_shares_accepted;
+            m_found->setText(QString::number(m_shares_accepted));
+            m_found_sub->setText(tr("paid by PPLNS · last %1").arg(QTime::currentTime().toString("HH:mm")));
+        } else if (const auto m{rate.match(line)}; m.hasMatch()) {
+            m_pool_hashps = m.captured(1).toDouble();
+            m_shares_accepted = m.captured(2).toInt();
+            m_shares_stale = m.captured(3).toInt();
+            m_shares_rejected = m.captured(4).toInt();
+            m_found->setText(QString::number(m_shares_accepted));
+            m_found->setToolTip(tr("%1 accepted, %2 late (stale), %3 rejected").arg(m_shares_accepted).arg(m_shares_stale).arg(m_shares_rejected));
+        }
+    }
+}
+
+void MiningPage::onPoolFinished()
+{
+    if (!m_process) return;
+    QProcess* p{m_process};
+    m_process = nullptr;
+    const bool asked{m_pool_stopping};
+    const bool failed_to_start{p->error() == QProcess::FailedToStart};
+    p->disconnect(this);
+    p->deleteLater();
+    m_pool_stopping = false;
+    m_pool_hashps = 0;
+    g_gui_mining = false;
+    if (failed_to_start) {
+        setStatus(tr("Error"), Tone::Error, tr("Could not start the pool miner (%1).").arg(QDir::toNativeSeparators(poolMinerPath())));
+    } else if (!asked && m_tone != Tone::Error) {
+        setStatus(tr("Stopped"), Tone::Error, tr("The pool miner stopped by itself. Start it again, or check the pool node's address."));
+    } else if (asked) {
+        setStatus(tr("Stopped"), Tone::Idle);
+    }
+    updateControls();
 }
