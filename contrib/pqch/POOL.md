@@ -105,7 +105,7 @@ Quando o `pqch-pool` existir (fases A–C), o mesmo modo passa a minerar no pool
 | --- | --- | --- | --- |
 | A. Fork e cadeia principal | **feita a 20 nov. 2026** | Repositório `pqch-core/pqch-pool`; modelo de bloco, coinbase, prova de trabalho e envio de blocos com o `pqchd`; um só nó do pool em regtest | O pool encontra blocos em regtest e a coinbase paga certo |
 | B. Rede do pool | **feita a 20 nov. 2026** | Cadeia de partilhas entre vários nós; PPLNS; parâmetros PQCH | Nós do pool na testnet (âncora e Kali) na mesma cadeia e a dividir os pagamentos certo |
-| C. Minerador | jan. 2027 (2 semanas) | Minerador próprio com stratum | Minerar no pool a partir de outra máquina |
+| C. Minerador | **feita a 21 nov. 2026** | Minerador próprio com stratum | Minerar no pool a partir de outra máquina |
 | D. Aplicação | jan. – fev. 2027 (3 semanas) | Aplicação de um clique, Windows e Linux; instaladores assinados | Pessoas de fora a minerar no pool da testnet com a aplicação |
 | E. Testes e auditoria | fev. 2027 | Testes com mineiros de fora; o pool e a aplicação entram no âmbito da auditoria | Sem falhas graves por corrigir |
 
@@ -142,6 +142,12 @@ provisória `OP_TRUE`, proibida pela regra pós-quântica). Corrigido em `c31466
 - critério cumprido: `deploy/verificar_pool_testnet.py` (independente do código do pool) deu 6 blocos em 6
   com a divisão PPLNS exata, corrido em cada nó com o seu próprio registo de partilhas. Antes, em regtest e
   no CI: dois nós e um terceiro que entra a meio, na mesma cadeia e a pagarem-se um ao outro.
+
+**Fase C feita (21 nov. 2026):** o nó do pool serve mineradores sem nó por stratum (`--stratum`, porta 37889,
+por agora só na rede local) e o mesmo programa faz de minerador (`pqch-pool --pqch-miner ip:porta morada`). Cada
+minerador recebe trabalho com a sua morada na coinbase e é pago por PPLNS; o nó recalcula cada hash recebido.
+Na testnet, o server (sem nó do pool, 2 núcleos, 80 H/s) minerou pelo stratum do Kali: 435 blocos do pool nos
+últimos 500, todos com a divisão PPLNS exata e a morada do server paga em cada bloco recente.
 
 O pool não faz parte do consenso: pode continuar a ser melhorado depois de o código do nó congelar
 (1 de março), desde que esteja pronto no dia do lançamento.
