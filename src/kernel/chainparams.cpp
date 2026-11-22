@@ -185,6 +185,8 @@ public:
         // PQCH: new chain, no accumulated work or assumed-valid block yet.
         consensus.nMinimumChainWork = uint256{};
         consensus.defaultAssumeValid = uint256{};
+        // Header checkpoints (pow_randomx.h): none until the chain exists; each release adds them with
+        // contrib/pqch/checkpoints.py, checked on two nodes.
 
         /**
          * The message start string is designed to be unlikely to occur in normal data.
@@ -307,6 +309,53 @@ public:
 
         consensus.nMinimumChainWork = uint256{};
         consensus.defaultAssumeValid = uint256{};
+        // Header checkpoints: every 500 blocks up to 22000, contrib/pqch/checkpoints.py
+        consensus.header_checkpoints = {
+            {500, uint256{"00e2b9b4c19fc3a0cfb67df5154a5c7ee6ea502be0a548125f160c9e9ef980aa"}},
+            {1000, uint256{"fd1b2e03019100f0e0d293c74ae6bcac517c0353c01fb3e107cb36bf939daa22"}},
+            {1500, uint256{"4d13a4e74a23696ba49ef08a930377461ab539faf764ddf74e6f594df43c8348"}},
+            {2000, uint256{"2812182a91efa965397a01ee4a4755b7090a43a386b89042096eec4281467e2d"}},
+            {2500, uint256{"1807f2b4f6929ffb899e1a03077af7df3b9a891a2c20b611a15a4e420e4ddd6c"}},
+            {3000, uint256{"499aca434f9cb93265a1bfc7e6ea1253fb12eb9a1c64a6d4d19b706b10c38643"}},
+            {3500, uint256{"87da4edea61ab275044639bf5b2fa305085a11e787ce8a17da54ee760c770614"}},
+            {4000, uint256{"fa6afe46d5dac97ebe24806e6f9bce60af7e68b936b4c9a21474e32d9747d76d"}},
+            {4500, uint256{"35a5bb50601b8fc971ec6c93599800dc33f0cb2419818e6000207b5f38f7f828"}},
+            {5000, uint256{"decf3f254b9984dd0fe7851ea94b187af196791fa63b8ae996d09c36b220adb0"}},
+            {5500, uint256{"c201e5ca8e9f8bf7cd0b87ab755b38ababb721ab11151eff5b386eee7636d371"}},
+            {6000, uint256{"6c74e466d7dedc14eeb1c2af031919fbe3b360c299be579fea6c5e6932fb5192"}},
+            {6500, uint256{"e50ee0dca19481b83a126b3d31694fe31d8b6a69c2d81d41d4ec47f562a857fd"}},
+            {7000, uint256{"6f7d9688386ee275018dc75cf413966fe553d8353e0f2e1de39475607ce7b179"}},
+            {7500, uint256{"ca4f8d903776b1fd86169e4d8f67af097286508fd2f7eb4725e6fb690e38bab9"}},
+            {8000, uint256{"65300b420d672219287c06ac89ca4031ecbf28114f698958af49c04fc84b5156"}},
+            {8500, uint256{"c1123fa5cadb5eaa737a26b6ba3b7fc400c4b5cadd63dae52565d3f903dd9798"}},
+            {9000, uint256{"37233dec01e5fdded6304bbd8cb2a8fbd8516613162362116cb438f820d6ec48"}},
+            {9500, uint256{"02be0eb4e3adf248078d592a020a6f44c6426eeee615e9daa913efa31929b649"}},
+            {10000, uint256{"ffc4b15c7718e973f33d667a6a5611519ade1e1cb07fcc8a4c6ff46f80ace2fd"}},
+            {10500, uint256{"08a3a76da5b87016035612d9d8d9bdc48777366b7944b49dc7130a9f1b331911"}},
+            {11000, uint256{"491af0ee31dbd8e3eda78f9edbad6ce939fa662cfd490ec6c4c254669e0aba71"}},
+            {11500, uint256{"311ae433e335d054f5b7591e6295cb0189fcbdf8fc708e9b80251fcb420a7bb3"}},
+            {12000, uint256{"4518e827c0a7e78da151ca8d950973a8304a7b358eea7ae490ce87b8d2b35358"}},
+            {12500, uint256{"6999a9800f1fd31c6bdbe5289b62dd955efd2c36c131ca40b7ce2f98ed75ff1a"}},
+            {13000, uint256{"a7423690ad4736e723fa70a8adfc95ee509f1f1e3e0ce6946896a8c5bb200d51"}},
+            {13500, uint256{"e91c2efaab42886596de03d89f0bdb119f10f3a0772a8fc6493de9628cd57ee2"}},
+            {14000, uint256{"9fd4531e65814f55a35779bd79dccea8fe91e1ee46259da91e3e98c069c94b01"}},
+            {14500, uint256{"348e1c3b8377d2ec1f0f25d1056193d81b765f860c4d95fc049b101f5079a804"}},
+            {15000, uint256{"4e635feb92ae7d560f782ad32e373b520220d06a530e6e5e03968635460741ff"}},
+            {15500, uint256{"8bfafd121be3447a381f4ed2daf3bff35634137243a43ec3494bce2be4d4dffc"}},
+            {16000, uint256{"3010bc555d61f8f4c7f6cfe6a9279a84d53b9a88eef5232739e542742851ef5e"}},
+            {16500, uint256{"63bee8531c09780da2db53e0150a2d3a5958c2d660770fea749b20c6034ab7d5"}},
+            {17000, uint256{"f9f7eece96b66e7c8bf1f17d7abfda57971ee42e0aac94bef2c071f5477bad8c"}},
+            {17500, uint256{"efa3198c99138aed1112693693f45ebc8143baf5a285148b99094bd2b931ed34"}},
+            {18000, uint256{"19898f1bc23cb33369769847658d2d76990f0070d3db4fba9fc807dbec0fcf48"}},
+            {18500, uint256{"feccad418eb63835fb56cd0e08d6824cbf3265083f978621cb9329a664e5279d"}},
+            {19000, uint256{"415a0adc82a694e78718a35b9d966cce6de405a30441955aeb67ae2d6ed5d7d1"}},
+            {19500, uint256{"25b16733a93e263d415b44dbe781f453d5c8075e04759a84267ad9247840007c"}},
+            {20000, uint256{"d05948d6c433cf71b7e9cbd2e6275ab3a26e6b04d853ca063af276f2d4e23bb1"}},
+            {20500, uint256{"3f59e24e1ed2c6322980dc124cab4a9a79781a1b44e77d36d4f60b42d98a872f"}},
+            {21000, uint256{"c2c5fdcca4655acb075f8c67712b21da623ccfc9615f47b11e238e25480fadf6"}},
+            {21500, uint256{"0ac217def8e4bb997bca1c4842a6a0710769bf156231fe2688b7b28beee57f2c"}},
+            {22000, uint256{"ae428de6a2131101130edd106d61fb8b77733638f138bfbcf791608feddf108d"}},
+        };
 
         // PQCH: randomly generated, distinct from the main network, regtest and Bitcoin's networks.
         pchMessageStart[0] = 0xe8;

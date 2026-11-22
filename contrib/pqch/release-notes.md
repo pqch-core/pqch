@@ -3,6 +3,16 @@
 **PQCH {{VERSION}}**
 
 **Changes**
+In v0.3.5 (testnet; no change to which chain is valid):
+- Header checkpoints: every release ships the hash of one block in 500. A header at a checkpoint height
+  must have that hash, and the headers that lead to it are not hashed with RandomX (about 25 ms each),
+  so a new node syncs the block headers much faster. Everything else in a header is still checked and
+  blocks are validated in full. The testnet ships 44 checkpoints (up to block 22,000), read from two
+  public nodes that agree; the main network starts without any.
+- PQCH-Qt: a main window saved as big as the screen opens at 80% of it, centred, so it can be resized
+  (un-maximizing used to leave it filling the screen).
+- Tests: the two inherited header sync functional tests fixed (one-minute blocks; batched generation).
+
 In v0.3.4 (testnet; no consensus changes):
 - PQCH-Qt, Mining tab: fits narrow windows. The Start button moves to its own full-width row instead of
   going off the right edge, the stat cards reflow to two columns, and the window is never narrower than
