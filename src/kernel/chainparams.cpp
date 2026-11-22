@@ -643,6 +643,7 @@ public:
         m_max_reorg_depth = 60;
         consensus.fPowAllowMinDifficultyBlocks = true;
         consensus.enforce_BIP94 = opts.enforce_bip94;
+        consensus.header_checkpoints = opts.header_checkpoints;
         consensus.fPowNoRetargeting = true;
 
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].bit = 28;

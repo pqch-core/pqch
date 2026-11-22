@@ -165,6 +165,8 @@ public:
         DeploymentOptions dep_opts{};
         bool fastprune{false};
         bool enforce_bip94{false};
+        //! PQCH: header checkpoints for tests (-testcheckpoint=<height>:<hash>)
+        std::map<int, uint256> header_checkpoints{};
     };
 
     struct MainNetOptions {

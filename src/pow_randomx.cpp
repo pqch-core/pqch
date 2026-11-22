@@ -27,6 +27,7 @@
 #include <stdexcept>
 #include <thread>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 std::atomic<bool> g_randomx_fast_mining{false};
@@ -223,7 +224,68 @@ void AddPreverified(const uint256& id, const uint256& seed)
         g_preverified_order.pop_front();
     }
 }
+// PQCH: header ids whose proof of work is known valid from a checkpoint (AssumeHeaderPow).
+constexpr size_t MAX_ASSUMED{50000}; // a redownload buffer (~16,000) and a few batches
+std::mutex g_assumed_mutex;
+std::unordered_set<uint256, SaltedUint256Hasher> g_assumed;
+std::deque<uint256> g_assumed_order;
+
+bool TakeAssumedHeaderPow(const uint256& id)
+{
+    std::lock_guard<std::mutex> lock(g_assumed_mutex);
+    return g_assumed.erase(id) > 0;
+}
 } // namespace
+
+std::optional<uint256> HeaderCheckpoint(const Consensus::Params& params, int height)
+{
+    const auto it{params.header_checkpoints.find(height)};
+    if (it == params.header_checkpoints.end()) return std::nullopt;
+    return it->second;
+}
+
+int LastHeaderCheckpointHeight(const Consensus::Params& params)
+{
+    return params.header_checkpoints.empty() ? 0 : params.header_checkpoints.rbegin()->first;
+}
+
+void AssumeHeaderPow(const uint256& id)
+{
+    std::lock_guard<std::mutex> lock(g_assumed_mutex);
+    if (!g_assumed.insert(id).second) return;
+    g_assumed_order.push_back(id);
+    while (g_assumed_order.size() > MAX_ASSUMED) {
+        g_assumed.erase(g_assumed_order.front());
+        g_assumed_order.pop_front();
+    }
+}
+
+bool IsHeaderPowAssumed(const uint256& id)
+{
+    std::lock_guard<std::mutex> lock(g_assumed_mutex);
+    return g_assumed.contains(id);
+}
+
+size_t AssumePowBelowCheckpoints(int prev_height, std::span<const CBlockHeader> headers, const Consensus::Params& params)
+{
+    if (params.header_checkpoints.empty() || prev_height >= LastHeaderCheckpointHeight(params)) return 0;
+    std::optional<size_t> last; // index of the highest matching checkpoint in the run
+    uint256 prev_id;
+    for (size_t i = 0; i < headers.size(); ++i) {
+        const uint256 id{headers[i].GetHash()};
+        if (i > 0 && headers[i].hashPrevBlock != prev_id) break; // not one chain from here
+        prev_id = id;
+        const int height{prev_height + 1 + static_cast<int>(i)};
+        if (height > LastHeaderCheckpointHeight(params)) break;
+        if (const auto cp{HeaderCheckpoint(params, height)}) {
+            if (*cp != id) break; // validation rejects it
+            last = i;
+        }
+    }
+    if (!last) return 0;
+    for (size_t i = 0; i <= *last; ++i) AssumeHeaderPow(headers[i].GetHash());
+    return *last + 1;
+}
 
 std::vector<uint256> RandomXSeedsForHeaders(int prev_height, const std::function<uint256(int)>& ancestor_hash,
                                             std::span<const CBlockHeader> headers, const Consensus::Params& params)
@@ -256,6 +318,7 @@ size_t PreverifyHeadersPow(std::span<const CBlockHeader> headers, std::span<cons
             if (i >= n) break;
             const CBlockHeader& h{headers[i]};
             if (h.IsAuxPow() || seeds[i].IsNull()) continue; // merged mined: checked in validation
+            if (IsHeaderPowAssumed(h.GetHash())) continue;     // below a checkpoint: nothing to hash
             const std::span<const unsigned char> key{seeds[i].data(), seeds[i].size()};
             if (!ctx || !std::ranges::equal(ctx->key, key)) {
                 if (vm) randomx_destroy_vm(vm);
@@ -315,11 +378,13 @@ bool CheckHeaderProofOfWork(const CBlockHeader& header, int height, const uint25
             error = "bad-auxpow (" + detail + ")";
             return false;
         }
+        if (TakeAssumedHeaderPow(header.GetHash())) return true; // PQCH: below a header checkpoint
         // Monero's own proof of work: original RandomX before Monero hard fork 17, RandomX v2 from it.
         if (CheckProofOfWork(MoneroPowHash(header.auxpow->seed_hash, blob), header.nBits, params)) return true;
         error = "high-hash";
         return false;
     }
+    if (TakeAssumedHeaderPow(header.GetHash())) return true; // PQCH: below a header checkpoint
     if (TakePreverified(header.GetHash(), seed)) return true; // PQCH: already hashed, outside cs_main
     if (CheckProofOfWork(GetRandomXPowHash(header, seed), header.nBits, params)) return true;
     error = "high-hash";

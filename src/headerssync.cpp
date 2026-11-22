@@ -292,13 +292,20 @@ bool HeadersSyncState::CheckPresyncHeader(const CBlockHeader& current, int64_t h
         }
     }
 
+    // Header checkpoints: a header at a checkpoint height must be the checkpoint. Below the last one
+    // nothing is sampled: a chain with fake work fails at the next checkpoint height anyway.
+    if (const auto checkpoint{HeaderCheckpoint(params, height)}; checkpoint && current.GetHash() != *checkpoint) {
+        return abort("checkpoint-mismatch");
+    }
+    const bool below_checkpoint{height <= LastHeaderCheckpointHeight(params)};
+
     // Proof of work, for a random sample of headers and for the one that reaches the minimum work.
     // A peer cannot tell which headers are checked, so a chain with fake work is caught with high
     // probability before it is ever redownloaded.
     if (params.fPowUseRandomX) {
         const bool reaches_min_work{m_current_chain_work < m_minimum_required_work && m_current_chain_work + GetBlockProof(current) >= m_minimum_required_work};
         const uint32_t period{std::max<uint32_t>(1, m_params.pow_sample_period)};
-        if (reaches_min_work || m_rng.randrange(period) == 0) {
+        if (reaches_min_work || (!below_checkpoint && m_rng.randrange(period) == 0)) {
             uint256 seed;
             if (!current.IsAuxPow()) {
                 const auto s{SeedHashFor(height)};
@@ -375,6 +382,16 @@ bool HeadersSyncState::ValidateAndStoreRedownloadedHeader(const CBlockHeader& he
         }
     }
 
+    // PQCH: header checkpoints. The buffer is one chain, so a matching checkpoint proves every header
+    // before it; PopHeadersReadyForAcceptance marks those so validation computes no RandomX hash.
+    if (const auto checkpoint{HeaderCheckpoint(m_consensus_params, next_height)}) {
+        if (header.GetHash() != *checkpoint) {
+            LogDebug(BCLog::NET, "Initial headers sync aborted with peer=%d: checkpoint mismatch at height=%i (redownload phase)\n", m_id, next_height);
+            return false;
+        }
+        m_redownload_proven_height = next_height;
+    }
+
     // Store this header for later processing.
     m_redownloaded_headers.emplace_back(header);
     m_redownload_buffer_last_height = next_height;
@@ -392,8 +409,10 @@ std::vector<CBlockHeader> HeadersSyncState::PopHeadersReadyForAcceptance()
 
     while (m_redownloaded_headers.size() > m_params.redownload_buffer_size ||
             (m_redownloaded_headers.size() > 0 && m_process_all_remaining_headers)) {
+        const int64_t height{m_redownload_buffer_last_height - static_cast<int64_t>(m_redownloaded_headers.size()) + 1};
         ret.emplace_back(m_redownloaded_headers.front().GetFullHeader(m_redownload_buffer_first_prev_hash));
         m_redownloaded_headers.pop_front();
+        if (height <= m_redownload_proven_height) AssumeHeaderPow(ret.back().GetHash());
         m_redownload_buffer_first_prev_hash = ret.back().GetHash();
     }
     return ret;

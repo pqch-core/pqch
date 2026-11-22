@@ -323,6 +323,7 @@ BASE_SCRIPTS = [
     'wallet_pqch_lightwallet.py',
     'wallet_pqch_vault.py',
     'feature_pqch_mldsa_emergency.py',
+    'feature_pqch_header_checkpoints.py',
     'feature_dersig.py',
     'feature_reindex_init.py',
     'feature_cltv.py',

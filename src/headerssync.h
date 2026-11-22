@@ -271,6 +271,9 @@ private:
     /** Height of last header in m_redownloaded_headers */
     int64_t m_redownload_buffer_last_height{0};
 
+    /** PQCH: height of the last header checkpoint matched in the redownload buffer (0: none). */
+    int64_t m_redownload_proven_height{0};
+
     /** Hash of last header in m_redownloaded_headers (initialized to
      * m_chain_start). We have to cache it because we don't have hashPrevBlock
      * available in a CompressedHeader.

@@ -71,7 +71,13 @@ struct PresyncSetup : public TestChain100Setup {
 
     HeadersSyncState State(uint32_t sample_period, arith_uint256 min_work = ~arith_uint256{0})
     {
-        return {/*id=*/0, params,
+        return State(params, sample_period, min_work);
+    }
+
+    /** With other consensus parameters (header checkpoints); `p` must outlive the state. */
+    HeadersSyncState State(const Consensus::Params& p, uint32_t sample_period, arith_uint256 min_work = ~arith_uint256{0})
+    {
+        return {/*id=*/0, p,
                 HeadersSyncParams{.commitment_period = 10, .redownload_buffer_size = 100, .pow_sample_period = sample_period},
                 *tip, min_work};
     }
@@ -303,6 +309,91 @@ BOOST_AUTO_TEST_CASE(preverified_headers_validate_the_same)
         LOCK(cs_main);
         BOOST_CHECK(chainman.m_blockman.LookupBlockIndex(headers.back().GetHash()));
     }
+}
+
+// PQCH: header checkpoints. Below the last one no proof of work is sampled in presync (a fake chain
+// fails at the checkpoint height instead); a header at a checkpoint height must be the checkpoint.
+BOOST_AUTO_TEST_CASE(header_checkpoints_presync)
+{
+    const auto fake{Chain(40, /*fake_from=*/0)}; // no header has valid proof of work
+    {
+        // Without checkpoints, every header checked: the first one fails.
+        auto state{State(1)};
+        BOOST_CHECK(!state.ProcessNextHeaders(fake, true).success);
+    }
+    {
+        // The checkpoint at the last height is this chain: nothing to hash, all accepted.
+        Consensus::Params p{params};
+        p.header_checkpoints[tip->nHeight + 40] = fake.back().GetHash();
+        auto state{State(p, 1)};
+        BOOST_CHECK(state.ProcessNextHeaders(fake, true).success);
+        BOOST_CHECK_EQUAL(state.GetPresyncHeight(), tip->nHeight + 40);
+    }
+    {
+        // Another chain at a checkpoint height ends the sync there.
+        Consensus::Params p{params};
+        p.header_checkpoints[tip->nHeight + 20] = Tagged(0x42);
+        auto state{State(p, 1'000'000)};
+        BOOST_CHECK(!state.ProcessNextHeaders(Chain(30), true).success);
+    }
+    {
+        // Above the last checkpoint the sampling is back.
+        Consensus::Params p{params};
+        p.header_checkpoints[tip->nHeight + 20] = fake[19].GetHash();
+        auto state{State(p, 1)};
+        BOOST_CHECK(!state.ProcessNextHeaders(fake, true).success);
+    }
+}
+
+// PQCH: in redownload, the headers up to a matching checkpoint come out marked (no RandomX hash in
+// validation); the ones after it do not.
+BOOST_AUTO_TEST_CASE(header_checkpoints_redownload)
+{
+    const auto headers{Chain(30)};
+    Consensus::Params p{params};
+    p.header_checkpoints[tip->nHeight + 20] = headers[19].GetHash();
+    arith_uint256 work{tip->nChainWork};
+    for (const auto& h : headers) work += GetBlockProof(h);
+    auto state{State(p, 1, work)};
+    BOOST_REQUIRE(state.ProcessNextHeaders(headers, true).success);
+    BOOST_REQUIRE(state.GetState() == HeadersSyncState::State::REDOWNLOAD);
+    const auto r{state.ProcessNextHeaders(headers, true)};
+    BOOST_REQUIRE(r.success);
+    BOOST_REQUIRE_EQUAL(r.pow_validated_headers.size(), 30U);
+    for (size_t i = 0; i < 30; ++i) BOOST_CHECK_EQUAL(IsHeaderPowAssumed(headers[i].GetHash()), i < 20);
+    // A wrong checkpoint aborts the redownload.
+    Consensus::Params q{params};
+    auto state2{State(q, 1, work)};
+    BOOST_REQUIRE(state2.ProcessNextHeaders(headers, true).success);
+    q.header_checkpoints[tip->nHeight + 10] = Tagged(0x43); // set after presync, met in redownload
+    BOOST_CHECK(!state2.ProcessNextHeaders(headers, true).success);
+}
+
+// PQCH: a run that reaches a matching checkpoint is marked up to it; a mark replaces one RandomX hash.
+BOOST_AUTO_TEST_CASE(header_checkpoints_runs)
+{
+    const auto fake{Chain(12, /*fake_from=*/0)};
+    const int h0{tip->nHeight};
+    Consensus::Params p{params};
+    p.header_checkpoints[h0 + 8] = fake[7].GetHash();
+    p.header_checkpoints[h0 + 100] = Tagged(0x44); // later: the run does not reach it
+    BOOST_CHECK_EQUAL(AssumePowBelowCheckpoints(h0, fake, p), 8U);
+    for (size_t i = 0; i < 12; ++i) BOOST_CHECK_EQUAL(IsHeaderPowAssumed(fake[i].GetHash()), i < 8);
+    // The mark stands in for the hash, once.
+    const uint256 seed{tip->GetAncestor(GetRandomXSeedHeight(h0 + 1, params))->GetBlockHash()};
+    std::string error;
+    BOOST_CHECK(CheckHeaderProofOfWork(fake[0], h0 + 1, seed, params, error));
+    BOOST_CHECK(!CheckHeaderProofOfWork(fake[0], h0 + 1, seed, params, error));
+    BOOST_CHECK(!CheckHeaderProofOfWork(fake[9], h0 + 10, seed, params, error));
+    // A checkpoint that does not match, or a run that is not one chain, marks nothing.
+    Consensus::Params q{params};
+    q.header_checkpoints[h0 + 8] = Tagged(0x45);
+    auto broken{fake};
+    broken[3].hashPrevBlock = Tagged(0x46);
+    BOOST_CHECK_EQUAL(AssumePowBelowCheckpoints(h0, fake, q), 0U);
+    BOOST_CHECK_EQUAL(AssumePowBelowCheckpoints(h0, broken, p), 0U);
+    // Nothing to do at or above the last checkpoint.
+    BOOST_CHECK_EQUAL(AssumePowBelowCheckpoints(h0 + 100, fake, p), 0U);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

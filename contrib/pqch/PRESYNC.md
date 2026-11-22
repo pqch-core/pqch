@@ -64,3 +64,25 @@ segunda passagem cada cabeçalho é validado por inteiro antes de ser guardado.
   inicial, se houver memória.
 - Uma chave Monero nova custa a construção de uma cache (~2 s nesta máquina) antes de se
   verificar o trabalho. A regra das chaves limita isto a 4 por janela, por par.
+
+## Pontos de controlo dos cabeçalhos (22 nov. 2026)
+
+Cada cabeçalho custa um hash RandomX (~25 ms numa thread), cerca de 525.960 por ano de cadeia. Para
+que um nó novo não os calcule todos, cada versão traz pontos de controlo: a altura e o hash de um
+bloco a cada 500 (`Consensus::Params::header_checkpoints`, gerados com `contrib/pqch/checkpoints.py`
+num nó sincronizado e conferidos noutro nó antes do commit).
+
+- Um cabeçalho na altura de um ponto de controlo tem de ter esse hash (`checkpoint-mismatch`).
+- Os cabeçalhos que levam a um ponto de controlo (cada um aponta para o anterior pelo `hashPrevBlock`,
+  e o hash de um bloco compromete o pai) ficam com a prova de trabalho dada como válida: nem a
+  pré-sincronização os amostra, nem a validação calcula o RandomX. Tudo o resto do cabeçalho
+  (alvo ASERT, tempos, estrutura AuxPoW, regra das chaves Monero) continua verificado, e os blocos
+  são validados por inteiro.
+- Na pré-sincronização, abaixo do último ponto de controlo não há amostragem: uma cadeia com trabalho
+  falso falha na altura do ponto de controlo seguinte. Na fase de redownload, o buffer só liberta
+  marcados os cabeçalhos até ao último ponto de controlo confirmado no próprio buffer.
+- Fora da sincronização inicial (`ProcessNewBlockHeaders`), um lote marca os cabeçalhos até ao ponto
+  de controlo mais alto que contém; os restantes são verificados normalmente.
+- A rede principal começa sem pontos de controlo (não há cadeia); cada versão acrescenta os novos.
+- Testes: `pqch_presync_tests` (header_checkpoints_*) e `feature_pqch_header_checkpoints.py`
+  (`-testcheckpoint=<altura>:<hash>`, só em regtest).

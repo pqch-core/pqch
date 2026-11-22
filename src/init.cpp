@@ -681,6 +681,7 @@ void SetupServerArgs(ArgsManager& argsman, bool can_listen_ipc)
     argsman.AddArg("-limitancestorsize", "", ArgsManager::ALLOW_ANY, OptionsCategory::HIDDEN);
     argsman.AddArg("-limitdescendantsize", "", ArgsManager::ALLOW_ANY, OptionsCategory::HIDDEN);
     argsman.AddArg("-limitdescendantcount=<n>", strprintf("Deprecated setting to not accept transactions if any ancestor would have <n> or more in-mempool descendants (default: %u); replaced by cluster limits (see -limitclustercount) and only used by wallet for coin selection", DEFAULT_DESCENDANT_LIMIT), ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::DEBUG_TEST);
+    argsman.AddArg("-testcheckpoint=<height>:<hash>", "PQCH: a header checkpoint, for testing (regtest only; repeatable)", ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::DEBUG_TEST);
     argsman.AddArg("-test=<option>", "Pass a test-only option. Options include : " + Join(TEST_OPTIONS_DOC, ", ") + ".", ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::DEBUG_TEST);
     argsman.AddArg("-limitclustercount=<n>", strprintf("Do not accept transactions into mempool which are directly or indirectly connected to <n> or more other unconfirmed transactions (default: %u, maximum: %u)", DEFAULT_CLUSTER_LIMIT, MAX_CLUSTER_COUNT_LIMIT), ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::DEBUG_TEST);
     argsman.AddArg("-limitclustersize=<n>", strprintf("Do not accept transactions whose virtual size with all in-mempool connected transactions exceeds <n> kilobytes (default: %u)", DEFAULT_CLUSTER_SIZE_LIMIT_KVB), ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::DEBUG_TEST);
@@ -1179,6 +1180,9 @@ bool AppInitParameterInteraction(const ArgsManager& args)
     if (args.GetBoolArg("-peerbloomfilters", DEFAULT_PEERBLOOMFILTERS))
         g_local_services = ServiceFlags(g_local_services | NODE_BLOOM);
 
+    if (args.IsArgSet("-testcheckpoint") && chainparams.GetChainType() != ChainType::REGTEST) {
+        return InitError(Untranslated("-testcheckpoint can only be used with regtest"));
+    }
     const std::vector<std::string> test_options = args.GetArgs("-test");
     if (!test_options.empty()) {
         if (chainparams.GetChainType() != ChainType::REGTEST) {

@@ -4175,6 +4175,10 @@ static bool ContextualCheckBlockHeader(const CBlockHeader& block, BlockValidatio
 
     // Check proof of work
     const Consensus::Params& consensusParams = chainman.GetConsensus();
+    // PQCH: a header at a checkpoint height must be the checkpoint (pow_randomx.h, HeaderCheckpoint).
+    if (const auto checkpoint{HeaderCheckpoint(consensusParams, nHeight)}; checkpoint && block.GetHash() != *checkpoint) {
+        return state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER, "checkpoint-mismatch", "header differs from the checkpoint at its height");
+    }
     if (block.nBits != GetNextWorkRequired(pindexPrev, &block, consensusParams))
         return state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER, "bad-diffbits", "incorrect proof of work");
 
@@ -4376,6 +4380,10 @@ bool ChainstateManager::ProcessNewBlockHeaders(std::span<const CBlockHeader> hea
             if (known > 0 && known < headers.size()) prev = m_blockman.LookupBlockIndex(headers[known].hashPrevBlock);
             if (prev && known < headers.size()) {
                 todo = headers.subspan(known);
+                // Below a header checkpoint the proof of work is known: mark those, nothing to hash.
+                if (const size_t n{AssumePowBelowCheckpoints(prev->nHeight, todo, GetConsensus())}) {
+                    LogDebug(BCLog::VALIDATION, "%u headers up to a checkpoint (height %d): proof of work not hashed\n", n, prev->nHeight + n);
+                }
                 seeds = RandomXSeedsForHeaders(prev->nHeight, [prev](int h) { return prev->GetAncestor(h)->GetBlockHash(); }, todo, GetConsensus());
             }
         }

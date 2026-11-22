@@ -119,6 +119,14 @@ void ReadRegTestArgs(const ArgsManager& args, CChainParams::RegTestOptions& opti
 {
     if (auto value = args.GetBoolArg("-fastprune")) options.fastprune = *value;
     if (HasTestOption(args, "bip94")) options.enforce_bip94 = true;
+    for (const std::string& arg : args.GetArgs("-testcheckpoint")) {
+        // PQCH: <height>:<block hash>, a header checkpoint (Consensus::Params::header_checkpoints).
+        const auto colon{arg.find(':')};
+        const auto height{colon == std::string::npos ? std::nullopt : ToIntegral<int>(arg.substr(0, colon))};
+        const auto hash{colon == std::string::npos ? std::nullopt : uint256::FromHex(arg.substr(colon + 1))};
+        if (!height || *height <= 0 || !hash) throw std::runtime_error(strprintf("-testcheckpoint must be <height>:<block hash>, not '%s'.", arg));
+        options.header_checkpoints[*height] = *hash;
+    }
 
     HandleDeploymentArgs(args, options.dep_opts);
 }

@@ -170,6 +170,15 @@ struct Params {
     int nAuxPowHeight{std::numeric_limits<int>::max()};
     int nAuxSeedWindow{4320};
     int nAuxNewSeedsPerWindow{4};
+    /**
+     * PQCH: header checkpoints, height -> block hash of blocks every release ships (Monero does the
+     * same). A header at a checkpoint height must have that hash; the headers of the chain that leads
+     * to it (proved by hashPrevBlock, as a block hash commits to its parent) are taken as having valid
+     * proof of work, so a new node does not compute a RandomX hash (~25 ms) for each of them: about
+     * 525,960 a year with one-minute blocks. Everything else in a header is still checked, and blocks
+     * are validated in full. Filled from a synced node with contrib/pqch/checkpoints.py.
+     */
+    std::map<int, uint256> header_checkpoints;
     /** PQCH: blocks a coinbase output must wait before it can be spent (Bitcoin: 100). */
     int nCoinbaseMaturity{100};
     int64_t nPowTargetSpacing;

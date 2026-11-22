@@ -11,6 +11,7 @@
 #include <atomic>
 #include <string>
 #include <functional>
+#include <optional>
 #include <memory>
 #include <span>
 #include <vector>
@@ -108,6 +109,27 @@ std::vector<uint256> RandomXSeedsForHeaders(int prev_height, const std::function
  */
 size_t PreverifyHeadersPow(std::span<const CBlockHeader> headers, std::span<const uint256> seeds,
                            const Consensus::Params& params, unsigned threads);
+
+/** PQCH: the hash a checkpoint fixes for `height` (Consensus::Params::header_checkpoints), if any. */
+std::optional<uint256> HeaderCheckpoint(const Consensus::Params& params, int height);
+/** PQCH: height of the last header checkpoint (0 without checkpoints). */
+int LastHeaderCheckpointHeight(const Consensus::Params& params);
+
+/**
+ * PQCH: marks the proof of work of a header as known to be valid because it is a checkpoint or leads
+ * to one; CheckHeaderProofOfWork then skips the RandomX hash (once: the mark is used up). Bounded.
+ */
+void AssumeHeaderPow(const uint256& id);
+bool IsHeaderPowAssumed(const uint256& id);
+
+/**
+ * PQCH: for a run of headers that extends a block at `prev_height`, finds the highest header at a
+ * checkpoint height whose hash is the checkpoint's and marks it and every header before it in the run
+ * (AssumeHeaderPow): each builds on the next, so they are that checkpoint's ancestors. Stops where the
+ * run is not one chain or a checkpoint does not match (validation rejects that header). Returns how
+ * many were marked.
+ */
+size_t AssumePowBelowCheckpoints(int prev_height, std::span<const CBlockHeader> headers, const Consensus::Params& params);
 
 /**
  * PQCH: Monero key rule for a merged mined header at pindexPrev->nHeight + 1 using `seed`
