@@ -102,6 +102,22 @@ BitcoinGUI::BitcoinGUI(interfaces::Node& node, const PlatformStyle *_platformSty
         // Restore failed (perhaps missing setting), center the window
         move(QGuiApplication::primaryScreen()->availableGeometry().center() - frameGeometry().center());
     }
+    // PQCH: a window saved as big as the screen (or bigger) has nothing to go back to: "restore" leaves it
+    // filling the screen, and its edges are at (or past) the screen's, so it cannot be resized either.
+    // Then open it at 80% of the screen, centred, keeping "maximized" if it was.
+    {
+        const bool maximized{isMaximized()};
+        if (maximized) setWindowState(windowState() & ~Qt::WindowMaximized);
+        QScreen* scr{QGuiApplication::screenAt(geometry().center())};
+        if (!scr) scr = QGuiApplication::primaryScreen();
+        const QRect avail{scr->availableGeometry()};
+        if (frameGeometry().width() >= avail.width() - 16 || frameGeometry().height() >= avail.height() - 16 ||
+            !avail.intersects(frameGeometry())) {
+            resize(std::max(minimumWidth(), avail.width() * 4 / 5), std::max(minimumHeight(), avail.height() * 4 / 5));
+            move(avail.center() - QPoint(width() / 2, height() / 2));
+        }
+        if (maximized) setWindowState(windowState() | Qt::WindowMaximized);
+    }
 
     setContextMenuPolicy(Qt::PreventContextMenu);
 
