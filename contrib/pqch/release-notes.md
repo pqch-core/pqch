@@ -3,6 +3,14 @@
 **PQCH {{VERSION}}**
 
 **Changes**
+In v0.3.6 (testnet; no change to which chain is valid):
+- Android wallet: if the network ever activates the ML-DSA emergency soft fork, the app switches to
+  the SLH-DSA recovery key by itself. A payment the node rejects for that reason is not sent; the app
+  signs the same payment again with the recovery key and asks for a new confirmation (the fee is
+  higher), and later payments use the recovery key from the start. New APK, signed with the release
+  key (certificate SHA-256 39:86:31:73:…:F3:D2:ED).
+- Light wallet core: create_tx can sign through the recovery leaf (recovery), with the fee for its size.
+
 In v0.3.5 (testnet; no change to which chain is valid):
 - Header checkpoints: every release ships the hash of one block in 500. A header at a checkpoint height
   must have that hash, and the headers that lead to it are not hashed with RandomX (about 25 ms each),
