@@ -3,6 +3,14 @@
 **PQCH {{VERSION}}**
 
 **Changes**
+In v0.3.4 (testnet; no consensus changes):
+- PQCH-Qt, Mining tab: fits narrow windows. The Start button moves to its own full-width row instead of
+  going off the right edge, the stat cards reflow to two columns, and the window is never narrower than
+  the tab bar.
+- PQCH-Qt: scroll bars in the logo violet, so it is obvious when a page scrolls.
+- PQCH-Qt, pool mode: "Your share" no longer says "one block every N minutes" (that is the solo
+  expectation); it says the pool's blocks pay by PPLNS.
+
 In v0.3.3 (testnet; no consensus changes):
 - Header sync no longer stalls the node: the RandomX proof of work of each batch of headers is checked
   before the chain lock is taken, in parallel on up to 8 cores, instead of under the lock (a minute per

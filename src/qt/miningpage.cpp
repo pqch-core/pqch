@@ -636,7 +636,10 @@ void MiningPage::refresh()
         const double share{std::min(1.0, local / std::max(m_network_hashps, local))};
         const double spacing{static_cast<double>(Params().GetConsensus().nPowTargetSpacing)};
         m_share->setText(QStringLiteral("%1%").arg(share * 100, 0, 'f', share < 0.01 ? 2 : 1));
-        m_share_sub->setText(tr("on average one block every %1").arg(FormatDuration(spacing / share)));
+        // Pool: the blocks are the pool's and every one pays a part to each miner with shares in the
+        // window, so "one block every N minutes" (the solo expectation) would mislead.
+        m_share_sub->setText(poolMode() ? tr("of the network · paid in the pool's blocks (PPLNS)")
+                                        : tr("on average one block every %1").arg(FormatDuration(spacing / share)));
     } else {
         m_share->setText(QStringLiteral("—"));
         m_share_sub->setText(tr("of the network"));
