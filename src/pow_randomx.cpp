@@ -379,6 +379,7 @@ bool CheckHeaderProofOfWork(const CBlockHeader& header, int height, const uint25
             return false;
         }
         if (TakeAssumedHeaderPow(header.GetHash())) return true; // PQCH: below a header checkpoint
+        if (TakePreverified(header.GetHash(), header.auxpow->seed_hash)) return true; // PreverifyNewAuxKeyPow
         // Monero's own proof of work: original RandomX before Monero hard fork 17, RandomX v2 from it.
         if (CheckProofOfWork(MoneroPowHash(header.auxpow->seed_hash, blob), header.nBits, params)) return true;
         error = "high-hash";
@@ -650,4 +651,40 @@ uint256 RandomXMiner::Hash(const CBlockHeader& header, const uint256& seed)
     uint256 out;
     randomx_calculate_hash(m_impl->vm, input.data(), input.size(), out.data());
     return out;
+}
+
+std::optional<bool> PreverifyNewAuxKeyPow(const CBlockHeader& header, const Consensus::Params& params)
+{
+    if (!params.fPowUseRandomX || !header.IsAuxPow() || !header.auxpow) return false;
+    std::vector<unsigned char> blob;
+    std::string detail;
+    if (!auxpow::CheckAuxPowHeader(*header.auxpow, header.GetHash(), params.hashGenesisBlock, blob, detail)) return false;
+    const uint256& seed{header.auxpow->seed_hash};
+    const std::span<const unsigned char> key{seed.data(), seed.size()};
+    // A cache of its own (~0.5 s, 256 MiB), outside the shared list: a key with fake work never
+    // takes the place of a cache in use.
+    std::shared_ptr<RxContext> ctx;
+    try {
+        ctx = std::make_shared<RxContext>(key);
+    } catch (const std::exception& e) {
+        LogWarning("RandomX: %s\n", e.what());
+        return std::nullopt;
+    }
+    const bool v2{!blob.empty() && blob[0] >= MONERO_HF_RANDOMX_V2};
+    uint256 hash;
+    {
+        std::lock_guard<std::mutex> lock(ctx->vm_mutex);
+        randomx_calculate_hash(v2 ? ctx->vm : ctx->vm_v1, blob.data(), blob.size(), hash.data());
+    }
+    if (v2) hash = RandomXCommitment(blob, hash);
+    if (!CheckProofOfWork(hash, header.nBits, params)) return false;
+    // Real work: the key is one Monero miners use. Validation takes the result instead of hashing
+    // again, and the cache joins the shared list for the blocks that follow under the same key.
+    AddPreverified(header.GetHash(), seed);
+    std::lock_guard<std::mutex> lock(g_rx_mutex);
+    if (std::none_of(g_rx_contexts.begin(), g_rx_contexts.end(), [&](const auto& c) { return std::ranges::equal(c->key, key); })) {
+        g_rx_contexts.push_front(ctx);
+        while (g_rx_contexts.size() > MAX_RX_CONTEXTS) g_rx_contexts.pop_back();
+    }
+    return true;
 }

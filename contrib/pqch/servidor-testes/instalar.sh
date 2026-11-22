@@ -18,7 +18,7 @@ FUNCAO="${1:-}"
 [[ "$FUNCAO" == vigiar || "$FUNCAO" == minerar ]] || { echo "uso: sudo $0 vigiar|minerar" >&2; exit 1; }
 KALI=0; grep -q '^ID=kali' /etc/os-release && KALI=1
 RAM_GB=$(( $(awk '/MemTotal/{print $2}' /proc/meminfo) / 1024 / 1024 ))
-VERSAO="${PQCH_VERSAO:-0.3.6}"
+VERSAO="${PQCH_VERSAO:-0.3.7}"
 FPR="1CDFA6A84A35AA6D7B524D1CFB6E21DF0D38B5DA"   # chave de assinatura das versões (pqch-releases.asc)
 REPO="https://github.com/pqch-core/pqch"
 NPROC="$(nproc)"

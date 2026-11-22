@@ -3,6 +3,14 @@
 **PQCH {{VERSION}}**
 
 **Changes**
+In v0.3.7 (testnet; no change to which chain is valid):
+- Merged mining from home: a node now checks a header with a new Monero key from an inbound peer too,
+  at most one a minute, with a RandomX cache of its own and outside the main lock. Before, such headers
+  were only checked from outbound peers, so a merged miner whose node only connects out (behind a home
+  router, the usual case for P2Pool miners) never got its blocks accepted by the network. A header with
+  fake work is refused, its sender punished, and no cache in use is pushed out.
+- Installer (Windows): no "test signet" or "testnet4" shortcuts (PQCH has neither network).
+
 In v0.3.6 (testnet; no change to which chain is valid):
 - Android wallet: if the network ever activates the ML-DSA emergency soft fork, the app switches to
   the SLH-DSA recovery key by itself. A payment the node rejects for that reason is not sent; the app

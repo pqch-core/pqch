@@ -132,6 +132,14 @@ bool IsHeaderPowAssumed(const uint256& id);
 size_t AssumePowBelowCheckpoints(int prev_height, std::span<const CBlockHeader> headers, const Consensus::Params& params);
 
 /**
+ * PQCH: checks the Monero proof of work of a merged mined header whose Monero key has no cache yet,
+ * with a cache of its own and without cs_main (net_processing: a new key from an inbound peer). Only a
+ * header with real work makes its key's cache join the shared ones (and marks the header as checked
+ * for CheckHeaderProofOfWork). nullopt: could not check (no memory for the cache).
+ */
+std::optional<bool> PreverifyNewAuxKeyPow(const CBlockHeader& header, const Consensus::Params& params);
+
+/**
  * PQCH: Monero key rule for a merged mined header at pindexPrev->nHeight + 1 using `seed`
  * (Consensus::Params::nAuxSeedWindow). Sets `is_new` when no block of the window on this chain
  * introduced the key. Fails ("auxpow-too-many-seeds") if a new key would exceed the window's limit.

@@ -802,6 +802,16 @@ private:
      */
     bool NeedsNewAuxKey(const CBlockHeader& header) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
     static bool MayVerifyNewAuxKey(const CNode& node) { return !node.IsInboundConn() || node.HasPermission(NetPermissionFlags::NoBan); }
+    /**
+     * PQCH: an inbound peer may still make us check one new Monero key, at most once a minute for the
+     * whole node (PreverifyNewAuxKeyPow: its own cache, without cs_main). Without this a merged miner
+     * whose node only makes outbound connections (behind a home router, the usual case) could never
+     * get its first block under a new key accepted: its peers see it as inbound and nobody else has
+     * the block to relay. Bounded cost for an attacker: ~0.5 s of one core and 256 MiB a minute.
+     */
+    bool TakeInboundAuxKeyCheck();
+    std::atomic<int64_t> m_last_inbound_aux_key_check{std::numeric_limits<int64_t>::min()};
+    static constexpr std::chrono::seconds INBOUND_NEW_AUX_KEY_INTERVAL{60};
 
     /** Request further headers from this peer with a given locator.
      * We don't issue a getheaders message if we have a recent one outstanding.
@@ -3102,6 +3112,16 @@ bool PeerManagerImpl::NeedsNewAuxKey(const CBlockHeader& header)
     return is_new;
 }
 
+bool PeerManagerImpl::TakeInboundAuxKeyCheck()
+{
+    const int64_t now{TicksSinceEpoch<std::chrono::seconds>(NodeClock::now())};
+    int64_t last{m_last_inbound_aux_key_check.load()};
+    do {
+        if (last != std::numeric_limits<int64_t>::min() && now - last < INBOUND_NEW_AUX_KEY_INTERVAL.count()) return false;
+    } while (!m_last_inbound_aux_key_check.compare_exchange_weak(last, now));
+    return true;
+}
+
 bool PeerManagerImpl::IsAncestorOfBestHeaderOrTip(const CBlockIndex* header)
 {
     if (header == nullptr) {
@@ -3367,12 +3387,31 @@ void PeerManagerImpl::ProcessHeadersMessage(CNode& pfrom, Peer& peer,
     // At this point, we have a set of headers with sufficient work on them
     // which can be processed.
 
-    // PQCH: a new Monero key is only checked when a peer we chose or trust sends it (NeedsNewAuxKey).
+    // PQCH: a new Monero key is checked when a peer we chose or trust sends it (NeedsNewAuxKey); from
+    // another peer, one header with a new key a minute is checked first, outside cs_main.
     if (!MayVerifyNewAuxKey(pfrom)) {
-        LOCK(cs_main);
-        if (std::ranges::any_of(headers, [&](const CBlockHeader& h) { return NeedsNewAuxKey(h); })) {
-            LogDebug(BCLog::NET, "Ignoring headers with a new Monero RandomX key from inbound peer=%d (waiting for an outbound peer to relay them)\n", pfrom.GetId());
-            return;
+        const CBlockHeader* first{nullptr};
+        bool other_keys{false};
+        {
+            LOCK(cs_main);
+            for (const CBlockHeader& h : headers) {
+                if (!NeedsNewAuxKey(h)) continue;
+                if (!first) first = &h;
+                else if (h.auxpow->seed_hash != first->auxpow->seed_hash) other_keys = true;
+            }
+        }
+        if (first) {
+            if (other_keys || !TakeInboundAuxKeyCheck()) {
+                LogDebug(BCLog::NET, "Ignoring headers with a new Monero RandomX key from inbound peer=%d (checked at most once a minute)\n", pfrom.GetId());
+                return;
+            }
+            const auto valid{PreverifyNewAuxKeyPow(*first, m_chainman.GetConsensus())};
+            if (!valid) return; // could not check (no memory): ignored, no penalty
+            if (!*valid) {
+                Misbehaving(peer, "header with a new Monero RandomX key and invalid merged mining proof of work");
+                return;
+            }
+            LogDebug(BCLog::NET, "Checked a new Monero RandomX key from inbound peer=%d: real work\n", pfrom.GetId());
         }
     }
 
@@ -4868,8 +4907,9 @@ void PeerManagerImpl::ProcessMessage(Peer& peer, CNode& pfrom, const std::string
             LogDebug(BCLog::NET, "Ignoring low-work compact block from peer %d\n", pfrom.GetId());
             return;
         } else if (!MayVerifyNewAuxKey(pfrom) && NeedsNewAuxKey(cmpctblock.header)) {
-            // PQCH: see NeedsNewAuxKey
-            LogDebug(BCLog::NET, "Ignoring compact block with a new Monero RandomX key from inbound peer=%d\n", pfrom.GetId());
+            // PQCH: see NeedsNewAuxKey. Ask for the headers instead: that path may check the key.
+            LogDebug(BCLog::NET, "Compact block with a new Monero RandomX key from inbound peer=%d: asking for its headers\n", pfrom.GetId());
+            MaybeSendGetHeaders(pfrom, GetLocator(m_chainman.m_best_header), peer);
             return;
         }
 

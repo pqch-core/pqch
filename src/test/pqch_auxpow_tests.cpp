@@ -816,8 +816,11 @@ BOOST_AUTO_TEST_CASE(new_monero_key_only_checked_from_chosen_peers)
 
     CNode& inbound{make_peer(ConnectionType::INBOUND)};
     CNode& outbound{make_peer(ConnectionType::OUTBOUND_FULL_RELAY)};
+    auto now{GetTime<std::chrono::seconds>()};
+    SetMockTime(now);
 
-    // Fake work, new key, from an inbound peer: not checked (no cache), not stored, no penalty.
+    // Fake work, new key, from an inbound peer: checked with a cache of its own (one a minute), refused
+    // and the peer punished; the key's cache does not join the shared ones.
     const uint256 key_a{Tagged(0xc1)};
     const CBlock fake{make_block(key_a, /*valid_work=*/false)};
     forget_keys();
@@ -825,7 +828,8 @@ BOOST_AUTO_TEST_CASE(new_monero_key_only_checked_from_chosen_peers)
     send_headers(inbound, fake);
     BOOST_CHECK(!key_cached(key_a));
     BOOST_CHECK(!known(fake));
-    BOOST_CHECK(!punished(inbound));
+    BOOST_CHECK(punished(inbound));
+    for (uint8_t t = 0xd4; t < 0xd8; ++t) BOOST_CHECK(key_cached(Tagged(t))); // no cache in use was pushed out
 
     // The same header from an outbound peer is checked: refused, and the peer is punished.
     send_headers(outbound, fake);
@@ -833,21 +837,34 @@ BOOST_AUTO_TEST_CASE(new_monero_key_only_checked_from_chosen_peers)
     BOOST_CHECK(!known(fake));
     BOOST_CHECK(punished(outbound));
 
-    // A real block with a new key: waits for an outbound peer, then is accepted.
+    // A real block with a new key from an inbound peer (a merged miner whose node only connects out):
+    // within the same minute it waits, without penalty; a minute later it is checked and accepted.
     CNode& inbound2{make_peer(ConnectionType::INBOUND)};
-    CNode& outbound2{make_peer(ConnectionType::OUTBOUND_FULL_RELAY)};
     const uint256 key_b{Tagged(0xc2)};
     const CBlock real{make_block(key_b, /*valid_work=*/true)};
     forget_keys();
     send_headers(inbound2, real);
     BOOST_CHECK(!known(real));
     BOOST_CHECK(!key_cached(key_b));
-    send_headers(outbound2, real);
+    BOOST_CHECK(!punished(inbound2));
+    now += 61s;
+    SetMockTime(now);
+    send_headers(inbound2, real);
     BOOST_CHECK(known(real));
-    BOOST_CHECK(!punished(outbound2));
-    // Now the key is known: the same header from the inbound peer is fine.
+    BOOST_CHECK(key_cached(key_b));
+    BOOST_CHECK(!punished(inbound2));
+    // Now the key is known: the same header again is fine, at any time.
     send_headers(inbound2, real);
     BOOST_CHECK(!punished(inbound2));
+
+    // From an outbound peer a new key is checked at once, whatever the minute.
+    CNode& outbound2{make_peer(ConnectionType::OUTBOUND_FULL_RELAY)};
+    const uint256 key_d{Tagged(0xc4)};
+    const CBlock real_d{make_block(key_d, /*valid_work=*/true)};
+    forget_keys();
+    send_headers(outbound2, real_d);
+    BOOST_CHECK(known(real_d));
+    BOOST_CHECK(!punished(outbound2));
 
     // An unrequested full block with a new key from an inbound peer is ignored as well.
     const uint256 key_c{Tagged(0xc3)};
@@ -866,6 +883,7 @@ BOOST_AUTO_TEST_CASE(new_monero_key_only_checked_from_chosen_peers)
     BOOST_CHECK(known(real_c));
 
     for (auto& node : peers) m_node.peerman->FinalizeNode(*node);
+    SetMockTime(0s);
 }
 
 // A PQCH block merge mined with a Monero block after hard fork 17: Carrot coinbase, FCMP++ tree

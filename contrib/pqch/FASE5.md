@@ -196,3 +196,15 @@ ou mais, tanto em `BuildFromMoneroBlock` como em `CheckAuxPowCoinbase`. Testes:
   honestos retransmitem blocos válidos). Aplica-se a `headers`, `cmpctblock` e a blocos não pedidos.
   Uma chave nova legítima aparece cerca de uma vez a cada 3 dias. Teste:
   `pqch_auxpow_chain_tests/new_monero_key_only_checked_from_chosen_peers` (falha sem a defesa).
+- **Correção de 22 nov. 2026 (0.3.7).** A testnet mostrou o limite dessa defesa: o servidor de casa
+  minerava em conjunto com o P2Pool e o seu nó só faz ligações de saída (atrás do router, sem portas
+  abertas, como quase todos os mineradores do P2Pool). Para a âncora e a VPS ele é um par de entrada,
+  e ninguém mais tinha os blocos para os retransmitir: os blocos com a chave Monero nova eram
+  ignorados e perdiam sempre (0 de 1.440 num dia; ramos laterais de 1 a 2 blocos a cada ~10 blocos).
+  Agora, de um par de entrada sem `noban`, o nó verifica **um** cabeçalho com chave nova por minuto
+  (para todo o nó), com uma cache própria e fora do `cs_main` (`PreverifyNewAuxKeyPow`): com trabalho
+  falso, o par é castigado e nenhuma cache em uso é afastada; com trabalho real, a cache entra na
+  lista partilhada e a validação usa o resultado sem voltar a calcular. Os outros cabeçalhos com chave
+  nova nesse minuto esperam, sem castigo; um bloco compacto com chave nova faz o nó pedir os
+  cabeçalhos. Custo máximo para um atacante: ~0,5 s de um núcleo e 256 MiB por minuto. O teste acima
+  passou a cobrir o par de entrada (verificado uma vez por minuto) e que as caches em uso ficam.
