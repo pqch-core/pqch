@@ -114,7 +114,10 @@ class RejectLowDifficultyHeadersTest(BitcoinTestFramework):
         check_node3_chaintips(2, self.nodes[0].getbestblockhash(), NODE1_BLOCKS_REQUIRED)
 
         self.log.info("Generate long chain for node0/node1/node3")
-        self.generate(self.nodes[0], NODE2_BLOCKS_REQUIRED-self.nodes[0].getblockcount(), sync_fun=self.no_op)
+        # PQCH: in batches. Each block is a RandomX proof checked by four nodes, so 2000 blocks in one call
+        # take longer than the RPC timeout on a small machine (2 cores: about 12 blocks a second).
+        while self.nodes[0].getblockcount() < NODE2_BLOCKS_REQUIRED:
+            self.generate(self.nodes[0], min(250, NODE2_BLOCKS_REQUIRED - self.nodes[0].getblockcount()), sync_fun=self.no_op)
 
         self.log.info("Verify that node2 and node3 will sync the chain when it gets long enough")
         self.sync_blocks()
