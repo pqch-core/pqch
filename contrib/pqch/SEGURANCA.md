@@ -62,8 +62,15 @@ o aviso de «regras desconhecidas» nos nós desta versão.
 
 **As carteiras.** Quando a regra está ativa, a carteira do PQCH Core passa a gastar pela folha de
 recuperação sem nada a configurar (`send`, `sendtoaddress`, `sendall`, PSBT), e calcula a taxa para o
-tamanho maior da assinatura SLH-DSA (~7,9 kB). A carteira Android ainda não muda sozinha: fica para a
-próxima versão da app, com a opção de recuperação que já existe no núcleo.
+tamanho maior da assinatura SLH-DSA (~7,9 kB). A carteira Android (desde 22 nov. 2026) também muda
+sozinha: não consegue perguntar ao nó o estado da implantação (fala com a API da testnet ou do
+explorador), por isso aprende-o da resposta ao primeiro pagamento. Quando o nó recusa o pagamento
+com «ML-DSA signatures are disabled», nada foi enviado; a app guarda isso para esta rede, assina o
+mesmo pagamento outra vez pela folha de recuperação (`create_tx` com `recovery`) e mostra-o de novo
+para confirmar, porque a taxa é maior. Os pagamentos seguintes já saem pela folha de recuperação.
+Testes: `wallet_pqch_lightwallet.py` (a transação pela folha B é válida e paga a taxa do seu
+tamanho) e `feature_pqch_mldsa_emergency.py` (depois da ativação, o nó recusa a transação híbrida do
+núcleo da app com essa frase e aceita a da folha B).
 
 **Procedimento, se for preciso usá-lo.**
 1. Confirmar a falha com a equipa e com quem a reportou (canal privado, `SECURITY.md`).

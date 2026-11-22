@@ -63,6 +63,13 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/** What the node answers to a hybrid spend once the ML-DSA emergency soft fork is active. */
+const val MLDSA_DISABLED = "ML-DSA signatures are disabled"
+
+const val RECOVERY_NOTICE = "The PQCH network has switched off ML-DSA signatures (emergency soft fork) and the payment was " +
+    "not sent. Your coins are safe: this wallet now signs with its recovery key (SLH-DSA), which is larger, so the fee " +
+    "is higher. Check the new amounts and send again."
+
 sealed interface Screen {
     data object Welcome : Screen
     data class ShowNewWords(val words: String) : Screen
@@ -73,7 +80,7 @@ sealed interface Screen {
     data object Home : Screen
     data object Receive : Screen
     data object Send : Screen
-    data class Review(val tx: JSONObject, val to: String, val sendAll: Boolean) : Screen
+    data class Review(val tx: JSONObject, val to: String, val sendAll: Boolean, val notice: String? = null) : Screen
     data class Sent(val txid: String) : Screen
     data object Settings : Screen
     data object RevealWords : Screen
@@ -227,14 +234,35 @@ class AppModel(val vault: Vault) {
             .put("change_index", s.changeIndex)
             .put("send_all", sendAll)
             .put("locktime", s.tipHeight)
+            .put("recovery", vault.mldsaDisabled)
         if (!sendAll) request.put("amount", amount ?: throw CoreException("Enter the amount."))
         val tx = withContext(Dispatchers.Default) { Core.createTx(k, request) }
+        lastRequest = request
         go(Screen.Review(tx, to.trim(), sendAll))
     }
 
+    /** The request behind the transaction on the Review screen (to sign it again another way). */
+    private var lastRequest: JSONObject? = null
+
     fun broadcast(tx: JSONObject) = task {
         val api = this.api
-        val txid = withContext(Dispatchers.IO) { api.broadcast(tx.getString("hex")) }
+        val txid = try {
+            withContext(Dispatchers.IO) { api.broadcast(tx.getString("hex")) }
+        } catch (e: ApiException) {
+            // The ML-DSA emergency soft fork is active (the node says so): from now on this wallet signs
+            // with its SLH-DSA recovery key. The same payment is signed again that way and shown for a
+            // new confirmation, because its fee is higher. Nothing was sent.
+            val request = lastRequest
+            val screen = this.screen
+            if (!(e.message ?: "").contains(MLDSA_DISABLED) || request == null || screen !is Screen.Review || tx.optBoolean("recovery")) throw e
+            vault.mldsaDisabled = true
+            val k = keys ?: throw e
+            val again = JSONObject(request.toString()).put("recovery", true)
+            val signed = withContext(Dispatchers.Default) { Core.createTx(k, again) }
+            lastRequest = again
+            go(Screen.Review(signed, screen.to, screen.sendAll, RECOVERY_NOTICE))
+            return@task
+        }
         go(Screen.Sent(txid))
         try {
             refreshNow()

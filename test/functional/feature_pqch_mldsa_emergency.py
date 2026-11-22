@@ -10,7 +10,13 @@
   a block, even when it was signed before activation.
 - The wallet then spends through the SLH-DSA recovery leaf by itself (send, sendall).
 - A node that does not signal enforces the rule too.
+- The light wallet core (libpqchwallet, used by the Android app): its hybrid spend is rejected with
+  "ML-DSA signatures are disabled" (what the app looks for), and with recovery=True it is accepted.
 """
+
+import ctypes
+import json
+import os
 
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.util import assert_equal, assert_raises_rpc_error
@@ -105,6 +111,44 @@ class PQCHMLDSAEmergencyTest(BitcoinTestFramework):
         assert all(s == (3, SLHDSA128S_SIG_SIZE) for s in self.witness_sizes(node, res["txid"]))
         self.generatetoaddress(node, 1, w.getnewaddress())
         assert_equal(other.get_wallet_rpc("o").getbalances()["mine"]["trusted"] > 0, True)
+
+        self.log.info("Light wallet (Android): the hybrid spend is refused with the reason the app looks for; recovery=True is accepted")
+        path = os.path.join(self.config["environment"]["BUILDDIR"], "lib", "libpqchwallet.so")
+        if not os.path.exists(path):
+            self.log.info("libpqchwallet.so not built: skipped")
+            return
+        lib = ctypes.CDLL(path)
+        lib.pqchw_call.restype = ctypes.c_void_p
+        lib.pqchw_call.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
+        lib.pqchw_free.argtypes = [ctypes.c_void_p]
+
+        def lw(method, **params):
+            ptr = lib.pqchw_call(method.encode(), json.dumps(params).encode())
+            try:
+                out = json.loads(ctypes.string_at(ptr).decode())
+            finally:
+                lib.pqchw_free(ptr)
+            assert "error" not in out, out
+            return out["result"]
+
+        lw("init", chain="regtest")
+        words = lw("new_mnemonic")["mnemonic"]
+        address = lw("addresses", mnemonic=words, branch=0, **{"from": 0}, count=1)[0]["address"]
+        txid = w.sendtoaddress(address, 4)
+        out = next(o for o in w.decoderawtransaction(w.gettransaction(txid)["hex"])["vout"] if o["scriptPubKey"].get("address") == address)
+        self.generatetoaddress(node, 1, w.getnewaddress())
+        coins = [{"txid": txid, "vout": out["n"], "value": round(out["value"] * 100_000_000), "branch": 0, "index": 0}]
+        dest = other.get_wallet_rpc("o").getnewaddress()
+        hybrid = lw("create_tx", mnemonic=words, utxos=coins, to=dest, amount=100_000_000, fee_rate=1, change_index=0)
+        res = node.testmempoolaccept([hybrid["hex"]])[0]
+        assert not res["allowed"]
+        self.log.info(f"  reject reason: {res['reject-reason']}")
+        assert "ML-DSA signatures are disabled" in res["reject-reason"], res
+        assert_raises_rpc_error(-26, "ML-DSA signatures are disabled", node.sendrawtransaction, hybrid["hex"])
+        recovery = lw("create_tx", mnemonic=words, utxos=coins, to=dest, amount=100_000_000, fee_rate=1, change_index=0, recovery=True)
+        assert_equal(node.sendrawtransaction(recovery["hex"]), recovery["txid"])
+        self.generatetoaddress(node, 1, w.getnewaddress())
+        assert recovery["txid"] not in node.getrawmempool()  # mined
 
 if __name__ == '__main__':
     PQCHMLDSAEmergencyTest(__file__).main()

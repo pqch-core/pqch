@@ -169,13 +169,14 @@ CAmount Dust(const CScript& script)
 }
 
 /** Virtual size of a transaction spending `inputs` standard P2MR outputs (hybrid leaf) to `outputs`. */
-int64_t EstimateVSize(size_t inputs, const std::vector<CTxOut>& outputs)
+/** `recovery`: inputs signed through the SLH-DSA recovery leaf (after the ML-DSA emergency soft fork). */
+int64_t EstimateVSize(size_t inputs, const std::vector<CTxOut>& outputs, bool recovery)
 {
     CMutableTransaction tx;
     tx.vin.resize(inputs);
     tx.vout = outputs;
     const int64_t base{static_cast<int64_t>(GetSerializeSize(TX_NO_WITNESS(tx)))};
-    const int64_t weight{base * WITNESS_SCALE_FACTOR + 2 /* marker and flag */ + static_cast<int64_t>(inputs) * p2mr::HybridWitnessSize(false)};
+    const int64_t weight{base * WITNESS_SCALE_FACTOR + 2 /* marker and flag */ + static_cast<int64_t>(inputs) * (recovery ? p2mr::RecoveryWitnessSize(false) : p2mr::HybridWitnessSize(false))};
     return (weight + WITNESS_SCALE_FACTOR - 1) / WITNESS_SCALE_FACTOR;
 }
 
@@ -320,6 +321,9 @@ UniValue CreateTx(const UniValue& p)
     const CScript change_script{Derive(*branches[1], change_index, provider)};
     const CAmount dust_to{Dust(to)};
     const CAmount dust_change{Dust(change_script)};
+    // PQCH: after the ML-DSA emergency soft fork (SEGURANCA.md) the coins can only be spent through the
+    // SLH-DSA recovery leaf: larger inputs (~7.9 kB of witness), so a higher fee for the same rate.
+    const bool recovery{GetBoolOr(p, "recovery", false)};
 
     // Selection: the first k coins (largest first) that pay amount and fee.
     size_t used{0};
@@ -328,8 +332,8 @@ UniValue CreateTx(const UniValue& p)
     for (size_t k{1}; k <= utxos.size() && used == 0; ++k) {
         total += utxos[k - 1].value;
         if (send_all && k < utxos.size()) continue; // send_all spends every coin
-        const CAmount fee_with_change{FeeFor(fee_rate, EstimateVSize(k, {CTxOut(0, to), CTxOut(0, change_script)}))};
-        const CAmount fee_without{FeeFor(fee_rate, EstimateVSize(k, {CTxOut(0, to)}))};
+        const CAmount fee_with_change{FeeFor(fee_rate, EstimateVSize(k, {CTxOut(0, to), CTxOut(0, change_script)}, recovery))};
+        const CAmount fee_without{FeeFor(fee_rate, EstimateVSize(k, {CTxOut(0, to)}, recovery))};
         if (subtract_fee) {
             const CAmount target{send_all ? total : amount};
             if (total < target) continue;
@@ -384,7 +388,9 @@ UniValue CreateTx(const UniValue& p)
         if (FastRandomContext().randbool()) std::swap(mtx.vout[0], mtx.vout[1]);
     }
     std::map<int, bilingual_str> errors;
-    if (!SignTransaction(mtx, &provider, coins, SignOptions{}, errors) || !errors.empty()) {
+    SignOptions sign_options;
+    sign_options.p2mr_recovery = recovery;
+    if (!SignTransaction(mtx, &provider, coins, sign_options, errors) || !errors.empty()) {
         throw Error("signing failed: " + (errors.empty() ? std::string{"unknown"} : errors.begin()->second.original));
     }
     const CTransaction tx{mtx};
@@ -397,6 +403,7 @@ UniValue CreateTx(const UniValue& p)
     r.pushKV("fee", fee);
     r.pushKV("vsize", vsize);
     r.pushKV("amount", pay);
+    r.pushKV("recovery", recovery);
     r.pushKV("inputs", std::move(inputs));
     if (change > 0) {
         UniValue c(UniValue::VOBJ);

@@ -539,6 +539,7 @@ fun ReviewScreen(m: AppModel, s: Screen.Review) {
     val amount = tx.getLong("amount")
     val fee = tx.getLong("fee")
     Page(if (s.sendAll) "Confirm: send everything" else "Confirm the payment", m, back = { m.go(Screen.Send) }) {
+        s.notice?.let { Warning(it) }
         if (s.sendAll) Warning("You are sending the WHOLE BALANCE of this wallet. The wallet will be empty afterwards.")
         Panel {
             Text("TO", color = Muted, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
@@ -547,6 +548,7 @@ fun ReviewScreen(m: AppModel, s: Screen.Review) {
             ReviewLine(if (s.sendAll) "Amount (everything)" else "Amount", "${formatPqch(amount)} PQCH", Ink)
             ReviewLine("Fee", "${formatPqch(fee)} PQCH", Muted)
             ReviewLine("Size", "${tx.getLong("vsize")} vB", Muted)
+            if (tx.optBoolean("recovery")) ReviewLine("Signed with", "recovery key (SLH-DSA)", Muted)
             Box(Modifier.fillMaxWidth().padding(vertical = 8.dp).height(1.dp).background(Line))
             ReviewLine("Total", "${formatPqch(amount + fee)} PQCH", Cyan)
         }

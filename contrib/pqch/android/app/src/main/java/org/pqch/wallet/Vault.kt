@@ -43,6 +43,14 @@ class Vault(context: Context) {
         get() = prefs.getString("server_$network", null) ?: defaultServer(network)
         set(v) = prefs.edit().putString("server_$network", v.trim()).apply()
 
+    /**
+     * The network has activated the ML-DSA emergency soft fork (contrib/pqch/SEGURANCA.md): coins can only
+     * be spent through the SLH-DSA recovery key. Learnt from the node's answer to a payment; kept per network.
+     */
+    var mldsaDisabled: Boolean
+        get() = prefs.getBoolean("mldsa_disabled_$network", false)
+        set(v) = prefs.edit().putBoolean("mldsa_disabled_$network", v).apply()
+
     val hasWallet: Boolean get() = prefs.contains("blob")
 
     val walletId: String? get() = prefs.getString("wallet_id", null)

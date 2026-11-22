@@ -154,6 +154,23 @@ class PQCHLightWalletTest(BitcoinTestFramework):
         self.generatetoaddress(node, 1, other.getnewaddress())
         assert_equal(int(other.getreceivedbyaddress(to) * COIN), 5 * COIN - tx["fee"])
 
+        self.log.info("Through the SLH-DSA recovery leaf (after the ML-DSA emergency soft fork): valid, with the fee for its size")
+        coins = utxos()
+        to = other.getnewaddress()
+        hybrid = lw.call("create_tx", mnemonic=words, utxos=coins, to=to, amount=COIN, fee_rate=1, change_index=2)
+        tx = lw.call("create_tx", mnemonic=words, utxos=coins, to=to, amount=COIN, fee_rate=1, change_index=2, recovery=True)
+        assert tx["recovery"] and not hybrid["recovery"]
+        assert_greater_than(tx["vsize"], hybrid["vsize"] + 1000)  # a 7856-byte SLH-DSA signature per input
+        accept = node.testmempoolaccept([tx["hex"]])[0]
+        assert accept["allowed"], accept
+        assert_equal(accept["vsize"], tx["vsize"])
+        assert_greater_than(tx["fee"], tx["vsize"] - 1)
+        decoded = node.decoderawtransaction(tx["hex"])
+        assert all(len(i["txinwitness"]) == 3 and len(bytes.fromhex(i["txinwitness"][0])) == 7856 for i in decoded["vin"])
+        node.sendrawtransaction(tx["hex"])
+        self.generatetoaddress(node, 1, other.getnewaddress())
+        assert_equal(other.getreceivedbyaddress(to), Decimal(1))
+
         self.log.info("Mistakes are refused")
         coins = utxos()
         assert "insufficient funds" in lw.error("create_tx", mnemonic=words, utxos=coins, to=to, amount=10_000 * COIN, fee_rate=1, change_index=2)

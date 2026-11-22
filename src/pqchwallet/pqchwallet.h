@@ -27,8 +27,12 @@
  *                  → [{index, address, script}]
  *   check_address  {address} → {valid, script?, error?}
  *   create_tx      {mnemonic, passphrase?, utxos: [{txid, vout, value, branch, index}],
- *                   to, amount, fee_rate (quanta/vB), change_index, subtract_fee?, send_all?, locktime?}
- *                  → {hex, txid, fee, vsize, amount, inputs: ["txid:vout"], change: {address, value}|null}
+ *                   to, amount, fee_rate (quanta/vB), change_index, subtract_fee?, send_all?, locktime?,
+ *                   recovery?}
+ *                  → {hex, txid, fee, vsize, amount, recovery, inputs: ["txid:vout"], change: {address, value}|null}
+ *                  recovery: sign through the SLH-DSA recovery leaf, the only way to spend once the ML-DSA
+ *                  emergency soft fork is active (the node then rejects hybrid spends with
+ *                  "ML-DSA signatures are disabled"; contrib/pqch/SEGURANCA.md).
  * Amounts are integers in quanta (1 PQCH = 100,000,000 quanta).
  *
  * Calls are serialised: it is safe to call from several threads.
