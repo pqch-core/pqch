@@ -21,6 +21,7 @@ ap.add_argument("--rede", choices=["main", "testnet", "regtest"], default="main"
 ap.add_argument("--cli", default="pqch-cli", help="pqch-cli command, with its options (datadir, rpcport, ...)")
 ap.add_argument("--intervalo", type=int, default=500)
 ap.add_argument("--margem", type=int, default=1440)
+ap.add_argument("--ate", type=int, help="last height (so that two nodes give the same output)")
 args = ap.parse_args()
 
 cli = shlex.split(args.cli) + ([] if args.rede == "main" else [f"-{args.rede}"])
@@ -32,7 +33,11 @@ def rpc(*params):
 
 tip = int(rpc("getblockcount"))
 last = (tip - args.margem) // args.intervalo * args.intervalo
-print(f"        // Header checkpoints: every {args.intervalo} blocks up to {last} (tip {tip}), contrib/pqch/checkpoints.py")
+if args.ate is not None:
+    if args.ate > tip - args.margem:
+        raise SystemExit(f"--ate {args.ate} is too close to the tip ({tip}); at most {tip - args.margem}")
+    last = args.ate // args.intervalo * args.intervalo
+print(f"        // Header checkpoints: every {args.intervalo} blocks up to {last}, contrib/pqch/checkpoints.py")
 print("        consensus.header_checkpoints = {")
 for height in range(args.intervalo, last + 1, args.intervalo):
     print(f'            {{{height}, uint256{{"{rpc("getblockhash", height)}"}}}},')
