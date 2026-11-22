@@ -211,6 +211,13 @@ Dois nós vão servir de entrada à testnet aberta. São também as sementes fix
 | Âncora | 187.127.89.83 | 10.77.0.1 | centro da VPN e da rede do pool (porta 37890, stratum público 37889); **não mina** (VPS com CPU por créditos: acima de 60% esgota-os em ~3 h e fica limitada a 30%) |
 | VPS pública | 72.61.20.80 | 10.77.0.20 | partilha a máquina com um site (nginx); não mina, sem carteira |
 
+Máquinas de casa (IP reservados no router a 17 nov. 2026; ver `servidor-testes/README.md`):
+
+| Máquina | SSH (rede de casa) | Na VPN | Função |
+|---|---|---|---|
+| Portátil i5-2435M (`cesar@NOSdrive`, Kali) | `ssh -i $HOME\.ssh\id_pqch cesar@192.168.1.233` | 10.77.0.11 | vigilância da testnet e fuzzing contínuo (`sudo /usr/local/bin/pqch-estado`); o antigo nó minerador (`pqchd-testnet`, `pqch-minerar-testnet`) está parado de propósito |
+| Portátil Kali (`sparta`) | — | 10.77.0.10 | nó do pool com 8 threads; carteira PQCH-Qt em modo pool |
+
 **Fase A (agora):** a VPS é um membro da VPN como os outros. O nó escuta só em `10.77.0.20`, não
 anuncia o IP e liga-se à âncora. Instalação feita com os binários assinados da release (conferidos
 com `gpg --verify` e `sha256sum -c`), sem compilar na máquina:
