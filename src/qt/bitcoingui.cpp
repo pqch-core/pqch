@@ -691,6 +691,8 @@ void BitcoinGUI::createToolBars()
         toolbar->setMovable(false);
         toolbar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
         toolbar->setStyleSheet(PQCHStyle::ToolbarSheet());
+        // PQCH: violet scroll bars everywhere (the application's sheet reaches every window and dialog).
+        if (!qApp->styleSheet().contains(QLatin1String("QScrollBar"))) qApp->setStyleSheet(qApp->styleSheet() + PQCHStyle::ScrollBarSheet());
         toolbar->addAction(overviewAction);
         toolbar->addAction(sendCoinsAction);
         toolbar->addAction(receiveCoinsAction);
@@ -734,6 +736,8 @@ void BitcoinGUI::createToolBars()
         brand_layout->addWidget(brand_name);
         brand->setToolTip(tr("PQCH — PostQuantum Cash"));
         toolbar->addWidget(brand);
+        // PQCH: never narrower than the tabs, or the last ones (Mining) disappear off the right edge.
+        setMinimumWidth(std::max(minimumWidth(), toolbar->sizeHint().width() + 8));
     }
 }
 

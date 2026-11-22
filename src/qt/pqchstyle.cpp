@@ -31,6 +31,22 @@ bool IsDark()
     return QApplication::palette().color(QPalette::Window).lightness() < 128;
 }
 
+QString ScrollBarSheet()
+{
+    const bool dark{IsDark()};
+    const QString track{dark ? QStringLiteral("#2e1065") : QStringLiteral("#ede9fe")};
+    return QStringLiteral(R"(
+        QScrollBar:vertical { background: %1; width: 14px; margin: 0; border: none; border-radius: 7px; }
+        QScrollBar:horizontal { background: %1; height: 14px; margin: 0; border: none; border-radius: 7px; }
+        QScrollBar::handle:vertical { background: #7c3aed; min-height: 36px; margin: 2px; border-radius: 5px; }
+        QScrollBar::handle:horizontal { background: #7c3aed; min-width: 36px; margin: 2px; border-radius: 5px; }
+        QScrollBar::handle:hover { background: #8b5cf6; }
+        QScrollBar::handle:pressed { background: #6d28d9; }
+        QScrollBar::add-line, QScrollBar::sub-line { width: 0; height: 0; border: none; background: none; }
+        QScrollBar::add-page, QScrollBar::sub-page { background: none; }
+    )").arg(track);
+}
+
 QString ToolbarSheet()
 {
     const Colours c{Current()};

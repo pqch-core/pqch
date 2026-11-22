@@ -17,6 +17,8 @@ class QWidget;
 namespace PQCHStyle {
 //! True when the system palette is dark.
 bool IsDark();
+//! Scroll bars in the logo's violet, for the whole application: easy to see that a window scrolls.
+QString ScrollBarSheet();
 //! Style sheet for the tabs toolbar.
 QString ToolbarSheet();
 //! Page background and style sheet for the wallet's pages (Overview, Send, Receive, Transactions).

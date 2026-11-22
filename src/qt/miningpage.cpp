@@ -163,9 +163,20 @@ MiningPage::MiningPage(const PlatformStyle* platform_style, QWidget* parent) : Q
     auto* settings_card = new QFrame;
     settings_card->setObjectName("card");
     settings_card->setGraphicsEffect(Shadow(settings_card));
-    auto* settings_layout = new QHBoxLayout(settings_card);
-    settings_layout->setContentsMargins(18, 14, 18, 14);
-    settings_layout->setSpacing(18);
+    // Two rows, so the Start button stays in view in a narrow window: what to mine and the button,
+    // then how (threads, fast mode).
+    auto* settings_rows = new QVBoxLayout(settings_card);
+    settings_rows->setContentsMargins(18, 14, 18, 14);
+    settings_rows->setSpacing(10);
+    auto* settings_layout = new QHBoxLayout;
+    settings_layout->setSpacing(14);
+    auto* how_layout = new QHBoxLayout;
+    how_layout->setSpacing(14);
+    settings_rows->addLayout(settings_layout);
+    settings_rows->addLayout(how_layout);
+    m_settings_top = settings_layout;
+    m_button_row = new QHBoxLayout; // the button's own row in a narrow window (resizeEvent)
+    settings_rows->addLayout(m_button_row);
     const int cores{static_cast<int>(std::max(1u, std::thread::hardware_concurrency()))};
     auto* threads_caption = new QLabel(tr("Threads"));
     threads_caption->setObjectName("caption");
@@ -199,21 +210,21 @@ MiningPage::MiningPage(const PlatformStyle* platform_style, QWidget* parent) : Q
     });
     settings_layout->addWidget(m_mode);
     settings_layout->addWidget(m_pool_caption);
-    settings_layout->addWidget(m_pool);
-    settings_layout->addSpacing(8);
-    settings_layout->addWidget(threads_caption);
-    settings_layout->addWidget(m_threads);
-    settings_layout->addWidget(threads_of);
-    settings_layout->addSpacing(8);
-    settings_layout->addWidget(m_fast);
-    settings_layout->addStretch(1);
+    settings_layout->addWidget(m_pool, 1);
+    settings_layout->addStretch(0);
+    how_layout->addWidget(threads_caption);
+    how_layout->addWidget(m_threads);
+    how_layout->addWidget(threads_of);
+    how_layout->addSpacing(8);
+    how_layout->addWidget(m_fast);
+    how_layout->addStretch(1);
     // PQCH: in the one-click mining app, mining can start by itself when the app opens.
     m_autostart = new QCheckBox(tr("Start mining when PQCH opens"));
     m_autostart->setToolTip(tr("Mining starts by itself every time this program opens, with these settings."));
     m_autostart->setChecked(settings.value("MiningAutoStart", false).toBool());
     m_autostart->setVisible(gArgs.GetBoolArg("-minerapp", false));
     connect(m_autostart, &QCheckBox::toggled, this, [](bool on) { QSettings().setValue("MiningAutoStart", on); });
-    settings_layout->addWidget(m_autostart);
+    how_layout->addWidget(m_autostart);
     m_button = new QPushButton(tr("Start mining"));
     m_button->setObjectName("startButton");
     m_button->setCursor(Qt::PointingHandCursor);
@@ -305,8 +316,28 @@ QLabel* MiningPage::addStat(QGridLayout* grid, int column, const QString& captio
     column_layout->addStretch(1);
     row->addLayout(column_layout, 1);
     grid->addWidget(card, 0, column);
-    grid->setColumnStretch(column, 1);
+    m_stat_cards.push_back(card);
+    m_stat_grid = grid;
     return value;
+}
+
+void MiningPage::resizeEvent(QResizeEvent* event)
+{
+    QWidget::resizeEvent(event);
+    // Four figures side by side when there is room, two by two in a narrow window (no sideways scrolling).
+    const int columns{width() >= 860 ? 4 : 2};
+    if (!m_stat_grid || columns == m_stat_columns) return;
+    m_stat_columns = columns;
+    for (QWidget* card : m_stat_cards) m_stat_grid->removeWidget(card);
+    for (int i = 0; i < static_cast<int>(m_stat_cards.size()); ++i) m_stat_grid->addWidget(m_stat_cards[i], i / columns, i % columns);
+    for (int c = 0; c < 4; ++c) m_stat_grid->setColumnStretch(c, c < columns ? 1 : 0);
+    // The Start button: at the end of the first row when there is room, on a row of its own otherwise.
+    if (m_button && m_settings_top && m_button_row) {
+        m_settings_top->removeWidget(m_button);
+        m_button_row->removeWidget(m_button);
+        if (columns == 4) m_settings_top->addWidget(m_button);
+        else m_button_row->addWidget(m_button, 1);
+    }
 }
 
 void MiningPage::applyStyle()

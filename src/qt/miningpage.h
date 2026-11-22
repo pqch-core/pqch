@@ -13,6 +13,7 @@
 #include <functional>
 #include <string>
 #include <thread>
+#include <vector>
 
 class ClientModel;
 class PlatformStyle;
@@ -75,6 +76,7 @@ private:
     void maybeAutoStart();
     void refresh();
     void updateControls();
+    void resizeEvent(QResizeEvent* event) override;
     bool poolMode() const;
     void startPoolMiner(const QString& address);
     void onPoolOutput();
@@ -102,6 +104,11 @@ private:
     bool m_autostarted{false};
     QPushButton* m_button{nullptr};
     QLabel* m_status{nullptr};
+    std::vector<QWidget*> m_stat_cards;
+    class QGridLayout* m_stat_grid{nullptr};
+    int m_stat_columns{0};
+    class QHBoxLayout* m_settings_top{nullptr};
+    class QHBoxLayout* m_button_row{nullptr};
     QLabel* m_hashrate{nullptr};
     QLabel* m_network{nullptr};
     QLabel* m_share{nullptr};
