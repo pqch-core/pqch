@@ -282,6 +282,7 @@ Lançamento a 27 nov. 2026, 23:00 UTC. A âncora e a VPS têm o nó da rede prin
 - serviço `pqchd-main` desligado; recusa arrancar com um `pqchd` anterior ao 1.0.0 (génesis
   provisório). No dia: instalar a 1.0.0 assinada e `instalar_rede_principal.sh arrancar`;
 - ufw: 29333/tcp aberta; a 29332 (RPC) fechada. Sem firewall no painel da Hostinger nas duas máquinas;
+- VPS: SSH só com chave desde 23 nov. 2026 (`/etc/ssh/sshd_config.d/00-pqch-so-chave.conf`; recuperação pelo Console web da Hostinger);
 - pool da rede principal na âncora: `instalar_pool_testnet.sh --rede main` (rede do pool na 29340,
   stratum público na 29341), depois de o nó arrancar;
 - explorador (servidor de casa): já na rede principal; no dia, `instalar_servidor.sh novo-genesis`
