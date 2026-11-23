@@ -1,7 +1,7 @@
-/* PQCH: constant-time check of slhdsa-c (SLH-DSA-SHA2-128s) with valgrind (ctgrind method).
 // Copyright (c) 2026 The PQCH developers
 // Distributed under the MIT software license, see the accompanying file COPYING or
 // https://opensource.org/license/mit/.
+/* PQCH: constant-time check of slhdsa-c (SLH-DSA-SHA2-128s) with valgrind (ctgrind method).
  * Secret bytes are marked "undefined"; memcheck then reports every branch or memory address that
  * depends on them. Mode: keygen | sign_seed | sign_prf | sign_all. */
 #include <stdio.h>
