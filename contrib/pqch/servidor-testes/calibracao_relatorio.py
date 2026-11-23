@@ -55,6 +55,7 @@ def main():
     ap.add_argument("--desde", help="UTC, 'AAAA-MM-DD HH:MM'")
     ap.add_argument("--ate", help="UTC, 'AAAA-MM-DD HH:MM'")
     ap.add_argument("--sem-rpc", action="store_true", help="nao perguntar o tx_extra ao no")
+    ap.add_argument("--janela", type=int, default=0, help="minutos: blocos e dificuldade media por janela (teste de hashrate)")
     a = ap.parse_args()
 
     blocos = ler("blocos.csv")
@@ -116,6 +117,20 @@ def main():
     for s, xs in sorted(semanas.items()):
         if len(xs) > 1:
             print(f"Semana {s}: {(xs[-1] - xs[0]) / (len(xs) - 1):.1f} s por bloco ({len(xs)} blocos)")
+
+    if a.janela:
+        passo_j = a.janela * 60
+        print(f"Por janelas de {a.janela} min (UTC): blocos, intervalo medio, dificuldade media, em conjunto")
+        inicio_j = t0 - t0 % passo_j
+        while inicio_j <= t1:
+            bs = [b for b in blocos if inicio_j <= b["t"] < inicio_j + passo_j]
+            if bs:
+                dif = statistics.mean(float(b["dificuldade"]) for b in bs)
+                print(f"  {time.strftime('%H:%M', time.gmtime(inicio_j))}  {len(bs):4d}  "
+                      f"{passo_j / len(bs):6.1f} s  {dif:.6g}  {sum(int(b['auxpow']) for b in bs)}")
+            else:
+                print(f"  {time.strftime('%H:%M', time.gmtime(inicio_j))}     0")
+            inicio_j += passo_j
 
     # 2. Limite de reorganizacao.
     forks = ler("forks.csv")
