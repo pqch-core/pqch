@@ -58,7 +58,7 @@ cerca de +650 blocos. Uma dificuldade certa no arranque dá na mesma +648 blocos
    (~5.500 PQCH) numa rajada de poucas horas. Cada fator de 10 a mais custa cerca de um dia de rede
    lenta. Por isso a dificuldade deve ficar baixa, como decidido.
 
-## Proposta
+## Decisão (confirmada pelo Cesar a 23 nov. 2026)
 
 - **`nBits`: manter o `powLimit` (`0x1e7fffff`)**, salvo dados novos até fev. 2027. Não exige
   estimar o hashrate do arranque, que hoje ninguém conhece. A alternativa é `0x1e0fffff`

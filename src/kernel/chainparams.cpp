@@ -204,8 +204,10 @@ public:
         m_assumed_chain_state_size = 0;
 
         // TODO(PQCH launch): PROVISIONAL genesis for development. The definitive genesis is created on
-        // launch day, with a headline of that day as its message and a starting target matched to the
-        // hashrate expected at launch. Its bits (the easiest target) also anchor ASERT.
+        // launch day (decided 23 Nov 2026, contrib/pqch/GENESIS.md): a headline of that day as its
+        // message; nTime = the announced start time, to the minute (no block can then be mined more
+        // than MAX_FUTURE_BLOCK_TIME before it); nBits 0x1e7fffff (powLimit, ~2.2 kH/s), ASERT adjusts
+        // in the first hours; reward 7 PQCH (unspendable OP_RETURN). Its bits also anchor ASERT.
         genesis = CreatePQCHGenesisBlock("PQCH provisional mainnet genesis 04/Nov/2026 - replaced at launch", 1793800800, 0, 0x1e7fffff, 1'250'000'000);
         consensus.hashGenesisBlock = genesis.GetHash();
         assert(consensus.hashGenesisBlock == uint256{"047f81331ca9e86897b2d1eae7747f78352e9d566ddff94c2acdbac5c0bbee8a"});
