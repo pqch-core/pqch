@@ -272,6 +272,21 @@ continua só local e a cópia da configuração anterior ficou em `pqch.conf.fas
 4. Reiniciar o nó e testar de fora: `Test-NetConnection 72.61.20.80 -Port 39333` no PowerShell.
 5. Os membros da equipa continuam na VPN sem mudar nada.
 
+### Rede principal nos nós públicos (preparada a 23 nov. 2026)
+
+Lançamento a 27 nov. 2026, 23:00 UTC. A âncora e a VPS têm o nó da rede principal preparado com
+`contrib/pqch/instalar_rede_principal.sh preparar <IP> <quota>` (âncora 40%, VPS 100%):
+
+- pasta `/var/lib/pqch-main`, `pqch.conf` com `externalip`, `maxconnections=40`, `fixedseeds=1`,
+  `dnsseed=0`, `disablewallet=1` e RPC só em 127.0.0.1;
+- serviço `pqchd-main` desligado; recusa arrancar com um `pqchd` anterior ao 1.0.0 (génesis
+  provisório). No dia: instalar a 1.0.0 assinada e `instalar_rede_principal.sh arrancar`;
+- ufw: 29333/tcp aberta; a 29332 (RPC) fechada. Sem firewall no painel da Hostinger nas duas máquinas;
+- pool da rede principal na âncora: `instalar_pool_testnet.sh --rede main` (rede do pool na 29340,
+  stratum público na 29341), depois de o nó arrancar;
+- explorador (servidor de casa): já na rede principal; no dia, `instalar_servidor.sh novo-genesis`
+  (snapshot ZFS e apaga a cadeia provisória), `git pull` e `tudo`.
+
 ### Cuidados
 
 - O runner da integração contínua corre código de pull requests: não deve ser o nó âncora.
