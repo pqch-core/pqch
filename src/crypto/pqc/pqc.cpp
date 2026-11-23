@@ -25,6 +25,25 @@ namespace {
 // FIPS 204 and 205 limit context strings to 255 bytes.
 constexpr size_t MAX_CONTEXT_SIZE{255};
 constexpr size_t SLH_N{16};
+
+/**
+ * slhdsa-c does not clear its stack: after keygen or signing, copies of SK.seed and SK.prf
+ * (slh_var_t) and intermediate WOTS+/FORS secret values stay in the stack frames it used (about
+ * 5 KiB with gcc and clang). The library is kept unchanged (PQCH-VERSION.md), so right after each
+ * call that handles an SLH-DSA secret key this function, called from the same frame, overwrites the
+ * stack area below it. 64 KiB leaves a wide margin; checked by contrib/pqch/ct/slhdsa_stack.sh.
+ */
+constexpr size_t SLH_STACK_CLEAR_SIZE{64 * 1024};
+#if defined(_MSC_VER)
+__declspec(noinline)
+#else
+__attribute__((noinline))
+#endif
+void ClearSLHDSAStack()
+{
+    unsigned char area[SLH_STACK_CLEAR_SIZE];
+    memory_cleanse(area, sizeof(area));
+}
 } // namespace
 
 bool MLDSA44Verify(std::span<const unsigned char> sig, std::span<const unsigned char> msg,
@@ -60,6 +79,7 @@ bool SLHDSA128sKeyFromSeed(std::span<const unsigned char> seed, KeyPair& out)
     out.seckey.assign(SLHDSA128S_SECKEY_SIZE, 0);
     const int ret{slh_keygen_internal(out.seckey.data(), out.pubkey.data(), expanded, expanded + SLH_N, expanded + 2 * SLH_N, &slh_dsa_sha2_128s)};
     memory_cleanse(expanded, sizeof(expanded));
+    ClearSLHDSAStack();
     return ret == 0;
 }
 
@@ -85,6 +105,7 @@ bool SLHDSA128sSign(std::span<const unsigned char> seckey, std::span<const unsig
     sig.assign(SLHDSA128S_SIG_SIZE, 0);
     const size_t len{slh_sign(sig.data(), msg.data(), msg.size(), ctx.data(), ctx.size(), seckey.data(),
                               addrnd.empty() ? nullptr : addrnd.data(), &slh_dsa_sha2_128s)};
+    ClearSLHDSAStack();
     return len == SLHDSA128S_SIG_SIZE;
 }
 

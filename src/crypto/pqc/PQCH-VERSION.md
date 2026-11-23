@@ -41,10 +41,14 @@ está em `src/crypto/CMakeLists.txt`.
     `pqch_pq_verify` (5 min) correram sem falhas, além do fuzzing contínuo da máquina de vigilância.
   - **Só usamos** `slh_keygen_internal`, `slh_sign` e `slh_verify` com o conjunto SHA2-128s. As
     variantes SHAKE e prehash estão compiladas mas não são chamadas.
-  - **Achado de baixo risco (não corrigido, para não alterar a biblioteca):** a biblioteca não apaga
-    da pilha as cópias do SK.seed e do SK.prf (`slh_var_t`) nem os valores intermédios, no fim da
-    assinatura. Para os ler, um atacante teria de já ter acesso à memória do processo. O invólucro
-    da PQCH apaga a chave secreta e a semente expandida (`memory_cleanse`). A reportar ao projeto.
+  - **Achado de baixo risco, corrigido a 23 nov. 2026:** a biblioteca não apaga da pilha as cópias
+    do SK.seed e do SK.prf (`slh_var_t`) nem os valores intermédios, no fim da geração de chaves e da
+    assinatura. Medido: o `slh_sign` usa cerca de 5 KiB de pilha e deixa lá uma cópia do SK.seed.
+    Para não alterar a biblioteca, o invólucro (`pqc.cpp`, `ClearSLHDSAStack`) apaga 64 KiB de pilha
+    logo depois de cada `slh_keygen_internal` e `slh_sign`, a partir da mesma moldura. Verificado por
+    `contrib/pqch/ct/slhdsa_stack.sh`, com o gcc e o clang (-O0 e -O2): sem o invólucro fica 1 cópia;
+    com ele, 0. O invólucro também apaga a chave secreta e a semente expandida (`memory_cleanse`).
+    A reportar ao projeto, para ser corrigido na própria biblioteca.
 - Correr os vetores ACVP do NIST completos do mldsa-native. Os testes da PQCH já comparam chaves e
   assinaturas com implementações independentes (`contrib/pqch/pq_reference.py`).
 - Para atualizar: substituir a pasta inteira por uma versão nova, atualizar esta tabela e voltar a
