@@ -42,7 +42,7 @@ std::unique_ptr<CBaseChainParams> CreateBaseChainParams(const ChainType chain)
 {
     switch (chain) {
     case ChainType::MAIN:
-        return std::make_unique<CBaseChainParams>("", 29332); // PQCH: provisional RPC port
+        return std::make_unique<CBaseChainParams>("", 29332); // PQCH: RPC port, unassigned at IANA, checked 23 Nov 2026
     case ChainType::TESTNET:
         return std::make_unique<CBaseChainParams>("testnet", 39332); // PQCH testnet
     case ChainType::TESTNET4:

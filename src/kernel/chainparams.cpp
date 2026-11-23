@@ -199,7 +199,7 @@ public:
         pchMessageStart[1] = 0xca;
         pchMessageStart[2] = 0xdc;
         pchMessageStart[3] = 0xbf;
-        nDefaultPort = 29333; // PQCH: provisional, to be checked against other networks before launch
+        nDefaultPort = 29333; // PQCH: unassigned at IANA (29170-29998), checked 23 Nov 2026
         nPruneAfterHeight = 100000;
         m_assumed_blockchain_size = 0;
         m_assumed_chain_state_size = 0;
@@ -214,7 +214,8 @@ public:
         assert(consensus.hashGenesisBlock == uint256{"047f81331ca9e86897b2d1eae7747f78352e9d566ddff94c2acdbac5c0bbee8a"});
         assert(genesis.hashMerkleRoot == uint256{"7707b9c39887615a04309653c2a090def013d3f2fbb436d1836a741b1b98c270"});
 
-        // PQCH: DNS seeds and fixed seeds are added before launch.
+        // PQCH: no DNS seeds at launch; the fixed seeds are the project's two public nodes
+        // (contrib/seeds/nodes_main.txt).
         vSeeds.clear();
 
         base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1,0);
@@ -226,7 +227,7 @@ public:
         // PQCH: addresses start with "pqc1".
         bech32_hrp = "pqc";
 
-        vFixedSeeds.clear();
+        vFixedSeeds = std::vector<uint8_t>(std::begin(chainparams_seed_main), std::end(chainparams_seed_main));
 
         fDefaultConsistencyChecks = false;
         m_is_mockable_chain = false;
