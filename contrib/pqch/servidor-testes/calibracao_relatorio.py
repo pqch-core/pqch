@@ -89,7 +89,7 @@ def main():
         dur = bs[-1]["t"] - bs[0]["t"]
         media = dur / (len(bs) - 1) if len(bs) > 1 else float("nan")
         var = statistics.pstdev(dif) / statistics.mean(dif) * 100
-        print(f"{d}  {len(bs):6d}  {media:7.1f} s  {min(dif):12.0f}..{max(dif):<12.0f} ({var:4.1f} %)  "
+        print(f"{d}  {len(bs):6d}  {media:7.1f} s  {min(dif):12.6g}..{max(dif):<12.6g} ({var:4.1f} %)  "
               f"{sum(int(b['auxpow']) for b in bs):5d}")
     # Periodos em que a ultima hora teve menos de 30 blocos (metade do ritmo).
     ts = [b["t"] for b in blocos]
