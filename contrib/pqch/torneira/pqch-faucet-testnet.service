@@ -22,4 +22,5 @@ NoNewPrivileges=true
 PrivateDevices=true
 
 [Install]
-WantedBy=multi-user.target
+# Também com o pqchd-testnet: quando o nó é parado (Requires) e volta a arrancar, a torneira volta com ele.
+WantedBy=multi-user.target pqchd-testnet.service
