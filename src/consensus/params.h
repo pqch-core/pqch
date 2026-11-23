@@ -165,7 +165,8 @@ struct Params {
      * that no block of the last nAuxSeedWindow blocks introduced counts as new, and at most
      * nAuxNewSeedsPerWindow new keys may appear in any nAuxSeedWindow blocks. A key therefore stays
      * usable for nAuxSeedWindow blocks after it is introduced (Monero changes key every 2048 blocks,
-     * about 2.8 days; 4320 PQCH blocks are 3 days). Provisional values, to calibrate on the testnet.
+     * about 2.8 days; 4320 PQCH blocks are 3 days). Calibrated 23 Nov 2026 (contrib/pqch/CALIBRACAO.md);
+     * the testnet monitoring keeps counting keys per window until the code freeze.
      */
     int nAuxPowHeight{std::numeric_limits<int>::max()};
     int nAuxSeedWindow{4320};

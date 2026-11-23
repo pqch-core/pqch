@@ -156,11 +156,12 @@ public:
         consensus.nPowTargetTimespan = 14 * 24 * 60 * 60; // two weeks
         consensus.nPowTargetSpacing = 60;
         consensus.fPowUseASERT = true;
-        consensus.nASERTHalfLife = 4 * 60 * 60; // 4 hours (240 blocks); to be confirmed in simulation and testnet
+        consensus.nASERTHalfLife = 4 * 60 * 60; // 4 hours (240 blocks); calibrated 23 Nov 2026 (contrib/pqch/CALIBRACAO.md)
         consensus.nASERTAnchorHeight = 0;
         // PQCH: 720 blocks (~12 h) before a block reward can be spent.
         consensus.nCoinbaseMaturity = MAINNET_COINBASE_MATURITY;
-        // PQCH: a synced node never rewrites more than 60 blocks (~1 h) of its active chain.
+        // PQCH: a synced node never rewrites more than 60 blocks (~1 h) of its active chain. Calibrated
+        // 23 Nov 2026 (contrib/pqch/CALIBRACAO.md).
         m_max_reorg_depth = 60;
         consensus.fPowAllowMinDifficultyBlocks = false;
         consensus.enforce_BIP94 = false;
@@ -283,7 +284,7 @@ public:
         consensus.nPowTargetTimespan = 14 * 24 * 60 * 60; // two weeks
         consensus.nPowTargetSpacing = 60;
         consensus.fPowUseASERT = true;
-        consensus.nASERTHalfLife = 4 * 60 * 60; // 4 hours; the testnet is where it gets calibrated
+        consensus.nASERTHalfLife = 4 * 60 * 60; // 4 hours, as on the main network (calibrated 23 Nov 2026)
         consensus.nASERTAnchorHeight = 0;
         // PQCH: 100 blocks (~100 min) instead of the main network's 720, so that testers can spend
         // what they mine the same day.

@@ -67,7 +67,7 @@ inline constexpr uint64_t MAX_PARENT_TX_COUNT{1 << 20};  //!< transactions in th
 inline constexpr size_t MAX_COINBASE_BRANCH{21};         //!< log2(MAX_PARENT_TX_COUNT) + 1
 inline constexpr size_t KECCAK_RATE{136};                //!< Keccak-256 block size in bytes
 inline constexpr uint64_t MAX_COINBASE_HEAD_SIZE{256 * 1024}; //!< coinbase prefix bytes summarised by the midstate
-inline constexpr size_t MAX_COINBASE_EXTRA_SIZE{512};    //!< below Monero's 1060; P2Pool uses about 80 bytes
+inline constexpr size_t MAX_COINBASE_EXTRA_SIZE{512};    //!< below Monero's 1060; real P2Pool proofs 75-83 bytes (calibrated 23 Nov 2026)
 inline constexpr size_t MAX_AUX_BRANCH{8};               //!< up to 256 merge mined chains
 inline constexpr uint64_t MAX_COINBASE_OUTPUTS{16384};
 /**

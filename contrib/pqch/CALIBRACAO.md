@@ -97,7 +97,7 @@ A máquina de vigilância (`servidor-testes/README.md`) guarda de hora a hora, s
 
 | Parâmetro | Fica como está se… | Muda se… |
 | --- | --- | --- |
-| Meia-vida | o intervalo médio por semana fica entre 55 e 65 s e nenhuma queda real de hashrate deixa a rede mais de 2 h abaixo de metade do ritmo | as quedas reais são frequentes e lentas a recuperar (→ 2 h) ou a dificuldade oscila com o hash switching (→ 8 h) |
+| Meia-vida | o intervalo médio por semana fica entre 55 e 65 s e uma queda de 10× recupera em menos de 1,5 dias (corrigido a 23 nov. 2026: o critério antigo, «nenhuma queda mais de 2 h abaixo de metade do ritmo», é impossível com uma queda de 10× e qualquer meia-vida razoável) | as quedas reais são frequentes e lentas a recuperar (→ 2 h) ou a dificuldade oscila com o hash switching (→ 8 h) |
 | Limite de reorganização | o maior ramo concorrente visto é muito menor que 60 (esperado: 1 a 3 blocos) | aparecerem ramos naturais acima de 20 blocos (rede mal ligada): rever a ligação entre nós antes de mexer no limite |
 | Janela das chaves | o máximo de chaves Monero por janela fica em 3 ou menos | aparece uma 4.ª chave legítima numa janela: aumentar o limite ou passar a janela a tempo |
 | `tx_extra` | as coinbases reais do P2Pool (rede principal) cabem em 512 B com folga | uma coinbase real se aproxima de 512 B: subir o limite |
@@ -165,12 +165,29 @@ P2Pool. Serviço `p2pool` com `--no-upnp`, stratum só em `127.0.0.1` e utilizad
 - O `debug.log` do `pqchd` não regista as chamadas RPC sem `-debug=rpc`; a contagem das provas faz-se
   pelo registo do P2Pool e pelo `auxpow` dos cabeçalhos.
 
-## 5. Calendário
+## 5. Decisão (23 nov. 2026, confirmada pelo Cesar)
+
+Os quatro valores ficam como estão e estão marcados como calibrados no código.
+
+| Parâmetro | Valor | Dados |
+| --- | --- | --- |
+| Meia-vida do ASERT | **4 h (240 blocos)** | 15–23 nov. (12.044 blocos): semanas de 60,1 a 60,7 s por bloco, dias de 57,9 a 62,6 s, dificuldade a variar 1,3 a 6 % por dia, um só período de 0,1 h abaixo de metade do ritmo. Simulação: uma queda de 10× recupera em 24,7 h. São quase os mesmos blocos da meia-vida do ASERT do Bitcoin Cash (288). Quem mina em conjunto recebe a PQCH sem custo extra, por isso há pouco hash switching. |
+| Limite de reorganização | **60 blocos** | 2 cadeias concorrentes, ambas de 1 bloco |
+| Janela das chaves Monero | **4 chaves novas em 4.320 blocos** | Análise: no máximo 3 por janela. Testnet: 1 chave (merged mining aceite só desde a 0.3.7). A vigilância continua a contar até 1 mar. 2027; uma 4.ª chave legítima numa janela obriga a rever o valor. |
+| `tx_extra` | **até 512 B** | 71 provas reais do P2Pool (Monero da rede principal), entre 75 e 83 B: sobram 429 B |
+
+**Teste de hashrate de 23 nov.** A mineração do Kali esteve parada das 12:39 às 16:00 e a rede não
+mostrou queda: o ritmo ficou nos ~60 s e a dificuldade não desceu. A parte do Kali no hashrate era
+pequena. Não se repetiu o teste. Os choques que contam na rede principal (pools do P2Pool a ligar ou
+desligar o merged mining) não se reproduzem numa testnet pequena, e a decisão da meia-vida assenta nas
+simulações da secção 1. O relatório é `servidor-testes/calibracao_relatorio.py`.
+
+## 6. Calendário
 
 | Quando | O quê |
 | --- | --- |
 | 17 nov. – dez. 2026 | Recolha de dados com a mineração da equipa; primeiros nós de fora |
 | dez. 2026 | Merged mining com o P2Pool real (assim que o disco estiver no server e o Monero sincronizado) |
 | jan. 2027 | Testes de hashrate na testnet: desligar e ligar mineradores (queda e subida reais), hash switching |
-| até 15 fev. 2027 | Decisão final dos quatro parâmetros, com os dados deste documento |
+| ~~até 15 fev. 2027~~ 23 nov. 2026 | Decisão final dos quatro parâmetros (secção 5) |
 | 1 mar. 2027 | Código congelado |
