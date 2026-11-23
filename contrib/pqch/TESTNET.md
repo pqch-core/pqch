@@ -238,6 +238,9 @@ para a rede real): `https://api-testnet.pqch.org/api/`, na VPS pública, sem pá
 - `pqch-electrs` (≥ `24d809b`, que aceita as versões 0.x do PQCH) como serviço
   `pqch-electrs-testnet`: utilizador `electrs`, índice em `/var/lib/pqch-electrs`, só em
   `127.0.0.1:3000`, `--jsonrpc-import`; limites `CPUQuota=50%`, `MemoryMax=1G`.
+- O índice e a torneira dependem do nó (`Requires=pqchd-testnet.service`) e, desde 23 nov. 2026,
+  também arrancam com ele (`WantedBy=multi-user.target pqchd-testnet.service`): numa atualização
+  do nó já não ficam parados.
 - RPC: utilizador `electrs` por `rpcauth` (palavra-passe só em `/etc/pqch-api/electrs.env`, root),
   com `rpcwhitelist` de leitura e `sendrawtransaction`; `rpcwhitelistdefault=0` deixa o cookie local
   com acesso total.
