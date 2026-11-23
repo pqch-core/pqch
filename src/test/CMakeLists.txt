@@ -84,6 +84,7 @@ add_executable(test_bitcoin
   pqch_asert_tests.cpp
   pqch_randomx_tests.cpp
   pqch_pq_tests.cpp
+  pqch_slhdsa_acvp_tests.cpp
   pqch_auxpow_tests.cpp
   pqch_network_tests.cpp
   pqch_p2mr_wallet_tests.cpp
@@ -158,6 +159,7 @@ target_json_data_sources(test_bitcoin
   data/key_io_valid.json
   data/script_tests.json
   data/sighash.json
+  data/slhdsa_sha2_128s_acvp.json
   data/siphash.json
   data/tx_invalid.json
   data/tx_valid.json

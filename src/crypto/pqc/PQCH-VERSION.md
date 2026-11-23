@@ -20,7 +20,14 @@ está em `src/crypto/CMakeLists.txt`.
 
 - O slhdsa-c ainda se declara "work in progress". Fixar uma versão publicada (ou rever este commit) e
   incluí-la na auditoria externa.
-- Correr os vetores ACVP do NIST completos das duas bibliotecas. Os testes da PQCH já comparam chaves e
+- **Feito para a slhdsa-c (23 nov. 2026):** os vetores ACVP do NIST (FIPS 205, ACVP-Server commit
+  `975de31`) do conjunto SLH-DSA-SHA2-128s, o da chave de recuperação, passam todos contra este commit:
+  10 de geração de chaves, 28 de assinatura (determinística e com aleatoriedade adicional, interfaces
+  "external" com contexto e "internal") e 28 de verificação (4 válidas e 24 alteradas: R, SIGFORS,
+  SIGHT, mensagem, assinatura curta ou longa). Teste `pqch_slhdsa_acvp_tests`, ficheiro gerado por
+  `contrib/pqch/acvp_slhdsa.py`. A 23 nov. o projeto continua sem versão publicada e o commit
+  `47451432` continua a ser o mais recente.
+- Correr os vetores ACVP do NIST completos do mldsa-native. Os testes da PQCH já comparam chaves e
   assinaturas com implementações independentes (`contrib/pqch/pq_reference.py`).
 - Para atualizar: substituir a pasta inteira por uma versão nova, atualizar esta tabela e voltar a
   correr `pqch_pq_tests` e `contrib/pqch/validar_fase4.sh`.
