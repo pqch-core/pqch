@@ -135,7 +135,10 @@ cmd_estado() {
     msg "Estado"
     echo "pqchd instalado: $(versao_pqchd)"
     echo "pqch.conf: $([[ -f "${CONF}" ]] && echo "${CONF}" || echo 'não existe')"
-    echo "Serviço pqchd-main: $(systemctl is-enabled pqchd-main 2>/dev/null || echo 'não existe') / $(systemctl is-active pqchd-main 2>/dev/null || true)"
+    local ativo ligado
+    ligado=$(systemctl is-enabled pqchd-main 2>/dev/null) || true
+    ativo=$(systemctl is-active pqchd-main 2>/dev/null) || true
+    echo "Serviço pqchd-main: ${ligado:-não existe} / ${ativo:-inactive}"
     echo "Serviço da testnet: $(systemctl is-active pqchd-testnet 2>/dev/null || echo 'não existe')"
     echo "Portas à escuta (29332/29333/39332/39333):"
     ss -ltnH 2>/dev/null | awk '{print $4}' | grep -E ':(29332|29333|39332|39333)$' || echo "  nenhuma"
