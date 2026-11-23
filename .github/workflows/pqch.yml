@@ -96,7 +96,7 @@ jobs:
             feature_config_args.py wallet_pqch_lightwallet.py \
             wallet_basic.py wallet_send.py wallet_sendall.py wallet_importdescriptors.py rpc_psbt.py \
             feature_pqch_mldsa_emergency.py mining_pqch_getblocktemplate.py p2p_initial_headers_sync.py \
-            feature_pqch_header_checkpoints.py
+            feature_pqch_header_checkpoints.py mempool_truc.py wallet_v3_txs.py
 
   sanitizers:
     name: 'ASan + UBSan'
