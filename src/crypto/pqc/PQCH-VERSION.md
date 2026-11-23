@@ -27,6 +27,24 @@ está em `src/crypto/CMakeLists.txt`.
   SIGHT, mensagem, assinatura curta ou longa). Teste `pqch_slhdsa_acvp_tests`, ficheiro gerado por
   `contrib/pqch/acvp_slhdsa.py`. A 23 nov. o projeto continua sem versão publicada e o commit
   `47451432` continua a ser o mais recente.
+- **Revisão da slhdsa-c (23 nov. 2026), commit `47451432`** (continua a ser o `main`, sem etiquetas
+  de versão):
+  - **Tempo constante:** sem falhas. `contrib/pqch/ct/slhdsa_ct.sh` usa o modo de teste da própria
+    biblioteca (`SLH_CONFIG_CT_TESTING_ENABLED`) com o valgrind: marca como secretos o SK.seed, o
+    SK.prf e a aleatoriedade adicional, e reporta qualquer salto ou endereço de memória que dependa
+    deles. Com o gcc 13.3 (-O0, -O2, -O3, -Os) e o clang 18.1 (-O2), a geração de chaves e a assinatura
+    deram 0 erros, e todas as assinaturas verificam. Os únicos valores desclassificados pela
+    biblioteca são públicos por definição: R, a chave pública FORS, as raízes XMSS intermédias e a
+    chave pública. Revi cada um destes pontos no código.
+  - **Verificação:** o tamanho da assinatura é conferido antes de ler (`slh_verify_internal` e
+    `slh_verify_digest`) e o contexto é limitado a 255 bytes. 450 mil entradas do alvo de fuzzing
+    `pqch_pq_verify` (5 min) correram sem falhas, além do fuzzing contínuo da máquina de vigilância.
+  - **Só usamos** `slh_keygen_internal`, `slh_sign` e `slh_verify` com o conjunto SHA2-128s. As
+    variantes SHAKE e prehash estão compiladas mas não são chamadas.
+  - **Achado de baixo risco (não corrigido, para não alterar a biblioteca):** a biblioteca não apaga
+    da pilha as cópias do SK.seed e do SK.prf (`slh_var_t`) nem os valores intermédios, no fim da
+    assinatura. Para os ler, um atacante teria de já ter acesso à memória do processo. O invólucro
+    da PQCH apaga a chave secreta e a semente expandida (`memory_cleanse`). A reportar ao projeto.
 - Correr os vetores ACVP do NIST completos do mldsa-native. Os testes da PQCH já comparam chaves e
   assinaturas com implementações independentes (`contrib/pqch/pq_reference.py`).
 - Para atualizar: substituir a pasta inteira por uma versão nova, atualizar esta tabela e voltar a
