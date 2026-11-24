@@ -201,8 +201,8 @@ public:
         pchMessageStart[3] = 0xbf;
         nDefaultPort = 29333; // PQCH: unassigned at IANA (29170-29998), checked 23 Nov 2026
         nPruneAfterHeight = 100000;
-        m_assumed_blockchain_size = 0;
-        m_assumed_chain_state_size = 0;
+        m_assumed_blockchain_size = 1; // PQCH: GB, shown in the first-run dialog (0 printed "at least 0 GB")
+        m_assumed_chain_state_size = 1;
 
         // TODO(PQCH launch): PROVISIONAL genesis for development. The definitive genesis is created on
         // launch day (decided 23 Nov 2026, contrib/pqch/GENESIS.md): a headline of that day as its
@@ -368,8 +368,8 @@ public:
         pchMessageStart[3] = 0x9b;
         nDefaultPort = 39333; // PQCH testnet (RPC 39332)
         nPruneAfterHeight = 1000;
-        m_assumed_blockchain_size = 0;
-        m_assumed_chain_state_size = 0;
+        m_assumed_blockchain_size = 1; // PQCH: GB, shown in the first-run dialog (0 printed "at least 0 GB")
+        m_assumed_chain_state_size = 1;
 
         genesis = CreatePQCHGenesisBlock(PQCH_TESTNET_GENESIS_MESSAGE, PQCH_TESTNET_GENESIS_TIME, 0, 0x1e7fffff, 1'250'000'000);
         consensus.hashGenesisBlock = genesis.GetHash();
