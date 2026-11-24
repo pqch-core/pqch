@@ -68,3 +68,4 @@ In v0.3.2 (testnet; no consensus changes from v0.3.1):
 - The installer shows "Unknown publisher" (UAC/SmartScreen). Expected: check SHA256SUMS first, then choose "Run anyway".
 - On Windows 11 with **Smart App Control** on, Windows blocks `pqch-qt.exe` ("Smart App Control blocked an app that may be unsafe"). There is no per-app exception. Only if the SHA256 and GPG checks passed: Windows Security → App & browser control → Smart App Control settings → Off. On Windows 11 with the April 2026 update or later it can be turned back on there; on older builds it stays off until Windows is reset.
 - A code-signed build will follow. Its program code will be the same as this release.
+- Step-by-step guide: https://github.com/pqch-core/pqch/blob/main/contrib/pqch/WINDOWS-INSTALL.md (Português: INSTALAR-WINDOWS.md).
