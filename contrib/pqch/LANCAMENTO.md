@@ -38,7 +38,7 @@ ainda não é público, por isso adiar não custa nada.
 - [x] Ferramenta do génesis (`contrib/pqch/genesis.py --verificar`).
 - [ ] Versão 1.0.0 em `CMakeLists.txt` e notas da release (`contrib/pqch/release-notes.md`).
 - [ ] Site: secção de downloads com as ligações da 1.0.0, pronta mas **não publicada**.
-- [ ] Decidir para onde vão as recompensas da mineração da equipa (ver passo 9).
+- [x] A equipa mina como qualquer pessoa (24 nov.); as recompensas vão para uma morada fora das máquinas de teste (passo 9).
 - [ ] Ensaio geral completo e código congelado às 18:00.
 
 ---
@@ -172,11 +172,11 @@ sudo <pasta do pqch-pool>/deploy/instalar_pool_testnet.sh --rede main --user pqc
 
 ### Passo 9 — Arranque (23:00)
 
-- **Mineração da equipa: decidir antes de sexta.**
-  - As máquinas de teste não podem ter carteiras com valor real. Por isso a equipa mina para uma
-    **morada** de uma carteira que não está nessas máquinas, por exemplo a app Android na rede
-    principal ou uma carteira dedicada.
-  - Os mineradores recebem só a morada: `--morada pqc1p…` no pool, ou o modo pool da carteira com
+- **Mineração da equipa** (decidido a 24 nov.): a equipa mina, como qualquer pessoa. Não há
+  pré-mineração e a mineração abre para todos à mesma hora.
+  - Regra de segurança: as recompensas vão para uma **morada** de uma carteira que não está nas
+    máquinas de teste, por exemplo a app Android na rede principal.
+  - Os mineradores recebem só essa morada: `--morada pqc1p…` no pool, ou o modo pool da carteira com
     morada.
 - Às **23:00:00**, e não antes, os mineradores da equipa arrancam.
 - Bloco 1: confirmar que os dois nós públicos e o explorador o veem com o mesmo hash.
