@@ -199,3 +199,12 @@ sudo <pasta do pqch-pool>/deploy/instalar_pool_testnet.sh --rede main --user pqc
 - **Erro de consenso** (nós a discordar do mesmo bloco): parar a mineração da equipa, recolher o
   `debug.log` dos nós e decidir: uma versão 1.0.1, ou, no pior caso nas primeiras horas, recomeçar
   com um génesis novo. Anuncia-se sempre o que aconteceu, com transparência.
+
+## Depois do lançamento (por fazer)
+
+- **Certificado de assinatura de código Certum Open Source** (shop.certum.eu, «Open Source Code Signing — set», com
+  cartão e leitor), em nome do Cesar com o prefixo «Open Source Developer». A chave fica no cartão, fora do PC, como
+  as chaves GPG. Depois: assinar `pqch-qt.exe`, os outros executáveis e o instalador no processo de release, e publicar
+  uma 1.0.1 para Windows com o mesmo código. Motivo: o Controlo Inteligente de Aplicações do Windows 11 bloqueia o
+  `pqch-qt.exe` sem assinatura (teste de 24 nov. 2026). Até lá: nota na página de transferências e
+  `INSTALAR-WINDOWS.md` / `WINDOWS-INSTALL.md`.
