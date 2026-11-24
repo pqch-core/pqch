@@ -83,6 +83,7 @@ add_executable(test_bitcoin
   pow_tests.cpp
   pqch_asert_tests.cpp
   pqch_randomx_tests.cpp
+  pqch_lightning_tests.cpp
   pqch_pq_tests.cpp
   pqch_slhdsa_acvp_tests.cpp
   pqch_auxpow_tests.cpp
