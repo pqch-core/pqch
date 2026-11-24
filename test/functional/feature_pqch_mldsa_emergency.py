@@ -117,7 +117,15 @@ class PQCHMLDSAEmergencyTest(BitcoinTestFramework):
         if not os.path.exists(path):
             self.log.info("libpqchwallet.so not built: skipped")
             return
-        lib = ctypes.CDLL(path)
+        try:
+            lib = ctypes.CDLL(path)
+        except OSError as e:
+            # A library built with ASan/UBSan needs the sanitizer runtime, which a plain Python
+            # process does not load (nightly sanitizer job). The normal CI runs this part.
+            if "san_" in str(e):
+                self.log.info(f"libpqchwallet.so built with a sanitizer, cannot be loaded here: skipped ({e})")
+                return
+            raise
         lib.pqchw_call.restype = ctypes.c_void_p
         lib.pqchw_call.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
         lib.pqchw_free.argtypes = [ctypes.c_void_p]
