@@ -406,6 +406,9 @@ BOOST_AUTO_TEST_CASE(presync_checks_asert_target)
     const Consensus::Params& params{Params().GetConsensus()};
     BOOST_REQUIRE(params.fPowUseASERT);
     const CBlockHeader genesis{Params().GenesisBlock()};
+    // The main network genesis is timed at the launch: before it, HeadersSyncState refuses to start
+    // (system clock behind the chain start). Run as if a day after the genesis.
+    SetMockTime(std::chrono::seconds{genesis.GetBlockTime() + 86400});
     const uint256 genesis_hash{genesis.GetHash()};
     CBlockIndex start{genesis};
     start.phashBlock = &genesis_hash;
@@ -440,6 +443,7 @@ BOOST_AUTO_TEST_CASE(presync_checks_asert_target)
         auto s{state()};
         BOOST_CHECK(!s.ProcessNextHeaders(bad, true).success);
     }
+    SetMockTime(0s);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
