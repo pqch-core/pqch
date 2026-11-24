@@ -4,6 +4,7 @@
 
 #include <qt/test/rpcnestedtests.h>
 
+#include <chainparams.h>
 #include <common/system.h>
 #include <interfaces/node.h>
 #include <qt/rpcconsole.h>
@@ -82,7 +83,9 @@ void RPCNestedTests::rpcNestedTests()
     QVERIFY(result == result2);
 
     RPCConsole::RPCExecuteCommandLine(m_node, result, "getblock(getbestblockhash())[tx][0]", &filtered);
-    QVERIFY(result == "7707b9c39887615a04309653c2a090def013d3f2fbb436d1836a741b1b98c270"); // PQCH mainnet genesis coinbase
+    // PQCH: the genesis coinbase of the network under test (main), read from the chain parameters so the
+    // test does not change when the main network genesis is replaced at launch (contrib/pqch/genesis.py).
+    QVERIFY(result == Params().GenesisBlock().vtx[0]->GetHash().GetHex());
     QVERIFY(filtered == "getblock(getbestblockhash())[tx][0]");
 
     RPCConsole::RPCParseCommandLine(nullptr, result, "createwallet test true", false, &filtered);
