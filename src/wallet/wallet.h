@@ -103,7 +103,10 @@ void NotifyWalletLoaded(WalletContext& context, const std::shared_ptr<CWallet>& 
 std::unique_ptr<WalletDatabase> MakeWalletDatabase(const std::string& name, const DatabaseOptions& options, DatabaseStatus& status, bilingual_str& error);
 
 //! -fallbackfee default
-inline constexpr CAmount DEFAULT_FALLBACK_FEE = 0;
+//! PQCH: 10 quanta/vB (Bitcoin: 0, disabled). A new network has no fee history, so a wallet without a
+//! fallback could not send at all until the estimator had data (seen on a fresh Windows install,
+//! 24 Nov 2026). A hybrid 1-input payment (~1.1 kvB) then pays ~0.00011 PQCH; -fallbackfee=0 disables it.
+inline constexpr CAmount DEFAULT_FALLBACK_FEE{10'000};
 //! -discardfee default
 inline constexpr CAmount DEFAULT_DISCARD_FEE{10'000};
 //! -mintxfee default
