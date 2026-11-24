@@ -42,7 +42,7 @@ jobs:
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             echo "::notice title=debug_pull_request_number_str::${{ github.event.number }}"
           fi
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: ${{ env.FETCH_DEPTH }}
@@ -134,7 +134,7 @@ jobs:
 
       - &CHECKOUT
         name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           # Ensure the latest merged pull request state is used, even on re-runs.
           ref: &CHECKOUT_REF_TMPL ${{ github.event_name == 'pull_request' && github.ref || '' }}
@@ -324,7 +324,7 @@ jobs:
       - *ANNOTATION_PR_NUMBER
 
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ needs.record-frozen-commit.outputs.commit }}
 
@@ -384,7 +384,7 @@ jobs:
       - *ANNOTATION_PR_NUMBER
 
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ needs.record-frozen-commit.outputs.commit }}
 
@@ -594,7 +594,7 @@ jobs:
       - *ANNOTATION_PR_NUMBER
 
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: *CHECKOUT_REF_TMPL
           fetch-depth: 0
