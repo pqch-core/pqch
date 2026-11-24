@@ -100,9 +100,13 @@ Section -post SEC0001
     CreateDirectory $SMPROGRAMS\$StartMenuGroup
     CreateShortcut "$SMPROGRAMS\$StartMenuGroup\$(^Name).lnk" $INSTDIR\@BITCOIN_GUI_NAME@@EXEEXT@
     CreateShortcut "$SMPROGRAMS\$StartMenuGroup\@CLIENT_NAME@ (testnet).lnk" "$INSTDIR\@BITCOIN_GUI_NAME@@EXEEXT@" "-testnet" "$INSTDIR\@BITCOIN_GUI_NAME@@EXEEXT@" 1
-    ; PQCH: one-click mining app (testnet until the main network launches)
+    ; PQCH: one-click mining app. From 1.0.0 the desktop shortcut is the main network; the testnet one
+    ; stays in the Start menu.
+    CreateShortcut "$SMPROGRAMS\$StartMenuGroup\PQCH Miner.lnk" "$INSTDIR\@BITCOIN_GUI_NAME@@EXEEXT@" "-minerapp" "$INSTDIR\@BITCOIN_GUI_NAME@@EXEEXT@" 1
+    CreateShortcut "$DESKTOP\PQCH Miner.lnk" "$INSTDIR\@BITCOIN_GUI_NAME@@EXEEXT@" "-minerapp" "$INSTDIR\@BITCOIN_GUI_NAME@@EXEEXT@" 1
     CreateShortcut "$SMPROGRAMS\$StartMenuGroup\PQCH Miner (testnet).lnk" "$INSTDIR\@BITCOIN_GUI_NAME@@EXEEXT@" "-testnet -minerapp" "$INSTDIR\@BITCOIN_GUI_NAME@@EXEEXT@" 1
-    CreateShortcut "$DESKTOP\PQCH Miner (testnet).lnk" "$INSTDIR\@BITCOIN_GUI_NAME@@EXEEXT@" "-testnet -minerapp" "$INSTDIR\@BITCOIN_GUI_NAME@@EXEEXT@" 1
+    ; The desktop shortcut of the testnet miner (0.3.x) is removed on upgrade.
+    Delete /REBOOTOK "$DESKTOP\PQCH Miner (testnet).lnk"
     ; PQCH: no signet or testnet4 shortcuts (PQCH has neither network; -signet and -testnet4 end in an error).
     ; The uninstaller still removes them, for installs of earlier versions.
     CreateShortcut "$SMPROGRAMS\$StartMenuGroup\Uninstall $(^Name).lnk" $INSTDIR\uninstall.exe
@@ -167,6 +171,8 @@ Section -un.post UNSEC0001
     Delete /REBOOTOK "$SMPROGRAMS\$StartMenuGroup\@CLIENT_NAME@ (testnet).lnk"
     Delete /REBOOTOK "$SMPROGRAMS\$StartMenuGroup\PQCH Miner (testnet).lnk"
     Delete /REBOOTOK "$DESKTOP\PQCH Miner (testnet).lnk"
+    Delete /REBOOTOK "$SMPROGRAMS\$StartMenuGroup\PQCH Miner.lnk"
+    Delete /REBOOTOK "$DESKTOP\PQCH Miner.lnk"
     Delete /REBOOTOK "$SMPROGRAMS\$StartMenuGroup\@CLIENT_NAME@ (testnet4).lnk"
     Delete /REBOOTOK "$SMPROGRAMS\$StartMenuGroup\@CLIENT_NAME@ (test signet).lnk"
     Delete /REBOOTOK "$SMSTARTUP\PQCH.lnk"
