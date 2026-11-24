@@ -85,7 +85,7 @@ jobs:
       # the depends and ccache caches live in the runner's home, not here.
       - name: Empty the workspace (self-hosted runner)
         run: find . -mindepth 1 -maxdepth 1 -exec rm -rf {} +
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Check the checkout is complete
         run: |
           if [[ ! -f depends/Makefile ]]; then
@@ -239,7 +239,7 @@ jobs:
       contents: write  # draft release on tags
     steps:
       # Its own folder ("meta"), so the sparse checkout never touches the build jobs' workspace.
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: meta
           sparse-checkout: |
