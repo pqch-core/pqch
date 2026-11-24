@@ -87,6 +87,9 @@ sha256sum --ignore-missing -c SHA256SUMS
 No Windows, sem GnuPG: `certutil -hashfile pqch-1.0.0-win64-setup.exe SHA256` e comparar com a
 linha do `SHA256SUMS`.
 
-**Aviso do Windows (SmartScreen):** o instalador não tem certificado de assinatura de código pago,
-por isso o Windows mostra "Editor desconhecido". É esperado. A garantia é a assinatura do
-`SHA256SUMS`. A página de downloads deve dizê-lo.
+**Aviso do Windows (SmartScreen e Controlo Inteligente de Aplicações):** o instalador ainda não tem
+certificado de assinatura de código, por isso o Windows mostra "Editor desconhecido". No Windows 11 com o
+Controlo Inteligente de Aplicações ligado, o `pqch-qt.exe` é bloqueado e não há exceção por aplicação
+(visto no teste de 24 nov. 2026). A garantia é a assinatura do `SHA256SUMS`. A página de downloads
+(`dl_win_note`) e as notas da versão dizem-no. Plano: certificado de assinatura de código em nome
+individual e uma versão assinada com o mesmo código.

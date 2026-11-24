@@ -64,4 +64,7 @@ In v0.3.2 (testnet; no consensus changes from v0.3.1):
 2. `gpg --verify SHA256SUMS.asc SHA256SUMS` → "Good signature from PQCH Releases"
 3. Linux: `sha256sum --ignore-missing -c SHA256SUMS` · Windows: `certutil -hashfile pqch-{{VERSION}}-win64-setup.exe SHA256`, then compare with the line in `SHA256SUMS`.
 
-The Windows installer is not code-signed, so SmartScreen shows "Unknown publisher". The GPG signature above is what proves the files are ours.
+**Windows: the installer is not code-signed yet.** The GPG signature above is what proves the files are ours.
+- The installer shows "Unknown publisher" (UAC/SmartScreen). Expected: check SHA256SUMS first, then choose "Run anyway".
+- On Windows 11 with **Smart App Control** on, Windows blocks `pqch-qt.exe` ("Smart App Control blocked an app that may be unsafe"). There is no per-app exception. Only if the SHA256 and GPG checks passed: Windows Security → App & browser control → Smart App Control settings → Off. On Windows 11 with the April 2026 update or later it can be turned back on there; on older builds it stays off until Windows is reset.
+- A code-signed build will follow. Its program code will be the same as this release.
