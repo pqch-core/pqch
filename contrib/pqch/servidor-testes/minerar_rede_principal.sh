@@ -32,7 +32,10 @@ LAUNCH_EPOCH=1795820400          # 2026-11-27T23:00:00Z
 FPR="1CDFA6A84A35AA6D7B524D1CFB6E21DF0D38B5DA"
 REPO_URL="https://github.com/pqch-core/pqch"
 ANCORA_POOL="187.127.89.83:29340"
-TESTNET_MINERS=(pqch-pool-testnet pqch-minerar-testnet)
+# Mineração da testnet que "arrancar" para (e "parar" repõe). p2pool: o P2Pool do server, que minera o Monero
+# e, em conjunto, a testnet (CALIBRACAO.md); o monerod continua a correr. O merged mining da rede principal é
+# um passo à parte, depois do lançamento.
+TESTNET_MINERS=(pqch-pool-testnet pqch-minerar-testnet p2pool xmrig)
 
 falha() { echo "ERRO: $*" >&2; exit 1; }
 msg() { echo; echo "== $*"; }
@@ -161,7 +164,7 @@ EOF
 
     msg "5/5 Mineração da testnet nesta máquina (continua até sexta às 23:00)"
     local s
-    for s in "${TESTNET_MINERS[@]}" p2pool xmrig; do
+    for s in "${TESTNET_MINERS[@]}"; do
         systemctl list-unit-files "${s}.service" --no-legend 2>/dev/null | grep -q . \
             && echo "  ${s}: $(systemctl is-active "${s}" 2>/dev/null || true)"
     done
@@ -272,7 +275,7 @@ cmd_estado() {
         echo "Ainda não preparado."
     fi
     local s
-    for s in pqch-pool-main "${TESTNET_MINERS[@]}" pqchd-testnet p2pool xmrig; do
+    for s in pqch-pool-main "${TESTNET_MINERS[@]}" pqchd-testnet monerod; do
         systemctl list-unit-files "${s}.service" --no-legend 2>/dev/null | grep -q . \
             && echo "  ${s}: $(systemctl is-active "${s}" 2>/dev/null || true)"
     done
