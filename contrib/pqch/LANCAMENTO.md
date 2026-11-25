@@ -249,3 +249,6 @@ do explorador: tem o seu próprio nó `pqchd-main`. Ainda ninguém mina.
   uma 1.0.1 para Windows com o mesmo código. Motivo: o Controlo Inteligente de Aplicações do Windows 11 bloqueia o
   `pqch-qt.exe` sem assinatura (teste de 24 nov. 2026). Até lá: nota na página de transferências e
   `INSTALAR-WINDOWS.md` / `WINDOWS-INSTALL.md`.
+- **App Android 1.0.1: morada sem servidor.** Hoje os botões Receive e Send ficam desativados enquanto a API
+  não responde (a app escolhe a primeira morada não usada). Na 1.0.1: mostrar a primeira morada mesmo sem
+  servidor, com um aviso de que pode já ter sido usada. Decidido a 25 nov. 2026: fica para a 1.0.1.
