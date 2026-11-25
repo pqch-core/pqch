@@ -49,6 +49,7 @@ ainda não é público, por isso adiar não custa nada.
       (`sudo contrib/pqch/servidor-testes/minerar_rede_principal.sh preparar --pool <pqch-pool> --threads N [--fast]`).
       Server (decidido a 25 nov.): só PQCH da rede principal, com toda a capacidade
       (`--threads max --fast --exclusivo`: às 23:00 para também o P2Pool, o `monerod` e o nó da testnet).
+      Kali `sparta`: 16 threads, 14 GB (`--threads max --fast --exclusivo`); clone do pqch em `~/pqch`.
       O Mac fica na testnet.
 - [ ] Ensaio geral completo e código congelado às 18:00.
 
@@ -207,8 +208,8 @@ do explorador: tem o seu próprio nó `pqchd-main`. Ainda ninguém mina.
   ```
   O script recusa antes das 23:00 UTC. Para a mineração da testnet dessa máquina (o nó da testnet
   continua), instala o pool da rede principal ligado à âncora (29340) e começa a minerar. No Kali,
-  parar também a mineração da carteira PQCH-Qt da testnet (separador Mining → Parar). O Mac continua
-  na testnet.
+  parar também, à mão, a mineração da carteira PQCH-Qt da testnet (separador Mining → Parar) e fechar
+  a Monero GUI (o `monerod` dela não é um serviço e o script não o vê). O Mac continua na testnet.
   Voltar atrás: `minerar_rede_principal.sh parar` (volta a minerar a testnet).
 - Bloco 1: confirmar que os dois nós públicos e o explorador o veem com o mesmo hash.
 
