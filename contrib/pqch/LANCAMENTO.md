@@ -18,8 +18,8 @@ ainda não é público, por isso adiar não custa nada.
 | VPS pública (Hostinger) | `ssh root@72.61.20.80` | nó público da rede principal; site pqch.org |
 | Servidor do explorador (casa) | `ssh pqch_explorer@192.168.1.155` | explorador e API `explorer.pqch.org` |
 | Kali (casa) | conforme `TESTNET.md` | verificar os binários antes de os instalar nos servidores |
-| Server de casa | conforme `servidor-testes/README.md` | minera a testnet até às 23:00; depois **minera a rede principal** pelo pool (`minerar_rede_principal.sh`) |
-| Kali `sparta` (casa) | — | minera a testnet até às 23:00; depois **minera a rede principal** pelo pool (`minerar_rede_principal.sh`) |
+| Server de casa | `ssh server@192.168.1.164` | minera a testnet até às 23:00; depois **minera a rede principal** pelo pool (`minerar_rede_principal.sh`) |
+| Kali `sparta` (casa) | `ssh sparta@192.168.1.242` | minera a testnet até às 23:00; depois **minera a rede principal** pelo pool (`minerar_rede_principal.sh`) |
 | Mac | — | **continua a minerar a testnet** (mantém a testnet viva para testes) |
 | PC principal | — | **só** descarrega o `SHA256SUMS` e assina-o, com `gpg --homedir D:\gnupg-pqch`; nunca descarrega binários |
 
@@ -182,14 +182,14 @@ sudo <pasta do pqch-pool>/deploy/instalar_pool_testnet.sh --rede main --user pqc
 ### Passo 8B — Nós dos mineradores da equipa (22:30, server e Kali `sparta`)
 
 ```bash
-# Kali sparta (e o server, se NÃO for a máquina do explorador): a 1.0.0 assinada, conferida pelo script
+# server (192.168.1.164) e Kali sparta (192.168.1.242): a 1.0.0 assinada, conferida pelo script
 sudo contrib/pqch/servidor-testes/minerar_rede_principal.sh binarios 1.0.0
 # os dois:
 sudo contrib/pqch/servidor-testes/minerar_rede_principal.sh arrancar-no
 ```
 
-**Verificar:** `"chain": "main"`, `"blocks": 0` e pelo menos 1 ligação. No server com o explorador,
-`arrancar-no` usa o nó do explorador do passo 8 (não instala outro). Ainda ninguém mina.
+**Verificar:** `"chain": "main"`, `"blocks": 0` e pelo menos 1 ligação. O server não é a máquina
+do explorador: tem o seu próprio nó `pqchd-main`. Ainda ninguém mina.
 
 ### Passo 9 — Arranque (23:00)
 

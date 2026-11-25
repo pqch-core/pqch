@@ -216,7 +216,7 @@ Máquinas de casa (IP reservados no router a 17 nov. 2026; ver `servidor-testes/
 | Máquina | SSH (rede de casa) | Na VPN | Função |
 |---|---|---|---|
 | Portátil i5-2435M (`cesar@NOSdrive`, Kali) | `ssh -i $HOME\.ssh\id_pqch cesar@192.168.1.233` | 10.77.0.11 | vigilância da testnet e fuzzing contínuo (`sudo /usr/local/bin/pqch-estado`); o antigo nó minerador (`pqchd-testnet`, `pqch-minerar-testnet`) está parado de propósito |
-| Portátil Kali (`sparta`) | — | 10.77.0.10 | nó do pool com 8 threads; carteira PQCH-Qt em modo pool |
+| Portátil Kali (`sparta`) | `ssh sparta@192.168.1.242` | 10.77.0.10 | nó do pool com 8 threads; carteira PQCH-Qt em modo pool |
 
 **Fase A (agora):** a VPS é um membro da VPN como os outros. O nó escuta só em `10.77.0.20`, não
 anuncia o IP e liga-se à âncora. Instalação feita com os binários assinados da release (conferidos
