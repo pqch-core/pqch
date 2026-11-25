@@ -283,7 +283,7 @@ cmd_estado() {
     echo "pqchd instalado: $(versao_pqchd)"
     if [[ -f "${CFG}" ]]; then
         source "${CFG}"
-        echo "Nó da rede principal: ${NODE_SVC} ($(systemctl is-enabled "${NODE_SVC}" 2>/dev/null || echo '?') / $(systemctl is-active "${NODE_SVC}" 2>/dev/null || true)), ${DATADIR}"
+        echo "Nó da rede principal: ${NODE_SVC} ($(systemctl is-enabled "${NODE_SVC}" 2>/dev/null || true) / $(systemctl is-active "${NODE_SVC}" 2>/dev/null || true)), ${DATADIR}"
         echo "Pool: ${THREADS} threads$( (( FAST )) && echo ', modo rápido')$( (( ${EXCLUSIVO:-0} )) && echo '; às 23:00 só PQCH (para também pqchd-testnet e monerod)'); clone em ${POOL_REPO}"
         if systemctl is-active --quiet "${NODE_SVC}"; then
             cli getblockchaininfo 2>/dev/null | grep -E '"chain"|"blocks"' || true
