@@ -40,7 +40,7 @@ ainda não é público, por isso adiar não custa nada.
 - [x] Explorador: comando `novo-genesis`. Pool: `--rede main`.
 - [x] Ferramenta do génesis (`contrib/pqch/genesis.py --verificar`).
 - [x] Notas da release 1.0.0 (`contrib/pqch/release-notes.md`, 25 nov.). O número 1.0.0 entra na sexta, com o génesis (passo 2).
-- [ ] Site: secção de downloads com as ligações da 1.0.0, pronta mas **não publicada**.
+- [x] Site: secção de downloads com as ligações da 1.0.0, pronta mas **não publicada** (25 nov., b4beeeabc; liga-se no passo 6).
 - [x] A equipa mina como qualquer pessoa (24 nov.); as recompensas vão para uma morada fora das máquinas de teste (passo 9).
 - [ ] Carteira **nova** da rede principal no telemóvel (app Android, rede Mainnet), com as 24 palavras só em
       papel. **Não** pode ser a carteira da testnet usada no teste de recuperação cruzada: essas palavras já
@@ -120,7 +120,11 @@ gpg --homedir D:\gnupg-pqch --verify SHA256SUMS.asc SHA256SUMS      # "Good sign
 ### Passo 6 — Publicar (Cesar, cerca das 20:00)
 
 1. Publicar o rascunho no GitHub, com a etiqueta `v1.0.0`.
-2. Publicar o site com os downloads:
+2. Ligar os downloads do site (Claude, logo depois do passo 1): no `pqch-explorer`, `site-src/config.json`
+   passa a `"release_version": "1.0.0"`, `build.py`, commit e push para o ramo `pqch`. Os cartões passam a
+   ligar a `…/releases/download/v1.0.0/pqch-1.0.0-win64-setup.exe` e `…-x86_64-linux-gnu.tar.gz`, e há uma
+   ligação para a página da release (APK, pool, SHA256SUMS e assinatura). Preparado a 25 nov. (b4beeeabc);
+   até lá os cartões dizem «Disponível no lançamento». Depois, publicar o site:
 
    ```
    ssh pqch_explorer@192.168.1.155
