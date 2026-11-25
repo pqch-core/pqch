@@ -6,7 +6,7 @@
 # Passa uma máquina de casa da equipa (o server, o Kali) da mineração da testnet para a mineração da
 # rede principal, pelo pool PQCH, no lançamento de 27 nov. 2026 às 23:00 UTC.
 #
-#   sudo contrib/pqch/servidor-testes/minerar_rede_principal.sh preparar --pool <pasta do pqch-pool> --threads N [--fast]
+#   sudo contrib/pqch/servidor-testes/minerar_rede_principal.sh preparar --pool <pasta do pqch-pool> --threads N|max [--fast] [--exclusivo]
 #   sudo contrib/pqch/servidor-testes/minerar_rede_principal.sh estado
 #   sudo contrib/pqch/servidor-testes/minerar_rede_principal.sh binarios 1.0.0     # sexta, depois da release assinada
 #   sudo contrib/pqch/servidor-testes/minerar_rede_principal.sh arrancar-no        # sexta, 22:30
@@ -23,6 +23,10 @@
 # Nó da rede principal: se a máquina já tem o nó do explorador na rede principal (pqchd.service,
 # /srv/pqch), o pool usa esse nó. Senão, "preparar" cria um nó só para minerar (pqchd-main,
 # utilizador pqch-minerador, /var/lib/pqch-main), DESLIGADO até sexta.
+#
+# --exclusivo: às 23:00 a máquina passa a minerar SÓ a PQCH da rede principal, com toda a capacidade:
+# além da mineração da testnet, para também o nó da testnet (pqchd-testnet) e o nó do Monero (monerod).
+# "parar" volta a ligar tudo o que "arrancar" parou.
 #
 # "preparar" não arranca nem para nada: pode correr já, com o pqchd 0.3.x instalado.
 set -euo pipefail
@@ -52,15 +56,17 @@ no_do_explorador() {
 }
 
 cmd_preparar() {
-    local pool="" threads="" fast=0
+    local pool="" threads="" fast=0 exclusivo=0
     while (( $# )); do
         case "$1" in
             --pool) pool=$2; shift 2 ;;
             --threads) threads=$2; shift 2 ;;
             --fast) fast=1; shift ;;
+            --exclusivo) exclusivo=1; shift ;;
             *) falha "opção desconhecida: $1" ;;
         esac
     done
+    [[ "${threads}" == max ]] && threads=$(nproc)
     [[ -n "${pool}" && -x "${pool}/deploy/instalar_pool_testnet.sh" ]] || falha "indica --pool <pasta do clone do pqch-pool>."
     pool="$(cd "${pool}" && pwd)"
     grep -q -- '--rede main' "${pool}/deploy/instalar_pool_testnet.sh" || falha "o pqch-pool em ${pool} não tem --rede main: faz git pull."
@@ -154,6 +160,7 @@ PROPRIO=${proprio}
 POOL_REPO=${pool}
 THREADS=${threads}
 FAST=${fast}
+EXCLUSIVO=${exclusivo}
 EOF
     chmod 0644 "${CFG}"
     cat "${CFG}"
@@ -235,8 +242,18 @@ cmd_arrancar() {
             parados+=("${s}"); echo "  ${s}: parado"
         fi
     done
+    if (( ${EXCLUSIVO:-0} )); then
+        for s in pqchd-testnet monerod; do
+            if systemctl is-active --quiet "${s}" 2>/dev/null; then
+                systemctl stop "${s}"; systemctl disable "${s}" >/dev/null 2>&1 || true
+                parados+=("${s}"); echo "  ${s}: parado (máquina só para a rede principal)"
+            fi
+        done
+    else
+        echo "  (o nó da testnet continua a correr, sem minerar)"
+    fi
     printf '%s\n' "${parados[@]}" > /var/lib/pqch-minerar-main.testnet-parados
-    echo "  (o nó da testnet continua a correr, sem minerar; o Mac continua a minerar a testnet)"
+    echo "  O Mac continua a minerar a testnet."
 
     msg "2/2 Pool da rede principal (${THREADS} threads$( (( FAST )) && echo ', modo rápido'))"
     local extra=(); (( FAST )) && extra+=(--fast)
@@ -255,7 +272,7 @@ cmd_parar() {
         while read -r s; do
             [[ -n "${s}" ]] || continue
             systemctl enable --now "${s}" >/dev/null 2>&1 && echo "  ${s}: de volta à testnet"
-        done < /var/lib/pqch-minerar-main.testnet-parados
+        done < <(tac /var/lib/pqch-minerar-main.testnet-parados)   # ordem inversa: os nós antes dos mineradores
         rm -f /var/lib/pqch-minerar-main.testnet-parados
     fi
     echo "O nó da rede principal continua ligado (não minera)."
@@ -267,7 +284,7 @@ cmd_estado() {
     if [[ -f "${CFG}" ]]; then
         source "${CFG}"
         echo "Nó da rede principal: ${NODE_SVC} ($(systemctl is-enabled "${NODE_SVC}" 2>/dev/null || echo '?') / $(systemctl is-active "${NODE_SVC}" 2>/dev/null || true)), ${DATADIR}"
-        echo "Pool: ${THREADS} threads$( (( FAST )) && echo ', modo rápido'); clone em ${POOL_REPO}"
+        echo "Pool: ${THREADS} threads$( (( FAST )) && echo ', modo rápido')$( (( ${EXCLUSIVO:-0} )) && echo '; às 23:00 só PQCH (para também pqchd-testnet e monerod)'); clone em ${POOL_REPO}"
         if systemctl is-active --quiet "${NODE_SVC}"; then
             cli getblockchaininfo 2>/dev/null | grep -E '"chain"|"blocks"' || true
         fi
