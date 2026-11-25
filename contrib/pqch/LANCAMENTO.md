@@ -18,6 +18,9 @@ ainda não é público, por isso adiar não custa nada.
 | VPS pública (Hostinger) | `ssh root@72.61.20.80` | nó público da rede principal; site pqch.org |
 | Servidor do explorador (casa) | `ssh pqch_explorer@192.168.1.155` | explorador e API `explorer.pqch.org` |
 | Kali (casa) | conforme `TESTNET.md` | verificar os binários antes de os instalar nos servidores |
+| Server de casa | conforme `servidor-testes/README.md` | minera a testnet até às 23:00; depois **minera a rede principal** pelo pool (`minerar_rede_principal.sh`) |
+| Kali `sparta` (casa) | — | minera a testnet até às 23:00; depois **minera a rede principal** pelo pool (`minerar_rede_principal.sh`) |
+| Mac | — | **continua a minerar a testnet** (mantém a testnet viva para testes) |
 | PC principal | — | **só** descarrega o `SHA256SUMS` e assina-o, com `gpg --homedir D:\gnupg-pqch`; nunca descarrega binários |
 
 ## Regras que se mantêm
@@ -39,6 +42,12 @@ ainda não é público, por isso adiar não custa nada.
 - [ ] Versão 1.0.0 em `CMakeLists.txt` e notas da release (`contrib/pqch/release-notes.md`).
 - [ ] Site: secção de downloads com as ligações da 1.0.0, pronta mas **não publicada**.
 - [x] A equipa mina como qualquer pessoa (24 nov.); as recompensas vão para uma morada fora das máquinas de teste (passo 9).
+- [ ] Carteira **nova** da rede principal no telemóvel (app Android, rede Mainnet), com as 24 palavras só em
+      papel. **Não** pode ser a carteira da testnet usada no teste de recuperação cruzada: essas palavras já
+      foram escritas no Kali. Tirar dela uma morada `pqc1p…` para as recompensas.
+- [ ] Server e Kali `sparta` preparados para minerar a rede principal, sem arrancar nada
+      (`sudo contrib/pqch/servidor-testes/minerar_rede_principal.sh preparar --pool <pqch-pool> --threads N [--fast]`).
+      O Mac fica na testnet.
 - [ ] Ensaio geral completo e código congelado às 18:00.
 
 ---
@@ -170,6 +179,18 @@ sudo <pasta do pqch-pool>/deploy/instalar_pool_testnet.sh --rede main --user pqc
 
 **Verificar:** o serviço `pqch-pool-main` está ativo e as portas 29340 e 29341 aparecem na ufw.
 
+### Passo 8B — Nós dos mineradores da equipa (22:30, server e Kali `sparta`)
+
+```bash
+# Kali sparta (e o server, se NÃO for a máquina do explorador): a 1.0.0 assinada, conferida pelo script
+sudo contrib/pqch/servidor-testes/minerar_rede_principal.sh binarios 1.0.0
+# os dois:
+sudo contrib/pqch/servidor-testes/minerar_rede_principal.sh arrancar-no
+```
+
+**Verificar:** `"chain": "main"`, `"blocks": 0` e pelo menos 1 ligação. No server com o explorador,
+`arrancar-no` usa o nó do explorador do passo 8 (não instala outro). Ainda ninguém mina.
+
 ### Passo 9 — Arranque (23:00)
 
 - **Mineração da equipa** (decidido a 24 nov.): a equipa mina, como qualquer pessoa. Não há
@@ -178,7 +199,15 @@ sudo <pasta do pqch-pool>/deploy/instalar_pool_testnet.sh --rede main --user pqc
     máquinas de teste, por exemplo a app Android na rede principal.
   - Os mineradores recebem só essa morada: `--morada pqc1p…` no pool, ou o modo pool da carteira com
     morada.
-- Às **23:00:00**, e não antes, os mineradores da equipa arrancam.
+- Às **23:00:00**, e não antes, os mineradores da equipa arrancam. No server e no Kali `sparta`:
+  ```bash
+  sudo contrib/pqch/servidor-testes/minerar_rede_principal.sh arrancar --morada pqc1p…
+  ```
+  O script recusa antes das 23:00 UTC. Para a mineração da testnet dessa máquina (o nó da testnet
+  continua), instala o pool da rede principal ligado à âncora (29340) e começa a minerar. No Kali,
+  parar também a mineração da carteira PQCH-Qt da testnet (separador Mining → Parar). O Mac continua
+  na testnet.
+  Voltar atrás: `minerar_rede_principal.sh parar` (volta a minerar a testnet).
 - Bloco 1: confirmar que os dois nós públicos e o explorador o veem com o mesmo hash.
 
 **Verificar nos primeiros 30 minutos:**
