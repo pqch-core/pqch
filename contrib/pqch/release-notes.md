@@ -2,61 +2,43 @@
      attach SHA256SUMS.asc, and replace the "Changes" list below. This comment is not shown. -->
 **PQCH {{VERSION}}**
 
-**Changes**
-In v0.3.7 (testnet; no change to which chain is valid):
-- Merged mining from home: a node now checks a header with a new Monero key from an inbound peer too,
-  at most one a minute, with a RandomX cache of its own and outside the main lock. Before, such headers
-  were only checked from outbound peers, so a merged miner whose node only connects out (behind a home
-  router, the usual case for P2Pool miners) never got its blocks accepted by the network. A header with
-  fake work is refused, its sender punished, and no cache in use is pushed out.
-- Installer (Windows): no "test signet" or "testnet4" shortcuts (PQCH has neither network).
+**PQCH 1.0.0 starts the main network** on 27 November 2026 at 23:00 UTC.
 
-In v0.3.6 (testnet; no change to which chain is valid):
-- Android wallet: if the network ever activates the ML-DSA emergency soft fork, the app switches to
-  the SLH-DSA recovery key by itself. A payment the node rejects for that reason is not sent; the app
-  signs the same payment again with the recovery key and asks for a new confirmation (the fee is
-  higher), and later payments use the recovery key from the start. New APK, signed with the release
-  key (certificate SHA-256 39:86:31:73:…:F3:D2:ED).
-- Light wallet core: create_tx can sign through the recovery leaf (recovery), with the fee for its size.
+- No premine: the genesis block's 7 PQCH go to an output nobody can spend, and mining opens to everyone at
+  the same time. No block dated before the genesis is valid, and a node refuses blocks more than 10 minutes
+  in the future, so nobody, the team included, can mine before 22:50 UTC.
+- The genesis message is a newspaper headline of 27 November 2026, which proves no block was mined before
+  that day. Genesis hash: `{{GENESIS_HASH}}`.
+- Block reward 7 PQCH, a block about every minute, halving every 4,207,000 blocks. Difficulty starts at the
+  easiest target and adjusts on every block (ASERT, half-life 4 hours).
+- Ports: 29333 (P2P) and 29332 (RPC, only on 127.0.0.1 by default). The node finds the network through
+  two seed nodes, 187.127.89.83 and 72.61.20.80; there are no DNS seeds yet.
+- Explorer and the API for the Android wallet: https://explorer.pqch.org. Pool: the public pool node
+  187.127.89.83, pool network port 29340, stratum port 29341 (PQCH-Qt, Mining tab, "Pool").
+- The testnet keeps running with the same chain; 0.3.7 and 1.0.0 nodes follow it alike.
 
-In v0.3.5 (testnet; no change to which chain is valid):
-- Header checkpoints: every release ships the hash of one block in 500. A header at a checkpoint height
-  must have that hash, and the headers that lead to it are not hashed with RandomX (about 25 ms each),
-  so a new node syncs the block headers much faster. Everything else in a header is still checked and
-  blocks are validated in full. The testnet ships 44 checkpoints (up to block 22,000), read from two
-  public nodes that agree; the main network starts without any.
-- PQCH-Qt: a main window saved as big as the screen opens at 80% of it, centred, so it can be resized
-  (un-maximizing used to leave it filling the screen).
-- Tests: the two inherited header sync functional tests fixed (one-minute blocks; batched generation).
+**Changes since 0.3.7**
+- Main network: final genesis block (above) and its seed nodes (the inherited Bitcoin seed list is gone).
+- Security: after every SLH-DSA key generation and signature, the node wipes 64 KiB of stack, where the
+  slhdsa-c library leaves a copy of the secret seed. Signatures are unchanged.
+- Wallet: the fallback fee is now 10 quanta/vB (0.0001 PQCH/kvB) instead of disabled, so a wallet can send
+  on a new network before it has fee estimates. `-fallbackfee=0` turns it off.
+- Relay policy (not consensus): a transaction spending an unconfirmed TRUC (version 3) transaction may now
+  be up to 4,000 vB instead of 1,000 vB. One post-quantum input is about 1,064 vB, so with the old limit a
+  PQCH wallet could not pay the fee of a zero-fee TRUC transaction by CPFP (needed to close Lightning
+  channels with an anchor output, PQIP 5).
+- Windows installer: "PQCH Miner" shortcuts for the main network (Start menu and desktop); the testnet
+  miner shortcut stays in the Start menu only.
+- PQCH-Qt, Mining tab: pool mode fills in the main network's public pool node, 187.127.89.83:29341 (it was
+  empty on the main network; the testnet keeps 187.127.89.83:37889).
+- PQCH-Qt: the first-run screen says 2026 and expects about 1 GB of disk to start.
+- Calibration closed with the values the testnet already used: reorganisations limited to 60 blocks, at
+  most 4 new Monero keys in 4,320 blocks, merged-mining `tx_extra` up to 512 bytes.
+- Tests: NIST ACVP vectors for SLH-DSA-SHA2-128s; constant-time and stack-residue checks of slhdsa-c
+  (contrib/pqch/ct/); fixes for a genesis in the future and for sanitizer builds.
 
-In v0.3.4 (testnet; no consensus changes):
-- PQCH-Qt, Mining tab: fits narrow windows. The Start button moves to its own full-width row instead of
-  going off the right edge, the stat cards reflow to two columns, and the window is never narrower than
-  the tab bar.
-- PQCH-Qt: scroll bars in the logo violet, so it is obvious when a page scrolls.
-- PQCH-Qt, pool mode: "Your share" no longer says "one block every N minutes" (that is the solo
-  expectation); it says the pool's blocks pay by PPLNS.
-
-In v0.3.3 (testnet; no consensus changes):
-- Header sync no longer stalls the node: the RandomX proof of work of each batch of headers is checked
-  before the chain lock is taken, in parallel on up to 8 cores, instead of under the lock (a minute per
-  2000 headers, during which wallet creation, the GUI and RPC calls waited; a wallet created during the
-  first sync on the testnet stalled). The same headers are accepted and rejected as before.
-- PQCH-Qt: while the block headers download, "Create a new wallet" and File > Create / Open / Restore
-  wallet wait, with a line saying why and the progress; -minerapp makes its wallet when they finish.
-- Linux: debug symbols in their own archive (pqch-0.3.3-x86_64-linux-gnu-debug.tar.gz), to read the
-  stack of a program that hangs (not needed to run PQCH).
-
-In v0.3.2 (testnet; no consensus changes from v0.3.1):
-- PQCH-Qt, Mining tab: **pool mode**. Choose "Pool (shared rewards)" and a pool node (on testnet the public
-  pool node 187.127.89.83:37889 is filled in); the wallet makes a new address and runs the pool miner, and
-  shows its hash rate and accepted shares. The pool pays a share of every block it finds, by PPLNS, to every
-  miner, instead of whole blocks rarely.
-- The pool miner is `pqch-pool` v0.1.0 (the PQCH decentralised pool, derived from P2Pool, GPL-3.0), shipped as
-  its own program next to pqch-qt (`pqch-pool.exe` on Windows, `bin/pqch-pool` on Linux) and taken from its
-  signed release (https://github.com/pqch-core/pqch-pool/releases/tag/v0.1.0) by version and SHA256.
-  `-poolminer=<path>` points the wallet at another copy. Antivirus programs often flag mining software:
-  check the files with SHA256SUMS below.
+No consensus rule changes on the testnet. The code is open source and can be audited by any person or
+institution.
 
 **Verify before installing**
 1. Import the release key (`pqch-releases.asc`) and check its fingerprint:

@@ -39,7 +39,7 @@ ainda não é público, por isso adiar não custa nada.
 - [x] Nós da âncora e da VPS preparados e desligados (`instalar_rede_principal.sh preparar`).
 - [x] Explorador: comando `novo-genesis`. Pool: `--rede main`.
 - [x] Ferramenta do génesis (`contrib/pqch/genesis.py --verificar`).
-- [ ] Versão 1.0.0 em `CMakeLists.txt` e notas da release (`contrib/pqch/release-notes.md`).
+- [x] Notas da release 1.0.0 (`contrib/pqch/release-notes.md`, 25 nov.). O número 1.0.0 entra na sexta, com o génesis (passo 2).
 - [ ] Site: secção de downloads com as ligações da 1.0.0, pronta mas **não publicada**.
 - [x] A equipa mina como qualquer pessoa (24 nov.); as recompensas vão para uma morada fora das máquinas de teste (passo 9).
 - [ ] Carteira **nova** da rede principal no telemóvel (app Android, rede Mainnet), com as 24 palavras só em
@@ -78,6 +78,12 @@ python3 contrib/pqch/genesis.py --mensagem "The Times 27/Nov/2026 ..." \
 - os testes unitários completos e os testes funcionais da CI passam.
 
 Commit «Main network genesis (27 Nov 2026)» em `main`, e push.
+
+
+**No mesmo commit** (decidido a 25 nov.: a versão muda com o génesis, para que nenhuma compilação com o
+génesis provisório diga 1.0.0 e passe a proteção do serviço `pqchd-main`):
+- `CMakeLists.txt`: `CLIENT_VERSION_MAJOR 1`, `MINOR 0`, `BUILD 0`;
+- `contrib/pqch/release-notes.md`: trocar `{{GENESIS_HASH}}` pelo hash do génesis novo.
 
 ### Passo 3 — Compilar a release (Cesar, 11:00–12:45)
 

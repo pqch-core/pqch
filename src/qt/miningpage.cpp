@@ -62,10 +62,21 @@ QString FormatRate(double hps)
     return QObject::tr("%1 H/s").arg(hps, 0, 'f', 0);
 }
 
-//! Pool node to offer by default: the testnet anchor's public stratum; none on main (there is no pool yet).
+//! Pool node to offer by default: the anchor's public stratum (main 29341, testnet 37889); none on other chains.
 QString DefaultPool()
 {
-    return Params().GetChainType() == ChainType::TESTNET ? QStringLiteral("187.127.89.83:37889") : QString();
+    switch (Params().GetChainType()) {
+    case ChainType::MAIN: return QStringLiteral("187.127.89.83:29341");
+    case ChainType::TESTNET: return QStringLiteral("187.127.89.83:37889");
+    default: return QString();
+    }
+}
+
+//! Example for the pool field: the anchor on main and testnet, a generic "ip:port" elsewhere.
+QString PoolExample()
+{
+    const QString d{DefaultPool()};
+    return d.isEmpty() ? QStringLiteral("ip:port") : d;
 }
 
 //! "ip:port" with an IPv4 address or a [bracketed] IPv6 one: what pqch-pool --pqch-miner takes.
@@ -201,7 +212,7 @@ MiningPage::MiningPage(const PlatformStyle* platform_style, QWidget* parent) : Q
     m_pool_caption->setObjectName("caption");
     m_pool = new QLineEdit(settings.value(QStringLiteral("MiningPool_%1").arg(QString::fromStdString(ChainTypeToString(Params().GetChainType()))), DefaultPool()).toString());
     m_pool->setObjectName("miningPool");
-    m_pool->setPlaceholderText(tr("ip:37889"));
+    m_pool->setPlaceholderText(PoolExample());
     m_pool->setMinimumWidth(170);
     m_pool->setToolTip(tr("The IP address and stratum port of a PQCH pool node. Every node of the pool pays by the same rules."));
     connect(m_mode, qOverload<int>(&QComboBox::currentIndexChanged), this, [this] {
@@ -474,7 +485,7 @@ void MiningPage::startMining()
         const QString pool{m_pool->text().trimmed()};
         if (!ValidPool(pool)) {
             g_gui_mining = false;
-            QMessageBox::warning(this, tr("Mining"), tr("Enter the pool node as an IP address and port, for example 187.127.89.83:37889."));
+            QMessageBox::warning(this, tr("Mining"), tr("Enter the pool node as an IP address and port, for example %1.").arg(PoolExample()));
             return;
         }
         if (!QFileInfo(poolMinerPath()).isExecutable()) {
