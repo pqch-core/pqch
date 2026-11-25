@@ -252,3 +252,8 @@ do explorador: tem o seu próprio nó `pqchd-main`. Ainda ninguém mina.
 - **App Android 1.0.1: morada sem servidor.** Hoje os botões Receive e Send ficam desativados enquanto a API
   não responde (a app escolhe a primeira morada não usada). Na 1.0.1: mostrar a primeira morada mesmo sem
   servidor, com um aviso de que pode já ter sido usada. Decidido a 25 nov. 2026: fica para a 1.0.1.
+- **Recuperação cruzada Android ↔ PQCH Core** (testnet): adiada para depois do lançamento (decidido a 25 nov.
+  2026). Motivo: o restauro com as 24 palavras no telemóvel já foi testado a 22 nov. e as duas carteiras usam o
+  mesmo núcleo (`libpqchwallet`). Como fazer: retirar do telemóvel a carteira da Mainnet (palavras em papel),
+  testar com uma carteira da testnet criada no Kali, nos dois sentidos, e voltar a restaurar a da Mainnet a
+  partir do papel. As palavras da Mainnet nunca são escritas num computador.
