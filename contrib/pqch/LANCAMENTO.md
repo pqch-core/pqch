@@ -185,6 +185,14 @@ sudo <pasta do pqch-pool>/deploy/instalar_pool_testnet.sh --rede main --user pqc
 
 ### Passo 8B — Nós dos mineradores da equipa (22:30, server e Kali `sparta`)
 
+**Morada das recompensas (Cesar, no telemóvel, logo que o explorador responda).** A app só mostra a morada
+depois de o servidor responder (escolhe a primeira morada não usada), e o índice `electrs` só arranca quando
+o nó do explorador sai do «initial block download». Com o génesis provisório isso nunca acontece (visto a
+25 nov.: «waiting for bitcoind sync … 0/0 blocks»); com o génesis de 27 nov. (hora 23:00, no futuro) deve
+acontecer logo depois do `novo-genesis` e do `tudo`. Confirmar no ensaio de quinta. Na app (Mainnet):
+**Refresh → Receive**, copiar a morada `pqc1p…`. Se às 23:00 ainda não houver morada, os mineradores da
+equipa arrancam uns minutos depois: não há pressa, a mineração está aberta a todos.
+
 ```bash
 # server (192.168.1.164) e Kali sparta (192.168.1.242): a 1.0.0 assinada, conferida pelo script
 sudo contrib/pqch/servidor-testes/minerar_rede_principal.sh binarios 1.0.0
