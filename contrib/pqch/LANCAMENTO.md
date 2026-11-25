@@ -47,6 +47,8 @@ ainda não é público, por isso adiar não custa nada.
       foram escritas no Kali. Tirar dela uma morada `pqc1p…` para as recompensas.
 - [ ] Server e Kali `sparta` preparados para minerar a rede principal, sem arrancar nada
       (`sudo contrib/pqch/servidor-testes/minerar_rede_principal.sh preparar --pool <pqch-pool> --threads N [--fast]`).
+      Server (decidido a 25 nov.): só PQCH da rede principal, com toda a capacidade
+      (`--threads max --fast --exclusivo`: às 23:00 para também o P2Pool, o `monerod` e o nó da testnet).
       O Mac fica na testnet.
 - [ ] Ensaio geral completo e código congelado às 18:00.
 
