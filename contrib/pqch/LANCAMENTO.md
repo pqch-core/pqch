@@ -45,7 +45,8 @@ ainda não é público, por isso adiar não custa nada.
 - [ ] Carteira **nova** da rede principal no telemóvel (app Android, rede Mainnet), com as 24 palavras só em
       papel. **Não** pode ser a carteira da testnet usada no teste de recuperação cruzada: essas palavras já
       foram escritas no Kali. Tirar dela uma morada `pqc1p…` para as recompensas.
-- [ ] Server e Kali `sparta` preparados para minerar a rede principal, sem arrancar nada
+- [x] Server e Kali `sparta` preparados a 25 nov. (server 4 threads, sparta 16, os dois em modo rápido e
+      `--exclusivo`; pqch-pool 55ebe27 compilado; `pqchd-main` desligado). Para minerar a rede principal, sem arrancar nada
       (`sudo contrib/pqch/servidor-testes/minerar_rede_principal.sh preparar --pool <pqch-pool> --threads N [--fast]`).
       Server (decidido a 25 nov.): só PQCH da rede principal, com toda a capacidade
       (`--threads max --fast --exclusivo`: às 23:00 para também o P2Pool, o `monerod` e o nó da testnet).
