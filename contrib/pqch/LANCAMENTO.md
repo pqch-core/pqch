@@ -116,6 +116,8 @@ gpg --homedir D:\gnupg-pqch --verify SHA256SUMS.asc SHA256SUMS      # "Good sign
 - Confirmar que o `SHA256SUMS` é o **da 1.0.0**: a primeira linha tem `pqch-1.0.0-…`.
 - Juntar o `SHA256SUMS.asc` ao rascunho.
 - A APK: assinar com a chave da pen E:, como na 0.3.6.
+  O ficheiro tem de se chamar exatamente `pqch-wallet-1.0.0.apk`: o botão Android do site liga a esse
+  nome. Juntá-lo ao rascunho e ao `SHA256SUMS` **antes** de assinar o `SHA256SUMS`.
 
 ### Passo 6 — Publicar (Cesar, cerca das 20:00)
 
