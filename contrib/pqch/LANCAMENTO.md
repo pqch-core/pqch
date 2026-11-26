@@ -173,12 +173,14 @@ ssh pqch_explorer@192.168.1.155
 
 ```bash
 sudo /opt/pqch-src/pqch-explorer/deploy/instalar_servidor.sh novo-genesis   # pede "APAGAR"; tira um snapshot ZFS antes
+sudo -u pqchbuild git -C /opt/pqch-src/pqch checkout main   # o ensaio de 26 nov. deixou-o no ramo ensaio-genesis
 for r in pqch pqch-electrs pqch-explorer; do sudo -u pqchbuild git -C /opt/pqch-src/$r pull; done
 sudo /opt/pqch-src/pqch-explorer/deploy/instalar_servidor.sh tudo
 sudo /opt/pqch-src/pqch-explorer/deploy/instalar_servidor.sh estado
 ```
 
-**Verificar:** `chain: main`, altura 0, o índice responde e o backend devolve 200. O
+**Verificar:** `git -C /opt/pqch-src/pqch log --oneline -1` mostra o commit do génesis do passo 2 (não o
+`ENSAIO`); `chain: main`, altura 0, o índice responde e o backend devolve 200. O
 `explorer.pqch.org` mostra o bloco 0.
 
 **Pool, na âncora:**
