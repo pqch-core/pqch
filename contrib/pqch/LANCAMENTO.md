@@ -45,7 +45,7 @@ o genesis real», hora 2026-11-26T15:00:00Z, id `6f4060bc…0208`, versão 1.0.0
 | 2. Testes unitários | ~20 min | 385 de 385 (1 ignorado, como sempre) |
 | 2. Testes funcionais da lista da CI | 17 min | todos passam; `mining_basic`, `rpc_psbt` e `wallet_sendall` falharam com 6 em paralelo e passaram ao repetir com 3 (carga da máquina, não o génesis) |
 | 3. Workflow de release (Linux) | 38 min (15:10–15:48) | verde |
-| 3. Workflow de release (Windows) | começa depois do Linux (um só runner) | ver abaixo |
+| 3. Workflow de release (Windows) | 36 min (15:48–16:24), depois do Linux (um só runner) | verde; `SHA256SUMS` às 16:25: **75 min no total** |
 | 8. Explorador `novo-genesis` | 6 s | snapshot ZFS e cadeia apagada |
 | 8. Explorador `tudo` | 4 min | nó v1.0.0, `electrs` (altura 0), backend 200 |
 | 8B. Morada na app (Mainnet) | logo a seguir | **Refresh → Receive** deu a morada pela API pública: app, túnel, nginx, `electrs` e nó funcionam juntos |
@@ -121,7 +121,7 @@ génesis provisório diga 1.0.0 e passe a proteção do serviço `pqchd-main`):
 ### Passo 3 — Compilar a release (Cesar, 11:00–12:45)
 
 No GitHub: **Actions → PQCH Release → Run workflow**, ramo `main`, com a caixa **release**
-marcada. Demora cerca de 80 a 95 minutos.
+marcada. Demora cerca de 75 minutos (medido no ensaio de 26 nov.: Linux 38 min, depois Windows 36 min).
 
 Em paralelo, **Actions → Android** para a APK 1.0.0.
 
