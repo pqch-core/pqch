@@ -209,10 +209,10 @@ public:
         // message; nTime = the announced start time, to the minute (no block can then be mined more
         // than MAX_FUTURE_BLOCK_TIME before it); nBits 0x1e7fffff (powLimit, ~2.2 kH/s), ASERT adjusts
         // in the first hours; reward 7 PQCH (unspendable OP_RETURN). Its bits also anchor ASERT.
-        genesis = CreatePQCHGenesisBlock("PQCH provisional mainnet genesis 04/Nov/2026 - replaced at launch", 1793800800, 0, 0x1e7fffff, 1'250'000'000);
+        genesis = CreatePQCHGenesisBlock("ENSAIO PQCH 26/Nov/2026 - nao e o genesis real", 1795705200, 0, 0x1e7fffff, 700'000'000);
         consensus.hashGenesisBlock = genesis.GetHash();
-        assert(consensus.hashGenesisBlock == uint256{"047f81331ca9e86897b2d1eae7747f78352e9d566ddff94c2acdbac5c0bbee8a"});
-        assert(genesis.hashMerkleRoot == uint256{"7707b9c39887615a04309653c2a090def013d3f2fbb436d1836a741b1b98c270"});
+        assert(consensus.hashGenesisBlock == uint256{"6f4060bc47a319c80d9baf14de951f6358a0b70bef3e14e126308441cf390208"});
+        assert(genesis.hashMerkleRoot == uint256{"247295169021fcb8519a1ef04cadc05ad9dba3f76835f4e425497727bb4602d6"});
 
         // PQCH: no DNS seeds at launch; the fixed seeds are the project's two public nodes
         // (contrib/seeds/nodes_main.txt).
