@@ -85,7 +85,8 @@ principal (o mesmo código do pool da testnet).
       (`--threads max --fast --exclusivo`: às 23:00 para também o P2Pool, o `monerod` e o nó da testnet).
       Kali `sparta`: 16 threads, 14 GB (`--threads max --fast --exclusivo`); clone do pqch em `~/pqch`.
       O Mac fica na testnet.
-- [x] Ensaio geral (26 nov., resultado acima). Código congelado às 18:00.
+- [x] Ensaio geral (26 nov., resultado acima). Código congelado às 18:00 de 26 nov. no commit `c319baa` do `main`:
+      até ao passo 2 só entram correções a erros graves (e documentação).
 
 ---
 
