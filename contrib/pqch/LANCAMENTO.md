@@ -33,6 +33,39 @@ ainda não é público, por isso adiar não custa nada.
 
 ---
 
+## Resultado do ensaio geral (26 nov. 2026, 15:00–16:30 UTC)
+
+Génesis de ensaio no ramo `ensaio-genesis` (61553dd, **não fundir**): mensagem «ENSAIO PQCH 26/Nov/2026 - nao e
+o genesis real», hora 2026-11-26T15:00:00Z, id `6f4060bc…0208`, versão 1.0.0.
+
+| Passo | Tempo medido | Resultado |
+|---|---|---|
+| 2. `genesis.py --aplicar` + versão + notas | menos de 1 min | id certo; `pqchd -version` v1.0.0; `getblockhash 0` = id; `initialblockdownload: false` logo no arranque |
+| 2. Compilar (máquina de desenvolvimento) | 9 min | sem erros |
+| 2. Testes unitários | ~20 min | 385 de 385 (1 ignorado, como sempre) |
+| 2. Testes funcionais da lista da CI | 17 min | todos passam; `mining_basic`, `rpc_psbt` e `wallet_sendall` falharam com 6 em paralelo e passaram ao repetir com 3 (carga da máquina, não o génesis) |
+| 3. Workflow de release (Linux) | 38 min (15:10–15:48) | verde |
+| 3. Workflow de release (Windows) | começa depois do Linux (um só runner) | ver abaixo |
+| 8. Explorador `novo-genesis` | 6 s | snapshot ZFS e cadeia apagada |
+| 8. Explorador `tudo` | 4 min | nó v1.0.0, `electrs` (altura 0), backend 200 |
+| 8B. Morada na app (Mainnet) | logo a seguir | **Refresh → Receive** deu a morada pela API pública: app, túnel, nginx, `electrs` e nó funcionam juntos |
+
+**O que o ensaio mostrou:**
+- O `electrs` arranca logo com um génesis recente (o nó sai do «initial block download» no arranque). O 502 de
+  25 nov. era só do génesis provisório antigo.
+- O `tudo` do explorador faz `apt upgrade` sozinho (26 pacotes a 26 nov.) e deixa o kernel novo à espera de
+  reinício: **não reiniciar antes do lançamento**.
+- O `git pull` do `pqch-electrs` pede o token do GitHub: tê-lo à mão e válido na sexta à noite.
+- A APK tem de entrar no `SHA256SUMS` **antes** da assinatura GPG (passo 5 reordenado).
+- Os artefactos do Actions não se descarregam a partir do ambiente do Claude: o passo 4 (verificar os
+  binários) é sempre no Kali.
+- Na sexta, o explorador volta primeiro ao ramo `main` (passo 8) e o ramo `ensaio-genesis` é apagado depois do
+  lançamento.
+
+Não ensaiado (já preparado ou já provado na testnet): nós públicos (âncora e VPS, `instalar_rede_principal.sh
+preparar` a 23–24 nov.), mineradores de casa (`minerar_rede_principal.sh preparar` a 25 nov.), pool da rede
+principal (o mesmo código do pool da testnet).
+
 ## Antes de sexta (feito até quinta às 18:00)
 
 - [x] Sementes da rede principal no código (`f4cc884`).
@@ -52,7 +85,7 @@ ainda não é público, por isso adiar não custa nada.
       (`--threads max --fast --exclusivo`: às 23:00 para também o P2Pool, o `monerod` e o nó da testnet).
       Kali `sparta`: 16 threads, 14 GB (`--threads max --fast --exclusivo`); clone do pqch em `~/pqch`.
       O Mac fica na testnet.
-- [ ] Ensaio geral completo e código congelado às 18:00.
+- [x] Ensaio geral (26 nov., resultado acima). Código congelado às 18:00.
 
 ---
 
@@ -106,18 +139,22 @@ sha256sum -c SHA256SUMS                  # todos "OK"
 Arrancar o `pqchd` 1.0.0 na rede principal numa pasta temporária, só para ler o génesis:
 `getblockhash 0` tem de ser igual ao id do passo 2.
 
-### Passo 5 — Assinar (Cesar, no PC principal, com a pen D:)
+### Passo 5 — Assinar (Cesar, no PC principal, com as pens das chaves)
+
+Por esta ordem (o ensaio de 26 nov. mostrou que a APK tem de entrar **antes** da assinatura GPG):
+
+1. **APK:** assinar com a chave Android da pen, como na 0.3.6 (comandos em `CARTEIRA-LEVE.md`). O ficheiro tem de se chamar
+   exatamente `pqch-wallet-1.0.0.apk`: o botão Android do site liga a esse nome. Juntá-lo ao rascunho e
+   acrescentar a sua linha `Get-FileHash` ao `SHA256SUMS`.
+2. Confirmar que o `SHA256SUMS` é o **da 1.0.0**: as linhas têm `pqch-1.0.0-…` e `pqch-wallet-1.0.0.apk`.
+3. **GPG** (pen D:):
 
 ```powershell
 gpg --homedir D:\gnupg-pqch --armor --detach-sign --local-user releases@pqch.org SHA256SUMS
 gpg --homedir D:\gnupg-pqch --verify SHA256SUMS.asc SHA256SUMS      # "Good signature"
 ```
 
-- Confirmar que o `SHA256SUMS` é o **da 1.0.0**: a primeira linha tem `pqch-1.0.0-…`.
-- Juntar o `SHA256SUMS.asc` ao rascunho.
-- A APK: assinar com a chave da pen E:, como na 0.3.6.
-  O ficheiro tem de se chamar exatamente `pqch-wallet-1.0.0.apk`: o botão Android do site liga a esse
-  nome. Juntá-lo ao rascunho e ao `SHA256SUMS` **antes** de assinar o `SHA256SUMS`.
+4. Juntar o `SHA256SUMS` final e o `SHA256SUMS.asc` ao rascunho. Tirar as pens.
 
 ### Passo 6 — Publicar (Cesar, cerca das 20:00)
 
