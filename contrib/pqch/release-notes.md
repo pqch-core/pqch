@@ -8,7 +8,7 @@
   the same time. No block dated before the genesis is valid, and a node refuses blocks more than 10 minutes
   in the future, so nobody, the team included, can mine before 22:50 UTC.
 - The genesis message is a newspaper headline of 27 November 2026, which proves no block was mined before
-  that day. Genesis hash: `{{GENESIS_HASH}}`.
+  that day. Genesis hash: `c3698389407cafd49368d64667b36ecec3ced548edb20978c7ff507b807f2acb`.
 - Block reward 7 PQCH, a block about every minute, halving every 4,207,000 blocks. Difficulty starts at the
   easiest target and adjusts on every block (ASERT, half-life 4 hours).
 - Ports: 29333 (P2P) and 29332 (RPC, only on 127.0.0.1 by default). The node finds the network through
